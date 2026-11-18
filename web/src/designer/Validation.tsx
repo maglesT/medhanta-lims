@@ -4,6 +4,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { api, ApiError, can, plantTime, type Me } from '../api.js';
 import { SignDialog } from '../components/SignDialog.js';
+import { kindRefusal, type Origin } from '../../../shared/engine/method-validation.js';
 
 export interface MethodUse { versionId: number; masterId: number; versionNo: number; state: string; code: string; name: string; origin: string; use: string; status: string; needs: string | null; reportNo: string | null }
 interface ReportRow { id: number; reportNo: string; kind: string; outside: boolean; code: string; name: string; methodVersionNo: number; reference: string; conclusion: string; status: string; personName: string; at: string }
@@ -122,7 +123,7 @@ function NewReport({ methods, onCancel, onDone }: { methods: MethodUse[]; onCanc
           </label>
           <label>Kind
             <select aria-label="Kind" value={kind} onChange={(e) => setKind(e.target.value as typeof kind)}>
-              {KINDS.map((k) => <option key={k} value={k}>{k}</option>)}
+              {KINDS.filter((k) => !method || !kindRefusal(method.origin as Origin, 'routine', k)).map((k) => <option key={k} value={k}>{k}</option>)}
             </select>
           </label>
           <label>Type of test (ICH Q2 Table 1)

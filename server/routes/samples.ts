@@ -12,7 +12,6 @@ import { oosOfSample } from './oos.js';
 import { loadReserves, openRetestSample, reserveNeed } from './reserve.js';
 import { coaDoc } from '../coa.js';
 import { render, sendPdf } from '../pdf.js';
-import { Dec, roundHalfUp, writtenDecimals } from '../../shared/templates/index.js';
 import { sampleTestResults, type TestResult } from './analyses.js';
 import { sampleTrend } from './trends.js';
 import { loadForms } from './forms.js';
@@ -133,12 +132,8 @@ const ACTION_BODIES: Record<SampleAction, z.ZodTypeAny> = {
  * The tests QC decides on (LIMS-11): each test of the sample's specification, whether it applies to the sample's
  * purpose, and its latest reviewed analysis with its result.
  */
-/** The result as reported (CoA, result_v1): rounded half up to the decimals the limit is written with (the finer bound). */
-export function reportedFigure(value: string, unit: string, limit: { low?: string; high?: string } | undefined): string {
-  const d = limit ? Math.max(limit.low !== undefined ? writtenDecimals(limit.low) : 0, limit.high !== undefined ? writtenDecimals(limit.high) : 0) : undefined;
-  const v = d === undefined ? value : roundHalfUp(new Dec(value), d).toFixed(d);
-  return `${v}${unit ? ` ${unit}` : ''}`;
-}
+import { reportedFigure } from '../coa.js';
+export { reportedFigure };
 
 export function testStates(spec: SpecDoc, purpose: string, results: Record<string, TestResult[]>, trend: Record<string, string> = {}, only?: string,
   containers: number | null = null): (TestState & { decided: Record<string, unknown> | null })[] {

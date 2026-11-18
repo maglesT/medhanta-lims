@@ -402,6 +402,13 @@ describe('on the server', () => {
     const [ev] = await t.owner`select e.id::int, e.kind, e.payload, e.person_id::int as person, 'QCUSER' as "personName", e.at, null as signature from sample_events e where e.sample_id = ${sid} and e.kind = 'approved'`;
     const text = pdfText(coaDoc({ sample: s, spec: spec(), specVersion: 1, decision: ev as never }, 'VIEWER'));
     expect(text).toContain('OUTSIDE LAB: Demo Analytical Services\nreport DAS-2026-117');
+    // LIMS-21: a decision kept before `reported` existed, whose worked line has no "= figure": the CoA rounds the value as
+    // the specification's limit is written (found on the demo: COA2600001 showed the full-precision loss on drying).
+    const e0 = ev!; const before = { ...e0, payload: { ...e0.payload, results: e0.payload.results.map((r: Record<string, unknown>) => r.key === 'id'
+      ? { ...r, reported: undefined, value: '6.249604474630443', shown: 'Reading 6.249604474630443 after no further change (stop repeating)' } : r) } };
+    const old = pdfText(coaDoc({ sample: s, spec: spec(), specVersion: 1, decision: before as never }, 'VIEWER'));
+    expect(old).toContain('6.2');
+    expect(old).not.toContain('6.2496');
     expect(text).toContain(`pH: tested by the outside (contract) lab Demo Analytical Services, report DAS-2026-117 (file DAS-2026-117.pdf, SHA-256 ${createHash('sha256').update(report).digest('hex')})`);
     // After the decision nothing more is entered.
     expect((await as('analyst', 'POST', `/api/samples/${sid}/outside`, body)).json().problems).toEqual(['The sample is already approved.']);

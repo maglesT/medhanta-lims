@@ -2,7 +2,8 @@
 // (item, lot or batch, source), the specification, and each test with its limit, method and the reviewed result decided
 // on at approval (kept with the signed decision), then the decision with its e-signature. Nothing is typed again.
 import type { Content, TDocumentDefinitions } from 'pdfmake/interfaces.js';
-import type { SpecDoc } from '../shared/master/spec.js';
+import { limitFor, purposeLimits, type SpecDoc } from '../shared/master/spec.js';
+import { Dec, roundHalfUp, writtenDecimals } from '../shared/templates/index.js';
 import { isHand } from '../shared/engine/links.js';
 import type { EventRow, SampleRow } from './routes/samples.js';
 import { pageFrame, plant, runs } from './pdf.js';
@@ -27,12 +28,26 @@ export const resultFigure = (shown: string, value: string, unit: string, reporte
   ?? /=\s*([^=;]+?)\s*(?:;\s*limit\b[^=]*)?$/.exec(shown.replace(/:\s*(PASS|FAIL)$/i, '').trim())?.[1]?.trim()
   ?? /^\s*([-+]?\d[\d.]*(?:\s*[^\s;]+)?)\s*;/.exec(shown)?.[1]?.trim() ?? `${value} ${unit}`.trim();
 
+/** The result as reported (CoA, result_v1): rounded half up to the decimals the limit is written with (the finer bound). */
+export function reportedFigure(value: string, unit: string, limit: { low?: string; high?: string } | undefined): string {
+  const d = limit ? Math.max(limit.low !== undefined ? writtenDecimals(limit.low) : 0, limit.high !== undefined ? writtenDecimals(limit.high) : 0) : undefined;
+  const v = d === undefined ? value : roundHalfUp(new Dec(value), d).toFixed(d);
+  return `${v}${unit ? ` ${unit}` : ''}`;
+}
+
 export function coaDoc(c: CoaInput, by: string, printedAt = new Date(), demo = false): TDocumentDefinitions {
   const s = c.sample;
   const h = c.spec.header;
   const p = c.decision.payload as { coaNo?: string; results?: Decided[] };
   const results = p.results ?? [];
-  const figure = (r: Decided) => resultFigure(r.shown, r.value, r.unit, r.reported);
+  // A decision kept before `reported` existed: rounded now as the specification's limit is written (the same rule).
+  const on = purposeLimits(s.purpose);
+  const reported = (r: Decided) => {
+    if (r.reported) return r.reported;
+    const t = c.spec.tests.find((x) => x.key === r.key);
+    try { return t && r.value ? reportedFigure(r.value, r.unit, limitFor(t, on)) : undefined; } catch { return undefined; }
+  };
+  const figure = (r: Decided) => resultFigure(r.shown, r.value, r.unit, reported(r));
   const content: Content[] = [
     { text: runs(`Certificate of analysis ${p.coaNo ?? ''}`), fontSize: 16, bold: true },
     { text: runs(`${s.item.code} · ${s.item.name}`), fontSize: 11, margin: [0, 2, 0, 8] },
