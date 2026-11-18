@@ -55,6 +55,34 @@ describe('units: same-kind conversion', () => {
     expect(c(v, from, to)).toBe(want);
   });
 
+  it.each([
+    // Lab units (L5-L19): each expected value is the definition (hand check in the comment).
+    ['250', 'µg/mL', 'mg/mL', '0.25'], // 1000 µg/mL = 1 mg/mL
+    ['0.130', 'g/g', '%', '13'], // 1 g/g = 100 %
+    ['30', 'mg/g', 'g/g', '0.03'], // 30 mg/g = 3 % = 0.03 g/g
+    ['500', 'ppb', 'ppm', '0.5'], // 1000 ppb = 1 ppm
+    ['1', 'dm', 'mm', '100'],
+    ['10', 'µg/min', 'g/h', '0.0006'], // 10 µg × 60 = 600 µg/h
+    ['50', 'µg/cm²', 'mg/cm²', '0.05'],
+    ['1.3', 'µS/cm', 'mS/cm', '0.0013'],
+    ['100', 'mmol/L', 'mol/L', '0.1'],
+    ['2', 'g/100 mL', 'mg/mL', '20'], // alias of %w/v: 2 g per 100 mL = 20 mg/mL
+  ])('Units: lab: %s %s = %s %s', (v, from, to, want) => {
+    expect(c(v, from, to)).toBe(want);
+  });
+
+  it.each([['M', 'mol/L'], ['mM', 'mmol/L'], ['g/100 g', '%w/w'], ['uS/cm', 'µS/cm'], ['% v/v', '%v/v'], ['ug/min', 'µg/min']])('Units: lab alias %s is %s', (a, s) => {
+    expect(findUnit(a)?.symbol).toBe(s);
+  });
+
+  it.each([
+    ['96', '%v/v', '%w/w', /cannot be converted/], // an alcohol strength by volume is not a mass fraction
+    ['1', 'µS/cm', 'ppm', /cannot be converted/],
+    ['0.1', 'mol/L', 'mg/mL', /cannot be converted/],
+  ])('Units: lab refused: %s %s to %s', (v, from, to, msg) => {
+    expect(() => convert(new Dec(v), unit(from), unit(to))).toThrow(msg);
+  });
+
   it('Units: a temperature difference compared with a limit written in °C uses the difference unit', () => {
     expect(c('1.5', 'Δ°C', '°C')).toBe('1.5');
     expect(c('9', 'Δ°F', '°C')).toBe('5');

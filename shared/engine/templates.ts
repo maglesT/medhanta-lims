@@ -20,6 +20,9 @@ export const TEMPLATES: Record<string, Template> = {
   L1: T.l1Assay, L2: T.l2LabelClaim, L3: T.l3OnBasis, L4: T.l4Impurities, L9: T.l9ResidualSolvents, L20: T.l20ChromAdjustment,
   // F2 "no further change": this round's reading against the previous round's ("$prev.name").
   F2: (i: { previous: T.Q; current: T.Q; limit: Parameters<typeof T.noFurtherChange>[2] }) => T.noFurtherChange(i.previous, i.current, i.limit),
+  // Lab templates, physical-chemical (library v1, section 3b).
+  L5: T.l5Dissolution, L6: T.l6Titration, L7: T.l7WaterKf, L8: T.l8MassLoss, L10: T.l10Reading, L14: T.l14Statistics,
+  L17: T.l17Standardisation, L19: T.l19SamplingPlan,
 };
 
 /** Calls a template with arguments already resolved; a bug-level throw becomes a refusal so a batch never crashes. */

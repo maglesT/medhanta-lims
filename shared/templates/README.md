@@ -243,3 +243,47 @@ Decisions taken while building:
   against the method (± amount or ± % around the method's value), as the library says.
 - **S1 in L1:** the template cannot tell A(1 %, 1 cm) from the absorptivity by the number alone, so the form is a
   required input; a figure taken in the wrong form gives a result 10 times off, which the limit then fails.
+
+## Lab templates, physical-chemical (`lab-physchem.ts`: L5-L8, L10, L14, L17, L19)
+
+The LIMS library v1 (section 3b). Same rules as every template above: text inputs with units, exact decimals, plain
+refusals, rounding only at a limit (C1). Tests: `test/templates/lab-physchem.test.ts`.
+
+| ID | Name | Modes and inputs | Output | Refusals and safety rules |
+|---|---|---|---|---|
+| L5 | Dissolution | label claim (content per unit); standard response(s) and concentration (as L1 gives it); sample dilution; volume mode **replace and correct** (aliquots added back to the amount), **no replacement** (volume falls by each aliquot), **replace, no correction**; stages: the first with its volume, later ones **add medium** (Method A: 750 + 250 mL, the dissolved drug stays) or **drain** (a new medium, with **add earlier amount** or **this stage only**); responses per vessel per time point; `express` % of label claim, amount per unit (mg) or per area (mg/cm², transdermal); `label` (Tier 1, Tier 2); `reportAt` | per vessel per time point (`vessels`), per time point mean, SD, RSD, min, max (`points`); value = mean at the reported time. **`atTime[k]`** feeds C6 IR/DR (S1-S3, A/B), **`perVessel`** feeds C6 ER (L1-L3): L5 never decides the stage | **S9**: a delivery rate as label claim; added medium without its volume; a drain without the earlier-amount choice. Responses count ≠ time points; aliquot not less than the volume left; time points not rising; standard response ≤ 0 |
+| L6 | Titration | direct or back; titrant volume, stated molarity, **factor** (VS item); blank; back without blank: the excess VS with its own factor and a reaction ratio; equivalence E (mg per mL) with the molarity it is written for and which VS; aliquot; titre temperature correction V × [1 + 0.001 (t1 − t2)]; sample by mass or volume; average unit weight; basis | % (or mg/g, g/g), mg, mg per unit, mg/mL. Content = n ÷ M(eq) × E, n in mmol: direct (V − Vb) × M; back with blank (Vb − V) × M (the excess VS cancels: only the titrant factor counts); back without blank Vex × Mex − V × M × r | **S5**: a VS of another molarity than the equivalence is followed automatically; a back titration without blank needs the excess VS's own factor; a factor outside 0.8-1.2 (molarity typed as factor). Blank above titre (direct) or below (back); **S3** basis on a sample already dried |
+| L7 | Water by Karl Fischer | volumetric (V − blank) × F − drift × time; **volumetric back** (method B) V(reagent) × F − V(water-methanol) × its water; coulometric µg − blank − drift × time; sample mass | % (or mg/g, g/g, ppm); `waterMg` | a negative result (blank, drift or back-titre too large); F not in mg/mL; drift not a mass rate |
+| L8 | Mass loss / residue | LOD, loss on ignition, residue on ignition, sulfated ash, residue (unsaponifiable matter), container weight loss (stability); tare, before, after (one or successive weighings); constant mass by the F2 helper (`noFurtherChange`), option "or the result complies" (Ph.Int 2.3); basis | % (or mg/g, g/g, ppm); `sampleMass`; `constantMass` check | no tare; no sample; mass gained; residue below the tare or above the sample; not yet at constant mass ("heat again"); **S3** |
+| L10 | Readings with a fixed rule | **specific rotation**: solution 100α ÷ (l × c), neat liquid α ÷ (l × d), solution by mass 100α ÷ (l × p × d), basis; **content from rotation** α × written factor; **relative density** and **weight per mL** (pycnometer, × water density from the table item); **ethanol content** from the density at 20 °C (OIML R 22, as T26); **pH** with temperature; **conductivity** stages 1-3 (USP <645>); **TOC** with system suitability (USP <643>); **melting point** with thermometer and emergent-stem 0.00015 × N × (T − t) corrections | [α] in °, a density, % v/v or % w/w, pH, µS/cm (with `decision` pass / next stage / fail), ppb, °C | **S12**: path length without unit, or outside 0.1-5 dm (mm typed as dm = 100 ×). **S11**: a temperature-compensated reading at stage 1. pH calibration more than 2 °C away; stage 2 outside 25 ± 1 °C; TOC response efficiency outside 85-115 % (system not suitable); water density outside 0.95-1.000 g/mL |
+| L14 | Statistics | **summary** (T7 statistics + confidence interval of the mean, two-sided or a one-sided bound; CI of the SD by χ²; prediction interval; tolerance interval by Howe's k; bias against a true value with its CI; RSD limit); **two means** (pooled or Welch); **F test** (two-sided larger ÷ smaller, or one-sided); confidence level in % | the mean, the difference or F; `ci`, `sdCi`, `predictionInterval`, `toleranceInterval`, `k`, `t`, `df`, `critical`, `significant` | fewer than two results; confidence not between 50 and 100; a series with no spread |
+| L17 | Standardisation | **VS factor** f = m × purity ÷ (E × (V − blank)), mean, RSD limit, molarity = stated × f; **KF water equivalent** F = m × water % ÷ V; **working standard** potency = (R ÷ c)(ws) ÷ (R ÷ c)(primary) × primary potency, c = mass ÷ volume, per preparation, mean; basis | factor, mg/mL or %; `replicates`, `rsd`, `rsdCheck`, `molarity` | a replicate factor outside 0.8-1.2; purity, water or potency not in (0, 100] %; dilution volume given for some preparations only; RSD with one replicate |
+| L19 | Sampling plan size | **square root**: 1 + √N rounded up (WHO "n plan"), not more than N; **every container**; tested each, as one composite or composites of n; **sterility containers** by product type and batch size (Ph.Int 3.2 / Ph. Eur. 2.6.1 / USP <71> Table 3), doubled when one container cannot inoculate both media; **sterility quantity** per container per medium (Table 2); **extractable volume** containers by nominal volume (Ph.Int 5.6) | number of containers (`tests` = tests to run), or the quantity per medium | N not a whole number ≥ 1; the both-media answer missing; a cream container below 200 mg |
+
+Units added for these templates (one line each in `units.ts`): µg/mL, g/g (= 100 %), ppb, dm, µg/min (KF drift), µg/cm²,
+µS/cm and mS/cm (conductivity, a kind of its own), mol/L and mmol/L (VS molarity; aliases M, mM), % v/v (a volume
+fraction, never a mass fraction); aliases g/100 mL (= % w/v) and g/100 g (= % w/w).
+
+### Pharmacopoeia rules and tables in these templates (paraphrased; no chapter text copied)
+
+- **L5:** amount = C × V(now) + Σ C(earlier) × aliquot(earlier) (+ the amount from drained media when cumulative).
+  All aliquots count, whichever analyte they were taken for (two actives from one vessel set, safety rule S9).
+  The stage decision is C6's. Tier 1 and Tier 2 are separate runs (owner, 18 Nov 2026: a Tier 1 failure that the
+  method sends to Tier 2 opens no OOS; the workflow records it).
+- **L6:** the volume correction for temperature follows Ph.Int 2.6 (coefficient 0.001 per °C by default; the master
+  may set another, e.g. 0.0011 for perchloric acid in glacial acetic acid as in USP).
+- **L10 conductivity:** stage 1 table of USP <645> (also Ph. Eur. water for injections), 0-100 °C in 5 °C steps, the
+  next lower temperature used; stage 2 NMT 2.1 µS/cm at 25 ± 1 °C; stage 3 the pH 5.0-7.0 table (pH rounded to 0.1).
+  The Ph. Eur. purified-water table (with interpolation) is not included.
+- **L10 TOC:** limit response r(s) − r(w); response efficiency (r(ss) − r(w)) ÷ (r(s) − r(w)) × 100, 85-115 %.
+- **L14 critical values** are computed, not typed: Student t, F and χ² from the regularized incomplete beta and gamma
+  functions (Abramowitz and Stegun 26.5.8, 6.5.29 and 6.5.31; continued fractions as in Numerical Recipes), ln Γ by
+  Stirling's series, quantiles by bisection, at 30 significant digits. The tests check them against the usual published
+  tables to their printed decimals (t to 3, F to 3, χ² to 3). Howe's k for the tolerance interval is an approximation
+  (n = 10, 95/95: 3.382 against the exact 3.379).
+- **L19:** sterility Table 3: parenteral and devices ≤ 100: 10 % or 4 (greater); 101-500: 10; > 500: 2 % or 20 (less);
+  large-volume parenterals 2 % or 10 (less); antibiotic bulk packages < 5 g: 20, ≥ 5 g: 6; ophthalmic and other
+  non-injectable ≤ 200: 5 % or 2 (greater), > 200: 10; bulk solids ≤ 4: each, 5-50: 20 % or 4 (greater), > 50: 2 % or 10
+  (greater). Percentages rounded up to whole containers; never more than the batch. Table 2: liquids < 1 mL whole,
+  1-40 mL half (NLT 1 mL), 40-100 mL 20 mL, > 100 mL 10 % (NLT 20 mL), antibiotic liquids 1 mL; solids < 50 mg whole,
+  50-300 mg half (NLT 50 mg), 300 mg-5 g 150 mg, > 5 g 500 mg; insoluble preparations, creams, ointments 200 mg.
