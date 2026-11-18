@@ -87,7 +87,7 @@ describe('method designer', () => {
 
   it('the method skeletons are valid drafts; what they leave open is listed by the method check', () => {
     expect(SKELETON_LIST.map((s) => s.id)).toEqual(['hplc-external-standard', 'titration', 'uv-specific-absorbance', 'related-substances', 'dissolution', 'water-kf',
-      'loss-on-drying', 'physical-tests']);
+      'loss-on-drying', 'physical-tests', 'microbial-limits', 'sterility-membrane', 'endotoxin-kinetic', 'bioburden']);
     const header = method().header;
     for (const s of SKELETON_LIST) {
       const doc = masterSchema.parse({ header, stages: skeletonStages(s.id) });
@@ -106,7 +106,7 @@ describe('method designer', () => {
       sample1Factor: { ref: 'sample/dilute-sample/factor' }, limit: { spec: 'limit' } });
     // Each skeleton ends with its result step, whose reportable value is its `result`.
     expect(SKELETON_LIST.map((s) => skeletonStages(s.id).at(-1)!.steps.at(-1)!.block.id)).toEqual(['assay', 'titration', 'assay-absorbance', 'impurities', 'dissolution',
-      'water-kf', 'loss-on-drying', 'disintegration']);
+      'water-kf', 'loss-on-drying', 'disintegration', 'count', 'sterility-test', 'endotoxin', 'bioburden']);
     expect(hplc[0]!.produces).toEqual({ name: 'standard solution', holdHours: 24 });
     // The weighings start with what is weighed, the unit and the usual tolerance; they are checked by a second person.
     expect(hplc[0]!.steps[0]).toMatchObject({ name: 'Weigh the reference standard', checker: true, settings: { tolerance: '10', what: 'Reference standard', unit: 'mg' } });

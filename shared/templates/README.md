@@ -366,3 +366,45 @@ Decisions taken while building:
 - **L25** checks a matrix on the time points; a matrix on factors (some batch × strength × pack combinations never
   placed) is accepted as long as every tested level is scheduled; its statistical justification is the
   `variability` answer.
+
+## Lab templates, microbiology (`lab-micro.ts`: L11-L13; build step 7)
+
+Library 3b and 8b (L11, L12, L13), Ph.Int 3.1, 3.2, 3.3.1, 3.4 (harmonised with Ph. Eur. 2.6.1, 2.6.12, 2.6.14 and
+USP <61>, <71>, <85>), the parallel-line statistics as Ph. Eur. 5.3. Same rules as every template. An assay that is
+**not valid** (its controls, curve or statistics fail) is refused with the reason: there is no result, the test is
+repeated. A valid result outside its limit is a result whose check fails (an OOS). Tests:
+`test/templates/lab-micro.test.ts` (L12 and L13 checked by an independent float calculation).
+
+New units: **CFU/mL, CFU/L, CFU/m³** (CFU per volume: per mL of product, per m³ of air); **EU, EU/mL, EU/mg, EU/g,
+EU/IU** (endotoxin units: 1 EU = 1 IU of endotoxin, which Ph.Int writes as IU; never a mass); **IU/mL** (a potency
+per mL: the MVD concentration for a limit per IU).
+
+| ID | Name | Modes and inputs | Output | Refusals and safety rules |
+|---|---|---|---|---|
+| L11 | Microbial count | **plate count**: levels (dilution factor, the colonies on each plate, or TNTC), amount plated or filtered (mL; air sampled for per m³; a mass), `per` CFU/g, CFU/mL, CFU/m³ or CFU (per plate: one undiluted level), `countable` (TAMC fewer than 250, TYMC fewer than 50, 30-300, 25-250, 15-150, membrane up to 100), `recoveryFactor` (bioburden); **MPN**: tubes with growth at 3 levels, `firstLevel` (0.1 g or mL by default); `acceptance` **10^n** or as written; `negativeControl`; `limit` with alert levels | CFU per g, mL, m³ or plate; `qualifier` "<" (none at the lowest dilution: 1 × dilution ÷ amount), ">" (every level above the range: maximum × highest dilution ÷ amount; MPN 3-3-3); `dilution`, `mean`; MPN `lower`, `upper` (95 %) | **S8**: a 10^n criterion that is not a power of ten; a "<" bound above the limit or a ">" bound within it (tells nothing: another dilution); a negative control with growth (not valid); a count not a whole number; counted and TNTC both; an MPN pattern not in the table; CFU as a mass |
+| L12 | Bacterial endotoxins | **MVD**; **photometric** (onset time, rate or absorbance; standards ≥ 3 with responses; sample A and spiked B in duplicate or more; the spike; negative control); **gel clot confirm** (end-points 2λ, λ, 0.5λ, 0.25λ per series); **gel clot limit** (A, B, C, D in duplicate, `repeat`); **gel clot quantitative** (A's greatest clotting dilution 1, 2, 4, 8 or none; B, C end-points, D); `limit` (EU/mL, EU/mg, EU/g, EU/IU), `concentration` in the limit's terms, `dilution` | in the limit's unit; `mvd`, `r`, `recovery`, `lambda`, `geometricMean`, `decision`, `qualifier`; the check is "less than" the limit | not valid: \|r\| below 0.980, spike outside 50-200 %, negative control not below the lowest standard, B/C/D with the wrong reaction, C's geometric mean outside 0.5-2λ, 0.25λ clotting; one A replicate positive in the first limit test (repeat); A above the highest standard; **S8**: a dilution beyond the MVD; a concentration missing or in other terms than the limit |
+| L13 | Antibiotic potency, microbial assay | `design` completely randomised or randomised blocks (plates); standard and test: 2 or 3 doses (geometric, one ratio) and n replicates each (balanced); responses zone diameters (mm) or turbidity (AU); `assumedPotency`; `limit`, `checkOn` estimate / lower / upper fiducial limit; `precision` (fiducial limits as % of the estimate) | potency in the assumed potency's unit; `lower`, `upper`, `lowerPercent`, `upperPercent`, `slope`, `anova` (preparations, regression, parallelism, linearity, blocks, residual: df, SS, F, critical F), `precisionCheck` | not valid: regression not significant, parallelism or linearity significant (F at p = 0.05); g ≥ 1; unequal replicates; doses not rising or not one ratio; the standard and test with different ratios |
+
+### Pharmacopoeia rules in these templates (paraphrased; no chapter text copied)
+
+- **L11 plate count:** the plates of the dilution with the highest count still within the counting range are used:
+  their mean × dilution ÷ amount plated (TAMC: fewer than 250 per plate, TYMC fewer than 50, Ph.Int 3.3.1). A
+  criterion 10^n is a maximum acceptable count of 2 × 10^n (10 → 20, 100 → 200, 1000 → 2000), as the pharmacopoeias
+  interpret it. The MPN table is Ph.Int 3.3.1 Table 3 (3 tubes at 0.1, 0.01, 0.001 g or mL), reproduced with its 95 %
+  limits; another first level scales it by 0.1 ÷ the first level.
+- **L12:** MVD = limit × concentration ÷ λ; photometric λ is the lowest standard; log-log regression of the response
+  on the concentration; spike recovery (mean B − mean A) ÷ spike × 100; complies when the result is less than the
+  limit. Gel clot: geometric mean = antilog of the mean log end-point; confirmation and C within 0.5λ to 2λ; the limit
+  test's one repeat (complies only if both A negative); quantitative: end-point dilution × λ × the sample's dilution,
+  "<" λ × dilution when none clots, "≥" at the last dilution, each replicate less than the limit (the higher one
+  reported).
+- **L13:** analysis of variance on ln dose; potency = assumed × exp((ȳT − ȳS) ÷ b + (x̄S − x̄T)); Fieller's 95 %
+  fiducial limits with t(0.975; residual df) and g = t² s² ÷ (b² Σ(x − x̄)²); F critical values computed (L14).
+
+Decisions taken while building:
+
+- **Not in this round** (library 8b): the L11 probable-number classes of bile-tolerant Gram-negative bacteria and log
+  reduction of preservative efficacy; the L13 Latin square and the combination of repeated assays; the lysate's λ as
+  an inventory fact (it is recorded on the step from the lot); particles per container (`count` mode, G023).
+- **Sterility** has no template of its own: the containers by L19 (with the number tested), the incubation by T13,
+  the temperatures by C1, the controls and the result by C4.

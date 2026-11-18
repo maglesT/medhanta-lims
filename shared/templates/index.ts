@@ -26,3 +26,7 @@ export {
   l15ShelfLife, l22PredictionInterval, l23Mkt, l24Arrhenius, l25DesignCheck, monthsOf, fUpperP,
   type L15Input, type L15Extrapolation, type L22Input, type L23Input, type L24Input, type L25Input, type StabilityBatch, type StabilityPoint,
 } from './lab-stability.js';
+export {
+  l11MicrobialCount, l12Endotoxin, l13MicrobialAssay, tenToN, COUNTABLE, COUNT_PER, MPN_TABLE, GEL_ENDPOINTS, QUANT_DILUTIONS,
+  type L11Input, type L11Level, type L12Input, type L13Input, type Qualifier,
+} from './lab-micro.js';

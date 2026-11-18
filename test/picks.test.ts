@@ -8,7 +8,9 @@ import { SKELETON_LIST, skeletonStages } from '../web/src/designer/skeletons.js'
 const TYPES = ['Balance', 'Analytical balance', 'Micro balance', 'Semi-micro balance', 'IPC balance', 'Platform balance', 'HPLC', 'GC',
   'Sonicator', 'Magnetic stirrer', 'Stirrer', 'Incubator shaker', 'Anchor stirrer vessel', 'Rapid mixer granulator', 'Planetary mixer (semi-solid)',
   'Hot air oven', 'Muffle furnace', 'Fluid bed dryer', 'Tray dryer', 'Vacuum tray dryer', 'Friabilator', 'Disintegration tester', 'Sieve shaker',
-  'UV-Vis spectrophotometer', 'Dissolution tester', 'Potentiometric titrator', 'Karl Fischer titrator'];
+  'UV-Vis spectrophotometer', 'Dissolution tester', 'Potentiometric titrator', 'Karl Fischer titrator',
+  // The microbiology lab (build step 7); a production tablet counter shares the word "counter".
+  'Incubator', 'Colony counter', 'Tablet counter', 'Endotoxin reader', 'Heating block'];
 const MACHINES = TYPES.map((type, i) => ({ code: `EQ-${i}`, type, room: null }));
 const BALANCES = ['Balance', 'Analytical balance', 'Micro balance', 'Semi-micro balance', 'IPC balance'];
 // The instrument of a run takes the instrument types the stage allows (the skeleton's run stage: HPLC and GC).
@@ -19,6 +21,9 @@ const OFFERS: Record<string, string[]> = {
   'assay-absorbance.spectrophotometer': ['UV-Vis spectrophotometer'], 'dissolution.apparatus': ['Dissolution tester'],
   'titration.titrator': ['Potentiometric titrator'], 'water-kf.titrator': ['Karl Fischer titrator'],
   'loss-on-drying.balance': BALANCES, 'loss-on-drying.oven': ['Hot air oven', 'Muffle furnace'],
+  // The micro skeletons: an incubator (never an incubator shaker), a colony counter (never a tablet counter), the endotoxin reader its stage allows.
+  'incubate.incubator': ['Incubator'], 'count.counter': ['Colony counter'], 'sterility-test.ftmIncubator': ['Incubator'], 'sterility-test.scdmIncubator': ['Incubator'],
+  'endotoxin.reader': ['Endotoxin reader'],
 };
 const field = (block: string, name: string) => findBlock({ id: block, version: 1 })!.fields.find((f) => f.name === name)!;
 

@@ -27,6 +27,8 @@ export const TEMPLATES: Record<string, Template> = {
   L17: T.l17Standardisation, L19: T.l19SamplingPlan,
   // Lab templates, stability (build step 6): Q1E shelf life, OOT prediction interval, MKT, Arrhenius (advisory), Q1D check.
   L15: T.l15ShelfLife, L22: T.l22PredictionInterval, L23: T.l23Mkt, L24: T.l24Arrhenius, L25: T.l25DesignCheck,
+  // Lab templates, microbiology (build step 7): microbial count, bacterial endotoxins, microbial assay of antibiotics.
+  L11: T.l11MicrobialCount, L12: T.l12Endotoxin, L13: T.l13MicrobialAssay,
 };
 
 /** Calls a template with arguments already resolved; a bug-level throw becomes a refusal so a analysis never crashes. */

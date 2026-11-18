@@ -16,7 +16,8 @@ export type Kind =
   | 'mass rate' | 'volume rate' | 'count rate' | 'current' | 'power' | 'specific energy'
   | 'relative humidity' | 'absolute humidity' | 'absolute humidity per volume' | 'log' | 'frequency' | 'rpm per Hz' | 'charge'
   | 'IU' | 'CFU' | 'activity units' | 'IU per mass' | 'CFU per mass' | 'activity units per mass' | 'mass per IU'
-  | 'absorbance' | 'calendar time' | 'molar energy';
+  | 'absorbance' | 'calendar time' | 'molar energy'
+  | 'CFU per volume' | 'IU per volume' | 'endotoxin' | 'endotoxin per volume' | 'endotoxin per mass' | 'endotoxin per IU';
 
 export interface Unit {
   readonly symbol: string;
@@ -89,6 +90,11 @@ const TABLE: [string, Kind, Dec | string, string?][] = [
   // Stability (L15, L22, L24): a stability time point in calendar months, never converted to days or seconds (a
   // month has no fixed length); an activation enthalpy (MKT, Arrhenius).
   ['months', 'calendar time', '1'], ['kJ/mol', 'molar energy', '1'], ['J/mol', 'molar energy', '0.001'],
+  // Microbiology (L11-L13, build step 7): counts per mL of product or per m³ of air; endotoxin units (1 EU = 1 IU of
+  // endotoxin, Ph.Int writes IU) per mL, per mass or per IU of the active, never a mass; a potency per mL (L12 MVD).
+  ['CFU/mL', 'CFU per volume', '1'], ['CFU/L', 'CFU per volume', '0.001'], ['CFU/m³', 'CFU per volume', '0.000001'],
+  ['EU', 'endotoxin', '1'], ['EU/mL', 'endotoxin per volume', '1'], ['EU/mg', 'endotoxin per mass', '1000'], ['EU/g', 'endotoxin per mass', '1'],
+  ['EU/IU', 'endotoxin per IU', '1'], ['IU/mL', 'IU per volume', '1'],
 ];
 
 /** Other spellings people type. */
@@ -99,6 +105,7 @@ const ALIASES: Record<string, string> = {
   M: 'mol/L', mM: 'mmol/L', 'g/100 mL': '%w/v', 'g/100mL': '%w/v', 'g/100 g': '%w/w', 'g/100g': '%w/w', 'uS/cm': 'µS/cm', 'μS/cm': 'µS/cm', '% v/v': '%v/v', 'ug/min': 'µg/min', 'mcg/min': 'µg/min', 'ug/cm2': 'µg/cm²', 'µg/cm2': 'µg/cm²',
   'kg/cm²': 'kgf/cm²', 'N/mm2': 'N/mm²', 'g/m3': 'g/m³', 'ft³/min': 'cfm', 'ft3/min': 'cfm', meq: 'mEq', mEQ: 'mEq', 'US gallon': 'US gal', 'imperial gallon': 'imp gal', 'kg/cm2': 'kgf/cm²', 'g/cm3': 'g/cm³', 'm3/h': 'm³/h', tablet: 'tablets', unit: 'units', pack: 'packs', no: 'nos', 'nos.': 'nos',
   month: 'months', mo: 'months', 'kJ mol-1': 'kJ/mol',
+  'cfu/mL': 'CFU/mL', 'cfu/ml': 'CFU/mL', 'CFU/ml': 'CFU/mL', 'cfu/m³': 'CFU/m³', 'CFU/m3': 'CFU/m³', 'cfu/m3': 'CFU/m³', 'EU/ml': 'EU/mL',
   'ug/mL': 'µg/mL', 'mcg/mL': 'µg/mL', 'μg/mL': 'µg/mL', 'µg/g': 'ppm', 'ug/g': 'ppm', 'mcg/g': 'ppm', 'μg/g': 'ppm', // 1 µg/g = 1 ppm
 };
 
@@ -113,7 +120,7 @@ export function findUnit(symbol: string): Unit | undefined {
   return UNITS.get(s) ?? (alias === undefined ? undefined : UNITS.get(alias));
 }
 
-const POTENCY: Kind[] = ['IU', 'CFU', 'activity units'];
+const POTENCY: Kind[] = ['IU', 'CFU', 'activity units', 'endotoxin'];
 
 /** Why two units cannot convert, in plain words; undefined when they can. */
 export function whyNot(from: Unit, to: Unit): string | undefined {

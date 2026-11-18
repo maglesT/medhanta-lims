@@ -46,6 +46,16 @@ const ALL: [string, Record<string, unknown>, object?][] = [
   ['optical-rotation', { form: 'solution', pathLength: '1 dm', concentration: '2.0 %w/v', temperatureLimit: { low: '19.5', high: '20.5', unit: '°C' }, limit: { low: '-30', high: '-26', unit: '°' } }],
   ['ph', { readingUnit: '', limit: { low: '5.0', high: '7.0', unit: '' } }],
   ['relative-density', { mode: 'relative density', temperatureLimit: { low: '19.5', high: '20.5', unit: '°C' }, limit: { low: '1.010', high: '1.030', unit: '' } }],
+  // The microbiology blocks (build step 7).
+  ['incubate', { what: 'TAMC plates (casein soya bean digest agar)', atmosphere: 'aerobic', temperatureLimit: { low: '30', high: '35', unit: '°C' }, timeLimit: { low: '72', high: '120', unit: 'h' } }],
+  ['count', { method: 'plate count', dilution1: '10', dilution2: '100', amount: '1 mL', per: 'CFU/g', countable: 'TAMC: fewer than 250 per plate', acceptance: '10^n', limit: { high: '1000', unit: 'CFU/g' } }],
+  ['sterility-test', { method: 'membrane filtration', productType: 'parenteral', bothMedia: 'no', ftmTemperatureLimit: { low: '30', high: '35', unit: '°C' },
+    scdmTemperatureLimit: { low: '20', high: '25', unit: '°C' }, incubationTime: { low: '14', unit: 'd' } }],
+  ['bioburden', { technique: 'membrane filtration', dilution1: '1', amount: '100 mL', per: 'CFU/mL', countable: 'membrane: up to 100', acceptance: 'as written', limit: { high: '10', unit: 'CFU/mL' } }],
+  ['endotoxin', { mode: 'photometric', response: 'onset time', responseUnit: 's', std1: '0.005 EU/mL', std2: '0.05 EU/mL', std3: '0.5 EU/mL', std4: '5 EU/mL', spike: '0.05 EU/mL',
+    concentration: '10 mg/mL', dilution: '100', limit: { high: '0.25', unit: 'EU/mg', highStrict: true } }],
+  ['microbial-assay', { design: 'completely randomised', responseUnit: 'mm', stdDose1: '1 IU/mL', stdDose2: '2 IU/mL', stdDose3: '4 IU/mL', testDose1: '1 IU/mL', testDose2: '2 IU/mL',
+    testDose3: '4 IU/mL', assumedPotency: '1000 IU/mg', limit: { low: '900', high: '1100', unit: 'IU/mg' } }],
 ];
 const using = (id: string, settings: object, options: object = {}): MasterDoc => {
   const b = findBlock({ id, version: 1 })!;

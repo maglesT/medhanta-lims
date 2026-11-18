@@ -49,6 +49,11 @@ function labKind(c: Block['calcs'][number], settings: Step['settings']): Kind | 
       const m = lit(a.mode);
       return m === 'specific rotation' ? 'angle' : m === 'pH' || m === 'relative density' ? 'number' : m === 'weight per mL' ? 'density' : undefined;
     }
+    case 'L11': {
+      // A microbial count follows its "per": a limit in CFU/g on a count per mL is refused (LIMS-01).
+      const per = lit(a.per);
+      return per === 'CFU/g' ? 'CFU per mass' : per === 'CFU/mL' || per === 'CFU/m³' ? 'CFU per volume' : per === 'CFU' ? 'CFU' : undefined;
+    }
     default: return undefined;
   }
 }

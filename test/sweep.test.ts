@@ -54,6 +54,17 @@ const SETTINGS: Record<string, Step['settings']> = {
   'optical-rotation': { form: 'solution', pathLength: '100 mm', sampleMass: '1.000 g', volume: '50.0 mL', concentration: '2.0 %w/v', massPercent: '2.0 %', density: '1.02',
     basis: 'dried', basisLoss: '0.5 %', temperatureLimit: { low: '19.5', high: '20.5', unit: '°C' }, limit: { low: '-30', high: '-26', unit: '°' } },
   ph: { readingUnit: '', limit: { low: '5.0', high: '7.0', unit: '' } },
+  incubate: { what: 'TAMC plates', atmosphere: 'anaerobic', temperatureLimit: { low: '30', high: '35', unit: '°C' }, timeLimit: { low: '72', high: '120', unit: 'h' } },
+  count: { method: 'plate count', dilution1: '10', dilution2: '100', dilution3: '1000', amount: '1 mL', per: 'CFU/g', countable: 'TAMC: fewer than 250 per plate', acceptance: '10^n',
+    limit: { high: '1000', unit: 'CFU/g', alertHigh: '500' }, mpnFirstLevel: '0.1 g' },
+  'sterility-test': { method: 'direct inoculation', productType: 'parenteral', bothMedia: 'yes', quantity: 'The whole contents', ftmTemperatureLimit: { low: '30', high: '35', unit: '°C' },
+    scdmTemperatureLimit: { low: '20', high: '25', unit: '°C' }, incubationTime: { low: '14', unit: 'd' } },
+  bioburden: { technique: 'pour plate', dilution1: '10', dilution2: '100', dilution3: '1000', amount: '1 mL', per: 'CFU/g', countable: '30 to 300 per plate', acceptance: 'as written',
+    limit: { high: '100', unit: 'CFU/g' }, recoveryFactor: '1.5' },
+  endotoxin: { mode: 'gel clot quantitative', response: 'onset time', responseUnit: 's', std1: '0.005 EU/mL', std2: '0.05 EU/mL', std3: '0.5 EU/mL', std4: '5 EU/mL', std5: '50 EU/mL',
+    spike: '0.05 EU/mL', concentration: '10 mg/mL', dilution: '10', limit: { high: '0.25', unit: 'EU/mg' } },
+  'microbial-assay': { design: 'randomised blocks', responseUnit: 'mm', stdDose1: '1 IU/mL', stdDose2: '2 IU/mL', stdDose3: '4 IU/mL', testDose1: '1 IU/mL', testDose2: '2 IU/mL',
+    testDose3: '4 IU/mL', assumedPotency: '1000 IU/mg', checkOn: 'lower fiducial limit', precision: { low: '95', high: '105', unit: '%' }, limit: { low: '900', high: '1100', unit: 'IU/mg' } },
   'relative-density': { mode: 'weight per mL', waterDensity: '0.99820 g/mL', temperatureLimit: { low: '19.5', high: '20.5', unit: '°C' }, limit: { low: '1.010', high: '1.030', unit: 'g/mL' } },
 };
 

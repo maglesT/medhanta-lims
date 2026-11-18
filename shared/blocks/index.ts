@@ -25,6 +25,12 @@ import { titration } from './titration.js';
 import { uniformityByWeight } from './uniformity-by-weight.js';
 import { waterKf } from './water-kf.js';
 import { weigh } from './weigh.js';
+import { incubate } from './incubate.js';
+import { count } from './count.js';
+import { sterilityTest } from './sterility-test.js';
+import { bioburden } from './bioburden.js';
+import { endotoxin } from './endotoxin.js';
+import { microbialAssay } from './microbial-assay.js';
 
 export type { Block, BlockField, BlockSetting } from './format.js';
 // In the order of an analysis: clearance, weighing and preparing solutions, the instrument run and its suitability,
@@ -33,6 +39,8 @@ export const BLOCKS: readonly Block[] = [
   lineClearance, weigh, mix, dilute, instrumentRun, systemSuitability, check, periodicCheck, dryConstant, disintegration, friability,
   uniformityByWeight, contentUniformity, densityFlow, sieveAnalysis,
   assay, assayAbsorbance, impurities, dissolution, titration, waterKf, lossOnDrying, opticalRotation, ph, relativeDensity,
+  // The microbiology lab (build step 7): incubation and the counts, and the result blocks of the micro lab.
+  incubate, count, sterilityTest, bioburden, endotoxin, microbialAssay,
 ];
 export function findBlock(ref: { id: string; version: number }): Block | undefined {
   return BLOCKS.find((b) => b.id === ref.id && b.version === ref.version);

@@ -1478,7 +1478,8 @@ export type SterilityProduct =
 
 export type L19Input =
   | { readonly mode: 'square root' | 'every container'; readonly containers: Q; readonly test?: 'each container' | 'one composite' | { readonly compositesOf: number } }
-  | { readonly mode: 'sterility containers'; readonly batchSize: Q; readonly product: SterilityProduct; readonly oneContainerForBothMedia: boolean }
+  // tested (a worksheet's count of containers tested): checked to be at least the number required (sterility test block).
+  | { readonly mode: 'sterility containers'; readonly batchSize: Q; readonly product: SterilityProduct; readonly oneContainerForBothMedia: boolean | 'yes' | 'no'; readonly tested?: Q }
   | { readonly mode: 'sterility quantity'; readonly content: Q; readonly product: 'liquid' | 'antibiotic liquid' | 'solid' | 'insoluble, cream or ointment' }
   | { readonly mode: 'extractable volume'; readonly nominal: Q };
 
@@ -1552,12 +1553,17 @@ export function l19SamplingPlan(i: L19Input): Outcome<{ readonly tests?: number;
           default:
             return refuse('Unknown product type for the sterility table');
         }
-        if (typeof i.oneContainerForBothMedia !== 'boolean') refuse('Say whether the contents of one container are enough to inoculate both media');
-        const perMedia = i.oneContainerForBothMedia ? n : n * 2;
+        const both = i.oneContainerForBothMedia === 'yes' ? true : i.oneContainerForBothMedia === 'no' ? false : i.oneContainerForBothMedia;
+        if (typeof both !== 'boolean') refuse('Say whether the contents of one container are enough to inoculate both media');
+        const perMedia = both ? n : n * 2;
         const all = perMedia >= N;
         const value = Math.min(perMedia, N);
-        const shown = `${i.product}, batch of ${N} (${rule}): ${n}${i.oneContainerForBothMedia ? ' for both media together' : `, × 2 as one container cannot inoculate both media = ${perMedia}`}${all ? `; the batch has only ${N}: test all ${N}` : ''}`;
-        return { ok: true, value: d(value), unit: 'units', shown };
+        const shown = `${i.product}, batch of ${N} (${rule}): ${n}${both ? ' for both media together' : `, × 2 as one container cannot inoculate both media = ${perMedia}`}${all ? `; the batch has only ${N}: test all ${N}` : ''}`;
+        if (i.tested === undefined) return { ok: true, value: d(value), unit: 'units', shown };
+        const tested = wholeCount(i.tested, 'The number of containers tested');
+        const pass = tested >= value;
+        const line = `${shown}; ${tested} tested: ${pass ? 'enough' : `TOO FEW (at least ${value})`}`;
+        return { ok: true, value: d(value), unit: 'units', shown: line, check: { pass, level: pass ? 'pass' : 'fail', rounded: `${tested} units`, shown: line } };
       }
       case 'sterility quantity': {
         const c = parse(i.content, 'The content of the container');

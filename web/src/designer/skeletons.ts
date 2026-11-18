@@ -101,6 +101,56 @@ const SKELETONS: { id: string; name: string; text: string; stages: StagePlan[] }
         steps: [{ block: 'uniformity-by-weight' }, { block: 'friability' }, { block: 'disintegration' }] },
     ],
   },
+  // The microbiology lab (build step 7): incubation and counting with the pharmacopoeia's usual conditions; the
+  // limits are the specification's (a TAMC or TYMC criterion 10^n is read as NMT 2 × 10^n).
+  {
+    id: 'microbial-limits', name: 'Microbial limits (TAMC/TYMC)',
+    text: 'Weigh 10 g and disperse it 1 in 10; pour plates of 2 dilutions; incubate and count TAMC (30-35 °C, 3-5 days) and TYMC (20-25 °C, 5-7 days).',
+    stages: [
+      { key: 'sample', name: 'Sample preparation', role: 'Microbiologist',
+        steps: [{ block: 'weigh', key: 'weigh-sample', name: 'Weigh 10 g of the sample', settings: { what: 'Sample (10 g)', unit: 'g' } },
+          { block: 'mix', key: 'disperse', name: 'Disperse 1 in 10 in buffered sodium chloride-peptone solution pH 7.0' }] },
+      { key: 'tamc', name: 'Total aerobic microbial count (TAMC)', role: 'Microbiologist', machineTypes: ['incubator', 'colony counter'],
+        steps: [{ block: 'incubate', key: 'incubate-tamc', name: 'Incubate the TAMC plates', settings: { what: 'TAMC plates, casein soya bean digest agar', atmosphere: 'aerobic',
+          temperatureLimit: { low: '30', high: '35', unit: '°C' }, timeLimit: { low: '72', high: '120', unit: 'h' } } },
+        { block: 'count', key: 'count-tamc', name: 'Count the TAMC plates', settings: { method: 'plate count', dilution1: '10', dilution2: '100', amount: '1 mL', per: 'CFU/g',
+          countable: 'TAMC: fewer than 250 per plate', acceptance: '10^n', limit: spec('limit') } }] },
+      { key: 'tymc', name: 'Total combined yeasts and moulds count (TYMC)', role: 'Microbiologist', machineTypes: ['incubator', 'colony counter'],
+        steps: [{ block: 'incubate', key: 'incubate-tymc', name: 'Incubate the TYMC plates', settings: { what: 'TYMC plates, Sabouraud-dextrose agar', atmosphere: 'aerobic',
+          temperatureLimit: { low: '20', high: '25', unit: '°C' }, timeLimit: { low: '120', high: '168', unit: 'h' } } },
+        { block: 'count', key: 'count-tymc', name: 'Count the TYMC plates', settings: { method: 'plate count', dilution1: '10', dilution2: '100', amount: '1 mL', per: 'CFU/g',
+          countable: 'TYMC: fewer than 50 per plate', acceptance: '10^n', limit: spec('limit') } }] },
+    ],
+  },
+  {
+    id: 'sterility-membrane', name: 'Sterility test (membrane filtration)',
+    text: 'Filter the containers the sterility table asks for; FTM at 30-35 °C and SCDM at 20-25 °C, each not less than 14 days; negative controls.',
+    stages: [
+      { key: 'sterility', name: 'Test for sterility', role: 'Microbiologist', machineTypes: ['incubator'],
+        steps: [{ block: 'sterility-test', key: 'sterility', settings: { method: 'membrane filtration', productType: 'parenteral', bothMedia: 'no',
+          ftmTemperatureLimit: { low: '30', high: '35', unit: '°C' }, scdmTemperatureLimit: { low: '20', high: '25', unit: '°C' }, incubationTime: { low: '14', unit: 'd' } } }] },
+    ],
+  },
+  {
+    id: 'endotoxin-kinetic', name: 'Bacterial endotoxins (kinetic)',
+    text: 'Kinetic chromogenic or turbidimetric LAL: a standard curve of 4 concentrations (0.005 to 5 EU/mL), the sample and the spiked sample, water BET.',
+    stages: [
+      { key: 'endotoxin', name: 'Bacterial endotoxins', role: 'Microbiologist', machineTypes: ['endotoxin reader'],
+        steps: [{ block: 'endotoxin', key: 'endotoxin', settings: { mode: 'photometric', response: 'onset time', responseUnit: 's',
+          std1: '0.005 EU/mL', std2: '0.05 EU/mL', std3: '0.5 EU/mL', std4: '5 EU/mL', spike: '0.5 EU/mL', limit: spec('limit') } }] },
+    ],
+  },
+  {
+    id: 'bioburden', name: 'Bioburden',
+    text: 'Filter the sample (membrane filtration), incubate at 30-35 °C for 3-5 days and count; the count per mL against the limit.',
+    stages: [
+      { key: 'bioburden', name: 'Bioburden', role: 'Microbiologist', machineTypes: ['incubator'],
+        steps: [{ block: 'incubate', key: 'incubate', name: 'Incubate the membranes', settings: { what: 'Membranes on casein soya bean digest agar', atmosphere: 'aerobic',
+          temperatureLimit: { low: '30', high: '35', unit: '°C' }, timeLimit: { low: '72', high: '120', unit: 'h' } } },
+        { block: 'bioburden', key: 'bioburden', settings: { technique: 'membrane filtration', dilution1: '1', amount: '100 mL', per: 'CFU/mL', countable: 'membrane: up to 100',
+          acceptance: 'as written', limit: spec('limit') } }] },
+    ],
+  },
 ];
 export const SKELETON_LIST = SKELETONS.map(({ id, name, text }) => ({ id, name, text }));
 

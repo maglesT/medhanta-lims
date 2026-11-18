@@ -470,3 +470,29 @@ calculations are pure functions (`shared/engine/stability-evaluation.ts`) over t
 Screens: the Stability tab's **Evaluation** list (products and materials on stability, their signed shelf life), the
 product evaluation screen (CTD downloads, studies, to be reported, data, Q1E per condition with "Propose the shelf life
 (QA)", signed evaluations, Arrhenius), and the same panel on the study screen (its batch alone).
+
+## Step 7: microbiology worksheets (build step 7, 18 Nov 2026)
+Plan 2.9 (sterility, bioburden, endotoxin, microbial limits) and library 2b, 3b (L11-L13), 8b. No migration, no new
+table, no new permission and no new engine mechanism: six new blocks of the block library and three templates
+(`shared/templates/lab-micro.ts`, README "Lab templates, microbiology"); the method designer offers four skeletons
+(microbial limits TAMC/TYMC, sterility by membrane filtration, kinetic endotoxins, bioburden).
+
+| Block | Records | Calculation | Reportable `result` against `limit` |
+|---|---|---|---|
+| `incubate` | the medium lot (inventory item, LIMS-34), the incubator (machine: Logbook and Qualification, LIMS-12), start and end timers, lowest and highest temperature, the reading | T13 incubation time (its lower bound is a minimum wait, as a mixing time), C1 temperature range | none (a preparation step); two temperatures = two incubate steps |
+| `count` | the colonies per plate of up to 3 dilutions (counted lists) or TNTC; or MPN tubes; negative control | L11 | the count, with the spec's alert and action levels (C1 tiers); 10^n read as NMT 2 × 10^n |
+| `bioburden` | the medium lot, the plates, negative control | L11 × the method's recovery factor | the count |
+| `sterility-test` | batch size and containers tested; per medium (FTM, SCDM: inventory items) its incubator, timers, readings during the incubation, temperatures, final reading and negative control; the organism found | L19 (the containers the sterility table requires, against those tested), T13 (14 days), C1, C4 | C4 "no growth in FTM or SCDM": the number of media with growth; a "conforms" spec test |
+| `endotoxin` | the lysate (reagent item), the reader or heating block; photometric: the standards' and A/B responses, negative control; gel clot: + / − per replicate, end-points, λ of the lot | L12 (MVD, validity, result) | endotoxin in the limit's terms, checked as less than the limit |
+| `microbial-assay` | the test organism (culture item, LIMS-35), the medium lot, the responses per dose of standard and test | L13 | potency on the estimate or a fiducial limit; precision checked beside it |
+
+**A positive sterility test (LIMS-38)** is an ordinary failed result: the step's `result` check fails, the step needs
+a deviation note before it is signed, and signing it opens the OOS (step 4, `openOos`), one per analysis and test.
+There is no other way to set it aside: the result is invalidated only through that OOS, i.e. phase I by the analyst
+records the assignable laboratory cause (e.g. the EM of the isolator, the organism's identity), a supervisor who did no
+part of it reviews phase I (e-signature `reviewed`), and QA signs the invalidation (e-signature `oos_approved`,
+permission `lims.oos.approve`); the original analysis stays, marked invalidated, and QA authorises the retest. QC's
+decision waits for the OOS (`approvalProblems`). An invalid test (growth in a count's negative control, a failed
+endotoxin curve or control, a microbial assay without parallelism) is not an OOS: its template refuses with the reason
+and the test is repeated. Growth in a sterility negative control fails its own check (a deviation note on the step),
+not the result.
