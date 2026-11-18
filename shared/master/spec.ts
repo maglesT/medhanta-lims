@@ -170,3 +170,15 @@ export function testsFor(doc: SpecDoc, methodMasterId: number, purpose: string):
   const on = purposeLimits(purpose);
   return doc.tests.filter((t) => t.method.masterId === methodMasterId && (t.use === 'release and stability' || t.use === on));
 }
+
+/** A test's limit in words, as the certificate and the published results show it ("98.0 to 102.0 %", "NMT 0.5 %"). */
+export function limitText(t: SpecTest, purpose: 'release' | 'stability' = 'release'): string {
+  if (t.limitType === 'conforms') return `Conforms: ${t.conforms ?? ''}`.trim();
+  if (t.limitType === 'report only') return 'Report';
+  const l = limitFor(t, purpose);
+  if (!l) return '';
+  const u = l.unit ? ` ${l.unit}` : '';
+  const main = l.low !== undefined && l.high !== undefined ? `${l.low} to ${l.high}${u}` : l.high !== undefined ? `NMT ${l.high}${u}` : `NLT ${l.low}${u}`;
+  const alert = l.alertLow !== undefined || l.alertHigh !== undefined ? ` (alert ${[l.alertLow && `below ${l.alertLow}`, l.alertHigh && `above ${l.alertHigh}`].filter(Boolean).join(', ')})` : '';
+  return main + alert;
+}

@@ -7,13 +7,13 @@ import { IssueDialog } from '../floor/IssueDialog.js';
 import { SignDialog } from '../components/SignDialog.js';
 import { testText } from '../designer/describe.js';
 import type { SampleAction } from '../../../shared/engine/sample.js';
-import { PURPOSE_LABEL, STATUS_CHIP, STATUS_LABEL, getSample, sampleEntry, type SampleDetail, type SampleEntry } from './api-samples.js';
+import { PURPOSE_LABEL, STATUS_CHIP, STATUS_LABEL, coaLink, decide, getSample, sampleEntry, type SampleDetail, type SampleEntry } from './api-samples.js';
 
 const ENTRY_WORDS: Record<SampleEntry['kind'], string> = {
-  checked: 'Checked by a second person', received: 'Received in QC', stored: 'Stored', handed_over: 'Handed over', disposed: 'Disposed of', note: 'Note',
+  checked: 'Checked by a second person', received: 'Received in QC', stored: 'Stored', handed_over: 'Handed over', disposed: 'Disposed of', note: 'Note', approved: 'QC approved', rejected: 'QC rejected',
 };
 const entryText = (e: SampleEntry) => [e.payload.condition && `Condition: ${e.payload.condition}`, e.payload.where && `Where: ${e.payload.where}`,
-  e.payload.to && `To: ${e.payload.to}`, e.payload.reason && `Reason: ${e.payload.reason}`, e.payload.method && `Method: ${e.payload.method}`, e.payload.text].filter(Boolean).join(' · ');
+  e.payload.to && `To: ${e.payload.to}`, e.payload.reason && `Reason: ${e.payload.reason}`, e.payload.method && `Method: ${e.payload.method}`, e.payload.coaNo && `Certificate ${e.payload.coaNo}`, e.payload.text].filter(Boolean).join(' · ');
 
 // The entries asked for in a small form: their fields and button words.
 const FORMS: Partial<Record<SampleAction, { title: string; button: string; fields: { name: string; label: string; hint?: string }[] }>> = {
@@ -58,6 +58,7 @@ export function SampleScreen({ me, id, onBack }: { me: Me; id: number; onBack: (
         </dl>
       </section>
       {d.spec && <Tests d={d} me={me} />}
+      {d.spec && <Decision d={d} me={me} reload={load} />}
       <section className="dash-panel samples-waiting" aria-label="Chain of custody">
         <div className="panel-head"><h2>Chain of custody</h2></div>
         <ol className="custody">
@@ -162,6 +163,52 @@ function Tests({ d, me }: { d: SampleDetail; me: Me }) {
         </div>
       )}
       {starting && <IssueDialog row={{ id: starting.versionId, versionNo: starting.versionNo, header: { code: starting.code, name: starting.name } }} sampleId={d.sample.id} sampleNo={d.sample.sampleNo} onCancel={() => setStarting(null)} />}
+    </section>
+  );
+}
+
+/**
+ * QC's decision (LIMS-20, LIMS-21): approve (e-signature "QC approved", a CoA number is given) when every test that applies
+ * has a reviewed result within its limit; reject with a reason (e-signature "rejected") at any time. Once approved, the
+ * certificate of analysis downloads here.
+ */
+function Decision({ d, me, reload }: { d: SampleDetail; me: Me; reload: () => Promise<void> }) {
+  const [signing, setSigning] = useState<'approve' | 'reject' | null>(null);
+  const [reason, setReason] = useState('');
+  const [error, setError] = useState('');
+  const decided = d.events.find((e) => e.kind === 'approved' || e.kind === 'rejected');
+  const may = can(me, 'qc.approve');
+  return (
+    <section className="dash-panel samples-waiting" aria-label="QC decision">
+      <div className="panel-head"><h2>QC decision</h2>{d.decision === 'approved' && <a className="button" href={coaLink(d.sample.id)} download>Certificate of analysis (PDF)</a>}</div>
+      {decided ? (
+        <p className={decided.kind === 'approved' ? 'all-good' : 'notice bad'}><span aria-hidden="true">{decided.kind === 'approved' ? '✓' : '✕'}</span>
+          {decided.kind === 'approved' ? `Approved, certificate ${decided.payload.coaNo}` : `Rejected: ${decided.payload.reason}`} · {decided.signature?.printedName ?? decided.personName}, {plantTime(decided.signature?.signedAt ?? decided.at)}</p>
+      ) : !may ? <p className="muted">QC decides when every test has a reviewed result.</p> : (<>
+        {d.approvalProblems.length > 0 && <div className="notice" role="note"><p><b>Not ready for approval:</b></p><ul>{d.approvalProblems.map((p, i) => <li key={i}>{p}</li>)}</ul></div>}
+        {error && <p className="notice bad" role="alert">{error}</p>}
+        <div className="decide">
+          <p className="why">Your signature means: every test of the specification that applies has a reviewed result within its limit; the sample is approved and its certificate issued.</p>
+          <button className="big ok" disabled={d.approvalProblems.length > 0} onClick={() => setSigning('approve')}>Sign: QC approved</button>
+        </div>
+        <div className="decide reject">
+          <label>Reason for rejection<textarea value={reason} onChange={(e) => setReason(e.target.value)} maxLength={1000} /></label>
+          <button className="big soft-bad" disabled={!reason.trim() || !!d.rejectionRefusal} onClick={() => setSigning('reject')}>Sign: rejected</button>
+        </div>
+      </>)}
+      {signing && (
+        <SignDialog meaning={signing === 'approve' ? 'qc_approved' : 'rejected'} what={`Sample ${d.sample.sampleNo} · ${d.sample.item.code} ${d.sample.item.name} · ${d.sample.lotNo}`}
+          onCancel={() => setSigning(null)}
+          onSign={async ({ proof }) => {
+            try {
+              await decide(d.sample.id, signing, { proof, contentHash: d.decisionHash, ...(signing === 'reject' ? { reason: reason.trim() } : {}) });
+              setSigning(null);
+              await reload();
+            } catch (e) { setSigning(null); setError(plainError(e)); }
+          }}>
+          <div className="summary-box">{signing === 'reject' ? <p>Reason: <b>{reason.trim()}</b></p> : <p>{d.spec!.tests.filter((t) => t.applies).length} tests, each with a reviewed result within its limit.</p>}</div>
+        </SignDialog>
+      )}
     </section>
   );
 }

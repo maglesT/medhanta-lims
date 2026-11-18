@@ -269,20 +269,25 @@ async function recordClosedStages(tx: Tx, id: number, before: readonly StageView
 }
 
 // A spec test's result in an analysis: the method's result step (stage/step/name), from its last signed round.
-export interface TestResult { analysisId: number; analysisNo: string; status: string; result: { shown: string; value: string; unit: string; pass?: boolean } | null }
+export interface TestResult { analysisId: number; analysisNo: string; status: string; result: { shown: string; value: string; unit: string; pass?: boolean } | null;
+  // Who recorded, signed or checked its steps, and its open deviations (read from Deviations while linked).
+  people: number[]; openDeviations: number; reviewedAt: Date | null; method: string }
 /** The analyses of a sample, per spec test they cover, oldest first, each with its status and its result once worked out. */
-export async function sampleTestResults(q: Sql | Tx, sampleId: number): Promise<Record<string, TestResult[]>> {
+export async function sampleTestResults(q: Sql | Tx, sampleId: number, app?: FastifyInstance): Promise<Record<string, TestResult[]>> {
   const ids = await q<{ id: number }[]>`select id::int from analyses where sample_id = ${sampleId} order by id`;
   const out: Record<string, TestResult[]> = {};
   for (const { id } of ids) {
     const l = (await loadAnalysis(q, id))!;
     const { steps } = openSteps(l.doc, l.events, l.now);
-    const status = analysisView(l.doc, l.events, l.analysisEvents, l.now).status;
+    const v = analysisView(l.doc, l.events, l.analysisEvents, l.now, app ? (await deviationsRead(app, l)).read : undefined);
+    const status = v.status;
+    const reviewedAt = l.analysisEvents.find((e) => e.kind === 'reviewed')?.at ?? null;
     for (const t of l.sample?.tests ?? []) {
       const [sk, tk, name] = t.result.split('/') as [string, string, string];
-      const v = steps.filter((x) => x.stageKey === sk && x.stepKey === tk && ['done', 'checked'].includes(x.state)).at(-1);
-      const r = v?.results[name];
-      (out[t.key] ??= []).push({ analysisId: id, analysisNo: l.analysis.analysisNo, status,
+      const at = steps.filter((x) => x.stageKey === sk && x.stepKey === tk && ['done', 'checked'].includes(x.state)).at(-1);
+      const r = at?.results[name];
+      (out[t.key] ??= []).push({ analysisId: id, analysisNo: l.analysis.analysisNo, status, people: v.people, openDeviations: v.deviations.filter((d) => d.open).length,
+        reviewedAt, method: l.doc.header.code,
         result: r?.ok ? { shown: r.shown, value: r.value, unit: r.unit, ...(r.check ? { pass: r.check.pass } : {}) } : null });
     }
   }

@@ -16,8 +16,8 @@ export interface SampleListRow {
   registeredByName: string; registeredAt: string; specNumber: string; specVersionNo: number; status: SampleStatus;
 }
 export interface SampleEntry {
-  id: number; kind: 'checked' | 'received' | 'stored' | 'handed_over' | 'disposed' | 'note'; personName: string; at: string;
-  payload: { condition?: string; where?: string; to?: string; reason?: string; method?: string; text?: string };
+  id: number; kind: 'checked' | 'received' | 'stored' | 'handed_over' | 'disposed' | 'note' | 'approved' | 'rejected'; personName: string; at: string;
+  payload: { condition?: string; where?: string; to?: string; reason?: string; method?: string; text?: string; coaNo?: string };
   signature: { printedName: string; signedAt: string } | null;
 }
 export interface SampleDetail {
@@ -27,6 +27,8 @@ export interface SampleDetail {
   spec: { id: number; versionNo: number; state: string; header: SpecDoc['header']; tests: (SpecTest & { applies: boolean; analyses: TestResult[] })[] } | null;
   methods: { versionId: number; masterId: number; versionNo: number; code: string; name: string }[];
   actions: SampleAction[]; refusals: Record<SampleAction, string | null>; contentHash: string;
+  // QC's decision (LIMS-20): made, or what stands in the way of approval for this person.
+  decision: 'approved' | 'rejected' | null; decisionHash: string | null; approvalProblems: string[]; rejectionRefusal: string | null;
 }
 // A spec test's analysis: its status and, once worked out, its result (pass or fail against the test's limit).
 export interface TestResult { analysisId: number; analysisNo: string; status: string; result: { shown: string; value: string; unit: string; pass?: boolean } | null }
@@ -40,6 +42,8 @@ export const listSamples = () => api<SampleListRow[]>('GET', '/api/samples');
 export const getSample = (id: number) => api<SampleDetail>('GET', `/api/samples/${id}`);
 export const specsFor = (of: 'material' | 'product', itemId: string) => api<SpecChoice[]>('GET', `/api/sample-specs?of=${of}&itemId=${encodeURIComponent(itemId)}`);
 export const registerSample = (b: RegisterInput) => api<{ id: number; sampleNo: string }>('POST', '/api/samples', b);
+export const decide = (id: number, decision: 'approve' | 'reject', body: object) => api<{ ok: true; coaNo?: string }>('POST', `/api/samples/${id}/${decision}`, body);
+export const coaLink = (id: number) => `/api/samples/${id}/coa`;
 export const sampleEntry = (id: number, action: SampleAction, body: object) => api<{ ok: true }>('POST', `/api/samples/${id}/${action}`, body);
 
 export const STATUS_CHIP: Record<SampleStatus, string> = {

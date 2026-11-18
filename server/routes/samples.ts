@@ -6,8 +6,11 @@ import { parseId, requirePermission } from '../auth.js';
 import { usableItem } from '../master.js';
 import { LOT_WAITING, batchWaiting, type BatchRead, type LotRead } from '../links.js';
 import { SignError, authenticateSigner, contentHash, sign, signBody } from '../signatures.js';
-import { purposeLimits, type SpecDoc } from '../../shared/master/spec.js';
-import { sampleTestResults } from './analyses.js';
+import { limitText, purposeLimits, type SpecDoc } from '../../shared/master/spec.js';
+import { approvalProblems, rejectionRefusal, sampleDecision, type TestState } from '../../shared/engine/sample.js';
+import { coaDoc } from '../coa.js';
+import { render, sendPdf } from '../pdf.js';
+import { sampleTestResults, type TestResult } from './analyses.js';
 import {
   PROVIDER_NAME, SAMPLE_ACTIONS, SAMPLE_ACTION_NAMES, SAMPLE_PURPOSES, isHand, sampleRefusal, sampleStatus,
   type LinkState, type SampleAction, type SampleEvent, type SamplePurpose, type Source,
@@ -30,7 +33,7 @@ export interface SampleRow {
   id: number; sampleNo: string; specVersionId: number; purpose: SamplePurpose; lotNo: string; item: SampleItem; source: Source;
   quantity: string; containers: number | null; registeredBy: number; registeredByName: string; registeredAt: Date;
 }
-type EventRow = SampleEvent & { id: number; personName: string; at: Date; signature: { printedName: string; signedAt: Date } | null };
+export type EventRow = SampleEvent & { id: number; personName: string; at: Date; signature: { printedName: string; signedAt: Date } | null };
 
 class SampleError extends Error {
   constructor(public status: number, public code: string, public problems: string[] = []) { super(code); }
@@ -72,6 +75,10 @@ const facts = (s: SampleRow) => ({ registeredBy: s.registeredBy, byHand: isHand(
 // What the signer of a disposal is shown: the sample as it stands, by its last entry (refused if anything was added since).
 const sampleContent = (s: SampleRow, events: EventRow[]) => ({ sample: s.id, sampleNo: s.sampleNo, lotNo: s.lotNo, item: s.item.code, status: sampleStatus(facts(s), events), lastEvent: events.at(-1)?.id ?? 0 });
 const sampleHash = (s: SampleRow, events: EventRow[]) => contentHash('sample', s.id, sampleContent(s, events));
+// What QC signs at the decision: the sample by its last entry, and the results decided on (refused if any changed).
+const decisionContent = (s: SampleRow, events: EventRow[], tests: ReturnType<typeof testStates>) =>
+  ({ ...sampleContent(s, events), results: tests.filter((t) => t.applies).map((t) => t.decided) });
+const decisionHash = (s: SampleRow, events: EventRow[], tests: ReturnType<typeof testStates>) => contentHash('sample_decision', s.id, decisionContent(s, events, tests));
 
 const text = (max = 200) => z.string().trim().min(1).max(max);
 const registerBody = z.object({
@@ -95,6 +102,26 @@ const ACTION_BODIES: Record<SampleAction, z.ZodTypeAny> = {
   dispose: signBody.extend({ reason: text(500), method: text(200) }),
   note: z.object({ text: text(1000) }),
 };
+
+/**
+ * The tests QC decides on (LIMS-11): each test of the sample's specification, whether it applies to the sample's
+ * purpose, and its latest reviewed analysis with its result.
+ */
+export function testStates(spec: SpecDoc, purpose: string, results: Record<string, TestResult[]>): (TestState & { decided: Record<string, unknown> | null })[] {
+  const on = purposeLimits(purpose);
+  return spec.tests.map((t) => {
+    const r = (results[t.key] ?? []).filter((a) => a.status === 'reviewed').at(-1);
+    const shown = r?.result ? `${r.result.value} ${r.result.unit}`.trim() : undefined;
+    return {
+      key: t.key, name: t.name, applies: t.use === 'release and stability' || t.use === on,
+      reviewed: r ? { analysisNo: r.analysisNo, hasResult: !!r.result, ...(r.result?.pass !== undefined ? { pass: r.result.pass } : {}), ...(shown ? { shown } : {}),
+        people: r.people, openDeviations: r.openDeviations } : null,
+      // The result as it goes on the certificate and into result_v1.
+      decided: r?.result ? { key: t.key, name: t.name, value: r.result.value, unit: r.result.unit, shown: r.result.shown, ...(r.result.pass !== undefined ? { pass: r.result.pass } : {}),
+        limit: limitText(t, on), method: r.method, analysisNo: r.analysisNo, reviewedAt: r.reviewedAt } : null,
+    };
+  });
+}
 
 export function sampleRoutes(app: FastifyInstance, sql: Sql) {
   const reader = { preHandler: requirePermission('lims.sample.register', 'lims.view') };
@@ -225,7 +252,7 @@ export function sampleRoutes(app: FastifyInstance, sql: Sql) {
     if (!l) return reply.code(404).send({ error: 'not_found' });
     const [v] = await sql<{ id: number; masterId: number; versionNo: number; state: string; doc: SpecDoc }[]>`
       select id::int, master_id::int as "masterId", version_no as "versionNo", state, doc from master_versions where id = ${l.s.specVersionId}`;
-    const results = await sampleTestResults(sql, l.s.id);
+    const results = await sampleTestResults(sql, l.s.id, app);
     const methodIds = [...new Set((v?.doc.tests ?? []).filter((t) => t.use === 'release and stability' || t.use === purposeLimits(l.s.purpose)).map((t) => t.method.masterId))];
     const methods = methodIds.length ? await sql<{ versionId: number; masterId: number; versionNo: number; code: string; name: string }[]>`
       select id::int as "versionId", master_id::int as "masterId", version_no as "versionNo", doc->'header'->>'code' as code, doc->'header'->>'name' as name
@@ -241,6 +268,11 @@ export function sampleRoutes(app: FastifyInstance, sql: Sql) {
       // The methods this sample's tests are done by: their effective versions, to start an analysis from.
       methods,
       actions: SAMPLE_ACTION_NAMES.filter((a) => refusals[a] === null), refusals, contentHash: sampleHash(l.s, l.events),
+      // QC's decision (LIMS-20): made, or what stands in the way of approval for this person.
+      decision: sampleDecision(l.events), decisionHash: v ? decisionHash(l.s, l.events, testStates(v.doc, l.s.purpose, results)) : null,
+      approvalProblems: !v ? ['The sample has no specification.'] : !user.permissions.includes('lims.qc.approve') ? ['QC approval needs the QC approval permission.']
+        : approvalProblems(facts(l.s), l.events, testStates(v.doc, l.s.purpose, results), user.id),
+      rejectionRefusal: user.permissions.includes('lims.qc.approve') ? rejectionRefusal(l.events) : 'Rejection needs the QC approval permission.',
     };
   });
 
@@ -280,4 +312,62 @@ export function sampleRoutes(app: FastifyInstance, sql: Sql) {
       }
     });
   }
+
+  // QC's decision (LIMS-20): approval, with the next CoA number (LIMS-21), only when every test that applies has a
+  // reviewed result within its limit; rejection at any time with its reason. Both are e-signatures; the results decided
+  // on are kept with the decision (published in result_v1, coa_v1).
+  for (const decision of ['approve', 'reject'] as const) {
+    app.post<{ Params: { id: string } }>(`/api/samples/:id/${decision}`, { preHandler: requirePermission('lims.qc.approve') }, async (req, reply) => {
+      const id = parseId(req.params.id);
+      const body = (decision === 'reject' ? signBody.extend({ reason: text(1000) }) : signBody).safeParse(req.body);
+      if (id === null || !body.success) return reply.code(400).send({ error: 'invalid', problems: body.error?.issues.map((i) => `${i.path.join('.')}: ${i.message}`) ?? [] });
+      const b = body.data as { proof: string; contentHash: string; reason?: string };
+      const user = req.user!;
+      const meaning = decision === 'approve' ? 'qc_approved' : 'rejected';
+      try {
+        const signer = await authenticateSigner(sql, app.proofKey, user, { proof: b.proof }, { objectType: 'sample', objectId: id, meaning });
+        return await sql.begin(async (tx) => {
+          await tx`select pg_advisory_xact_lock(hashtext(${`sample-entry:${id}`}))`;
+          const l = await loadSample(tx, id);
+          if (!l) throw new SampleError(404, 'not_found');
+          const [v] = await tx<{ doc: SpecDoc }[]>`select doc from master_versions where id = ${l.s.specVersionId}`;
+          const tests = testStates(v!.doc, l.s.purpose, await sampleTestResults(tx, id, app));
+          const problems = decision === 'approve' ? approvalProblems(facts(l.s), l.events, tests, user.id) : [rejectionRefusal(l.events)].filter((x): x is string => !!x);
+          if (problems.length) throw new SampleError(problems.some((p) => p.includes('another person approves')) ? 403 : 409, 'not_ready', problems);
+          if (b.contentHash !== decisionHash(l.s, l.events, tests)) throw new SampleError(409, 'content_changed', ['The sample or its results changed since you opened it.']);
+          let coaNo: string | undefined;
+          if (decision === 'approve') {
+            const [c] = await tx<{ n: number; yy: string }[]>`
+              insert into coa_counters (year, last_no) values (extract(year from now() at time zone ${PLANT_TZ})::int, 1)
+              on conflict (year) do update set last_no = coa_counters.last_no + 1 returning last_no as n, right(year::text, 2) as yy`;
+            coaNo = `COA${c!.yy}${String(c!.n).padStart(5, '0')}`;
+          }
+          const results = tests.filter((t) => t.decided).map((t) => t.decided);
+          const payload = { ...(coaNo ? { coaNo } : {}), ...(b.reason ? { reason: b.reason } : {}), results };
+          const [ev] = await tx<{ id: number }[]>`
+            insert into sample_events (sample_id, kind, payload, person_id) values (${id}, ${decision === 'approve' ? 'approved' : 'rejected'}, ${tx.json(payload as never)}, ${user.id}) returning id::int`;
+          const content = { ...decisionContent(l.s, l.events, tests), decision, ...(coaNo ? { coaNo } : {}), ...(b.reason ? { reason: b.reason } : {}) };
+          await sign(tx, { signer, objectType: 'sample_event', objectId: ev!.id, meaning, content, shownHash: contentHash('sample_event', ev!.id, content) });
+          await audit(tx, { actorId: user.id, action: `sample.${decision === 'approve' ? 'approved' : 'rejected'}`, objectType: 'sample', objectId: id, new: { event: ev!.id, ...payload }, reason: b.reason ?? null });
+          return { ok: true, eventId: ev!.id, ...(coaNo ? { coaNo } : {}) };
+        });
+      } catch (e) {
+        if (e instanceof SampleError) return reply.code(e.status).send({ error: e.code, problems: e.problems, message: e.problems[0] });
+        if (e instanceof SignError) return reply.code(e.code === 'wrong_credentials' ? 401 : e.code === 'not_allowed' ? 403 : 409).send({ error: e.code });
+        throw e;
+      }
+    });
+  }
+
+  // LIMS-21: the certificate of analysis of an approved sample, as a PDF: only the reviewed results decided on.
+  app.get<{ Params: { id: string } }>('/api/samples/:id/coa', reader, async (req, reply) => {
+    const id = parseId(req.params.id);
+    const l = id === null ? null : await loadSample(sql, id);
+    const approved = l?.events.find((e) => e.kind === 'approved');
+    if (!l || !approved) return reply.code(404).send({ error: 'not_found', message: 'A certificate is issued only for an approved sample.' });
+    const [v] = await sql<{ versionNo: number; doc: SpecDoc }[]>`select version_no as "versionNo", doc from master_versions where id = ${l.s.specVersionId}`;
+    const def = coaDoc({ sample: l.s, spec: v!.doc, specVersion: v!.versionNo, decision: approved }, req.user!.fullName, new Date(), app.demo);
+    return sendPdf(reply, `coa-${String(approved.payload.coaNo ?? l.s.sampleNo)}`, await render(def));
+  });
+
 }

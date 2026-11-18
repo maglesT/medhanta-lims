@@ -6,16 +6,16 @@
 
 export const SAMPLE_PURPOSES = ['release', 'retest', 'stability', 'investigation'] as const;
 export type SamplePurpose = (typeof SAMPLE_PURPOSES)[number];
-export const SAMPLE_EVENT_KINDS = ['checked', 'received', 'stored', 'handed_over', 'disposed', 'note'] as const;
+export const SAMPLE_EVENT_KINDS = ['checked', 'received', 'stored', 'handed_over', 'disposed', 'note', 'approved', 'rejected'] as const;
 export type SampleEventKind = (typeof SAMPLE_EVENT_KINDS)[number];
 
-// 'approved' and 'rejected' are QC's decision (build step 3, round 5); nothing computes them yet.
+// The custody status; QC's decision (approved or rejected) is told apart by sampleDecision.
 export type SampleStatus = 'waiting for check' | 'registered' | 'received' | 'stored' | 'handed over' | 'disposed' | 'approved' | 'rejected';
 
 export interface SampleEvent {
   kind: SampleEventKind;
   person: number;
-  payload: { condition?: string; where?: string; to?: string; reason?: string; method?: string; text?: string };
+  payload: { condition?: string; where?: string; to?: string; reason?: string; method?: string; text?: string; coaNo?: string };
 }
 export interface SampleFacts {
   registeredBy: number;
@@ -67,4 +67,46 @@ export function sampleRefusal(action: SampleAction, s: SampleFacts, events: read
     case 'note':
       return null;
   }
+}
+
+// ---- QC's decision (LIMS-11, LIMS-20, LIMS-41) ----
+export type Decision = 'approved' | 'rejected';
+/** QC's decision on the sample, once made; one per sample. */
+export const sampleDecision = (events: readonly SampleEvent[]): Decision | null =>
+  (events.find((e) => e.kind === 'approved' || e.kind === 'rejected')?.kind as Decision | undefined) ?? null;
+
+/** A test of the sample's specification as QC decides on it: its latest reviewed analysis, if any. */
+export interface TestState {
+  key: string; name: string; applies: boolean;
+  // A test whose limit type has no limit (report only, conforms) passes when it has a result.
+  reviewed: { analysisNo: string; hasResult: boolean; pass?: boolean; shown?: string; people: number[]; openDeviations: number } | null;
+}
+
+/**
+ * Why QC may not approve the sample now (plain words, all at once); empty when it may. Approval needs the sample in QC,
+ * a reviewed result for every test that applies (LIMS-11), every result within its limit (an out-of-limit result is
+ * investigated, LIMS-23: the sample cannot be approved), no open deviation in those analyses, and an approver who did
+ * no part of them (LIMS-41).
+ */
+export function approvalProblems(s: SampleFacts, events: readonly SampleEvent[], tests: readonly TestState[], person: number): string[] {
+  const d = sampleDecision(events);
+  if (d) return [`The sample is already ${d}.`];
+  const status = sampleStatus(s, events);
+  if (status === 'waiting for check' || status === 'registered') return ['QC has not received the sample yet.'];
+  const out: string[] = [];
+  for (const t of tests.filter((x) => x.applies)) {
+    const r = t.reviewed;
+    if (!r) { out.push(`${t.name}: no reviewed result yet.`); continue; }
+    if (!r.hasResult) out.push(`${t.name}: analysis ${r.analysisNo} has no result.`);
+    else if (r.pass === false) out.push(`${t.name}: ${r.shown ?? 'the result'} is out of limits (analysis ${r.analysisNo}): it is investigated as an OOS result; the sample cannot be approved.`);
+    if (r.openDeviations) out.push(`${t.name}: analysis ${r.analysisNo} has ${r.openDeviations} open deviation${r.openDeviations === 1 ? '' : 's'}.`);
+    if (r.people.includes(person)) out.push(`${t.name}: you worked on analysis ${r.analysisNo}; another person approves the sample.`);
+  }
+  return out;
+}
+
+/** Why QC may not reject the sample now; null when it may (a rejection may come at any time, with its reason). */
+export function rejectionRefusal(events: readonly SampleEvent[]): string | null {
+  const d = sampleDecision(events);
+  return d ? `The sample is already ${d}.` : null;
 }
