@@ -31,6 +31,7 @@ import { sterilityTest } from './sterility-test.js';
 import { bioburden } from './bioburden.js';
 import { endotoxin } from './endotoxin.js';
 import { microbialAssay } from './microbial-assay.js';
+import { VALIDATION_BLOCKS } from './validation.js';
 
 export type { Block, BlockField, BlockSetting } from './format.js';
 // In the order of an analysis: clearance, weighing and preparing solutions, the instrument run and its suitability,
@@ -41,6 +42,8 @@ export const BLOCKS: readonly Block[] = [
   assay, assayAbsorbance, impurities, dissolution, titration, waterKf, lossOnDrying, opticalRotation, ph, relativeDensity,
   // The microbiology lab (build step 7): incubation and the counts, and the result blocks of the micro lab.
   incubate, count, sterilityTest, bioburden, endotoxin, microbialAssay,
+  // Method validation (build step 8): specificity, linearity, accuracy, precision, DL/QL, robustness, transfer comparison.
+  ...VALIDATION_BLOCKS,
 ];
 export function findBlock(ref: { id: string; version: number }): Block | undefined {
   return BLOCKS.find((b) => b.id === ref.id && b.version === ref.version);

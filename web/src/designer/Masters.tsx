@@ -7,6 +7,7 @@ import { Designer } from './Designer.js';
 import { IssueDialog } from '../floor/IssueDialog.js';
 import { NewMaster } from './Header.js';
 import { product } from '../product.js';
+import { listMethodReports, Validation, type MethodUse } from './Validation.js';
 import './designer.css';
 
 export function Masters({ me }: { me: Me }) {
@@ -17,13 +18,17 @@ export function Masters({ me }: { me: Me }) {
   const [creating, setCreating] = useState<{ copyOf?: MasterRow } | null>(null);
   const [issuing, setIssuing] = useState<MasterRow | null>(null);
   const [q, setQ] = useState('');
+  // LIMS-02, LIMS-04: each version's use status (validated, verified, transferred or not yet), and the reports screen.
+  const [uses, setUses] = useState<MethodUse[]>([]);
+  const [reports, setReports] = useState(false);
   const author = can(me, 'master.author');
-  const load = async () => setRows(await listMasters());
+  const load = async () => { setRows(await listMasters()); setUses((await listMethodReports()).methods); };
   useEffect(() => {
     void load();
     loadMasterData().then(setMd, (e: Error) => setError(e.message));
   }, []);
 
+  if (reports) return <Validation me={me} onBack={() => { setReports(false); void load(); }} />;
   if (open !== null) return <Designer me={me} versionId={open} onOpen={setOpen} onBack={() => { setOpen(null); void load(); }} />;
 
   const words = q.toLowerCase().split(/\s+/).filter(Boolean);
@@ -39,7 +44,10 @@ export function Masters({ me }: { me: Me }) {
           <h1>{product.masters}</h1>
           <p className="greeting">One row per version. A draft is written here, checked by a second person and approved by QA. An analysis is started from a sample.</p>
         </div>
-        {author && <button className="primary" onClick={() => setCreating({})} disabled={!md}>New method</button>}
+        <span className="actions-cell">
+          <button onClick={() => setReports(true)}>Validation reports</button>
+          {author && <button className="primary" onClick={() => setCreating({})} disabled={!md}>New method</button>}
+        </span>
       </div>
       {error && <p className="notice">{error}</p>}
       <input className="search" placeholder="Search by method code, name or technique" aria-label="Search methods" value={q} onChange={(e) => setQ(e.target.value)} />
@@ -48,7 +56,7 @@ export function Masters({ me }: { me: Me }) {
       ) : (
         <div className="table-wrap">
           <table className="masters">
-            <thead><tr><th>Method</th><th>Technique</th><th>Version</th><th>State</th><th>Written by</th><th /></tr></thead>
+            <thead><tr><th>Method</th><th>Technique</th><th>Version</th><th>State</th><th>Validation</th><th>Written by</th><th /></tr></thead>
             <tbody>
               {shown.map((r) => (
                 <tr key={r.id} className="clickable" onClick={() => setOpen(r.id)}>
@@ -56,6 +64,7 @@ export function Masters({ me }: { me: Me }) {
                   <td className="nowrap">{r.header.technique}</td>
                   <td>{r.versionNo}</td>
                   <td><span className={STATE_CHIP[r.state]}>{STATE_LABEL[r.state]}</span></td>
+                  <td className="nowrap">{(() => { const u = uses.find((x) => x.versionId === r.id); return u ? <>{u.status}{u.reportNo && <span className="cell-sub">{u.reportNo}</span>}</> : null; })()}</td>
                   <td>{r.createdByName}<span className="cell-sub">{plantTime(r.createdAt)}</span></td>
                   <td>
                     <span className="actions-cell" onClick={(e) => e.stopPropagation()}>

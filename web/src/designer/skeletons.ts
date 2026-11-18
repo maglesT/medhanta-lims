@@ -13,7 +13,7 @@ const spec = (name: string): SettingValue => ({ spec: name });
 const weighSample = (k: number, unit = 'mg'): StepPlan => ({ block: 'weigh', key: `weigh-sample-${k}`, name: `Weigh sample ${k}`, settings: { what: `Sample ${k}`, unit } });
 // The result steps end each skeleton: their masses and dilution factors refer to the weigh and dilute steps before
 // them, and the result's limit (and the label claim) is the specification's.
-const SKELETONS: { id: string; name: string; text: string; stages: StagePlan[] }[] = [
+const SKELETONS: { id: string; name: string; text: string; use?: 'validation'; stages: StagePlan[] }[] = [
   {
     id: 'hplc-external-standard', name: 'Chromatography (HPLC/GC) with an external standard',
     text: 'Standard solution, two sample solutions, the instrument run and its system suitability, then the assay.',
@@ -151,8 +151,46 @@ const SKELETONS: { id: string; name: string; text: string; stages: StagePlan[] }
           acceptance: 'as written', limit: spec('limit') } }] },
     ],
   },
+  // Method validation (build step 8, plan 2.12): validation worksheets. Their analyses run without a sample and feed
+  // the validation report; the acceptance criteria are the protocol's settings (typical ICH Q2 values for an assay).
+  {
+    id: 'validation-assay-hplc', name: 'Validation: assay (HPLC)', use: 'validation',
+    text: 'ICH Q2(R2) for an assay: specificity, linearity 50-150 % (and the range), accuracy at 80, 100 and 120 % in triplicate, repeatability, intermediate precision, robustness.',
+    stages: [
+      { key: 'run', name: 'Instrument run', role: 'Analyst', machineTypes: ['HPLC', 'GC'], steps: [{ block: 'instrument-run', key: 'run' }, { block: 'system-suitability', key: 'sst' }] },
+      { key: 'validation', name: 'Validation characteristics', role: 'Analyst',
+        steps: [
+          { block: 'specificity', key: 'specificity', settings: { limit: { high: '0.5', unit: '%' }, resolutionLimit: { low: '2.0', unit: '' } } },
+          { block: 'linearity', key: 'linearity', settings: { levelUnit: '%', limit: { low: '0.999', unit: '' }, interceptLimit: { low: '-2.0', high: '2.0', unit: '%' }, use: 'assay' } },
+          { block: 'accuracy', key: 'accuracy', settings: { mode: 'recovery', amountUnit: 'mg', level1: '80 %', level2: '100 %', level3: '120 %', limit: { low: '98.0', high: '102.0', unit: '%' } } },
+          { block: 'precision', key: 'repeatability', name: 'Repeatability (6 at 100 %)', settings: { mode: 'repeatability', resultUnit: '%', limit: { high: '2.0', unit: '%' } } },
+          { block: 'precision', key: 'intermediate', name: 'Intermediate precision (2 analysts, 2 days)', settings: { mode: 'intermediate precision', resultUnit: '%', limit: { high: '2.0', unit: '%' } } },
+          { block: 'robustness', key: 'robustness', settings: { resultUnit: '%', factor1: 'Flow rate ± 0.1 mL/min', limit: { high: '2.0', unit: '%' } } },
+        ] },
+    ],
+  },
+  {
+    id: 'verification-pharmacopoeial', name: 'Verification: pharmacopoeial method', use: 'validation',
+    text: 'USP <1226> style: the monograph method works here, with these samples: specificity, repeatability and accuracy.',
+    stages: [
+      { key: 'verification', name: 'Verification', role: 'Analyst',
+        steps: [
+          { block: 'specificity', key: 'specificity', settings: { limit: { high: '0.5', unit: '%' } } },
+          { block: 'precision', key: 'repeatability', name: 'Repeatability (6 at 100 %)', settings: { mode: 'repeatability', resultUnit: '%', limit: { high: '2.0', unit: '%' } } },
+          { block: 'accuracy', key: 'accuracy', settings: { mode: 'recovery', amountUnit: 'mg', level1: '80 %', level2: '100 %', level3: '120 %', limit: { low: '98.0', high: '102.0', unit: '%' } } },
+        ] },
+    ],
+  },
+  {
+    id: 'transfer-comparative', name: 'Method transfer: comparative testing', use: 'validation',
+    text: 'USP <1224> comparative testing: the receiving laboratory tests the same batches; equivalence of the means (TOST) within ± 2.0 %.',
+    stages: [
+      { key: 'transfer', name: 'Comparative testing', role: 'Analyst',
+        steps: [{ block: 'transfer-comparison', key: 'comparison', settings: { mode: 'equivalence (TOST)', resultUnit: '%', margin: '2.0 %', rsdLimit: { high: '2.0', unit: '%' } } }] },
+    ],
+  },
 ];
-export const SKELETON_LIST = SKELETONS.map(({ id, name, text }) => ({ id, name, text }));
+export const SKELETON_LIST = SKELETONS.map(({ id, name, text, use }) => ({ id, name, text, ...(use ? { use } : {}) }));
 
 /** The stages of a skeleton. */
 export function skeletonStages(id: string): Stage[] {

@@ -21,6 +21,7 @@ import { emRoutes } from './routes/em.js';
 import { trendRoutes } from './routes/trends.js';
 import { outsideRoutes } from './routes/outside.js';
 import { formRoutes } from './routes/forms.js';
+import { methodReportRoutes } from './routes/method-reports.js';
 import { demoRoutes } from './demo.js';
 import type { SignOn } from './signon.js';
 import { ConnectionOff, NotUsable, type Master } from './master.js';
@@ -105,6 +106,7 @@ export async function buildApp({ sql, signOn, master, links = noLinks(), proofKe
   trendRoutes(app, sql);
   outsideRoutes(app, sql);
   formRoutes(app, sql);
+  methodReportRoutes(app, sql);
   demoRoutes(app, sql);
 
   // In production the built web UI is served from the same process.

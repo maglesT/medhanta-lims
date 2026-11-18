@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { connect, type Sql } from '../server/db.js';
 import { links } from '../server/links.js';
-import { call, freshApp, login, proofFor, seedUser, TEST_DATABASE_URL, type TestApp } from './helpers.js';
+import { call, freshApp, login, proofFor, seedUser, TEST_DATABASE_URL, type TestApp, validatedOutside } from './helpers.js';
 import { small } from './engine-fixture.js';
 import { OOS_CHECKLIST, checklistProblems, oosRefusal, oosStatus, plans, retestRefusal, type OosEvent, type OosEventKind, type OosPayload } from '../shared/engine/oos.js';
 import { approvalProblems, type SampleEvent, type TestState } from '../shared/engine/sample.js';
@@ -137,6 +137,7 @@ async function effective(kind: 'method' | 'spec', doc: object) {
     const res = await as(who, 'POST', `/api/master-versions/${v.id}/${a}`, { proof: proofFor(who), contentHash: await hash(who), ...x });
     expect(res.statusCode, `${a}: ${res.body}`).toBe(200);
   }
+  await validatedOutside(t.owner, v.id);
   expect((await as('quality2', 'POST', `/api/master-versions/${v.id}/make-effective`, {})).statusCode).toBe(200);
   return v;
 }

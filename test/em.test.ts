@@ -9,7 +9,7 @@ import {
   dueList, excursionLevel, excursionRefusal, excursionStatus, parseReport, periodOf, type ExcursionEvent, type ExcursionFacts,
 } from '../shared/engine/monitoring.js';
 import { small } from './engine-fixture.js';
-import { call, freshApp, login, proofFor, seedUser, TEST_DATABASE_URL, type TestApp } from './helpers.js';
+import { call, freshApp, login, proofFor, seedUser, TEST_DATABASE_URL, type TestApp, validatedOutside } from './helpers.js';
 
 // Environmental monitoring and water (LIMS-36, LIMS-37; plan 2.9): the monitoring plan (a master version), what it
 // makes due, samplings taken as ordinary samples, excursions over the alert and action limits (grade A: any colony)
@@ -198,6 +198,7 @@ async function approve(id: number) {
     const res = await as(who, 'POST', `/api/master-versions/${id}/${a}`, { proof: proofFor(who), contentHash: await hash(id, who), ...x });
     expect(res.statusCode, `${a}: ${res.body}`).toBe(200);
   }
+  await validatedOutside(t.owner, id);
   expect((await as('quality2', 'POST', `/api/master-versions/${id}/make-effective`, {})).statusCode).toBe(200);
 }
 async function effective(kind: 'method' | 'spec', doc: object) {

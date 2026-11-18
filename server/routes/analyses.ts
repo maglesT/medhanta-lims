@@ -408,6 +408,8 @@ export function analysisRoutes(app: FastifyInstance, sql: Sql) {
         const errors = masterChecks(v.doc).filter(blocking);
         if (errors.length) throw new StepError(409, 'master_has_errors', errors.map((p) => `${p.path}: ${p.message}`));
         let sample: { id: number; sampleNo: string; tests: string[] } | null = null;
+        // A validation worksheet runs without a sample: its results go into a validation report (LIMS-02).
+        if (b.data.sampleId !== undefined && v.doc.header.use === 'validation') throw new StepError(409, 'validation_worksheet', [`${v.doc.header.code} is a validation worksheet: it is run without a sample.`]);
         if (b.data.sampleId !== undefined) {
           await tx`select pg_advisory_xact_lock(${-b.data.sampleId}::bigint)`;
           const [x] = await tx<{ id: number; sampleNo: string; purpose: string; registeredBy: number; source: Source; spec: SpecDoc; containers: number | null }[]>`

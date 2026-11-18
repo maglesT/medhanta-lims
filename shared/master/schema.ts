@@ -82,6 +82,13 @@ export const headerSchema = z.object({
   // The source: a pharmacopoeia monograph or general chapter, or an in-house method number.
   reference: text(),
   edition: text(60).optional(),
+  // LIMS-02, LIMS-04 (build step 8): where the method comes from, so what it needs before routine use: an in-house
+  // method a validation report, a pharmacopoeial method a verification report, a method transferred from another
+  // laboratory a transfer report (shared/engine/method-validation.ts). Not set: in-house.
+  origin: z.enum(['in-house', 'pharmacopoeial', 'transferred']).optional(),
+  // 'validation': a validation, verification or transfer protocol run as a worksheet: its analyses have no sample and
+  // feed a validation report; it needs no validation itself. Not set: routine.
+  use: z.enum(['routine', 'validation']).optional(),
 }).strict();
 
 // The author's answer to a calculation warning (checks.ts), keyed by the warning and its item. `about` is the warning

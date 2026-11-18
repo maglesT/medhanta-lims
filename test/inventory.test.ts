@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { call, freshApp, login, proofFor, seedUser, type TestApp } from './helpers.js';
+import { call, freshApp, login, proofFor, seedUser, type TestApp, validatedOutside } from './helpers.js';
 import { small } from './engine-fixture.js';
 
 // The lab inventory through the API (server/routes/inventory.ts): items registered as received or prepared, their
@@ -114,6 +114,7 @@ async function analysisOf(key: keyof typeof STEPS) {
     const res = await as(who, 'POST', `/api/master-versions/${v.id}/${a}`, { proof: proofFor(who), contentHash: await hash(v.id, who), ...x });
     expect(res.statusCode, `${a}: ${res.body}`).toBe(200);
   }
+  await validatedOutside(t.owner, v.id);
   expect((await as('quality2', 'POST', `/api/master-versions/${v.id}/make-effective`, {})).statusCode).toBe(200);
   const a = await as('analyst', 'POST', '/api/analyses', { masterVersionId: v.id, proof: proofFor('analyst') });
   expect(a.statusCode, a.body).toBe(200);

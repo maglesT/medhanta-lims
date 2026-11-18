@@ -113,10 +113,30 @@ test('LIMS-01 build a method from a skeleton, fix the master-check problems, the
   // No QMS link here: the number was typed by hand, so another person makes the version effective.
   await expect(qa.getByRole('button', { name: 'Make effective' })).toBeDisabled();
   await expect(qa.locator('.review-actions')).toContainText('another person makes the version effective');
+  // LIMS-02: the method was validated on paper before LIMS: the author records it with the paper report's number, and
+  // QA approves the record as a second person (the validation journey runs a validation in LIMS).
+  const rec = await as(browser, 'author1');
+  await rec.getByRole('button', { name: 'Validation reports' }).click();
+  await rec.getByRole('button', { name: 'New report' }).click();
+  const report = rec.getByRole('dialog', { name: 'New report' });
+  await report.getByLabel('Method version').selectOption({ label: 'QC-M-201 Examplol assay by titration · version 1 (in-house; not yet validated)' });
+  await report.getByLabel('Validated outside LIMS').check();
+  await report.getByLabel('Reference').fill('QC/VAL/2019/044');
+  await report.getByRole('button', { name: 'Sign as prepared' }).click();
+  await sign(rec);
+  await expect(rec.locator('.greeting')).toContainText('to approve');
+  const qaRec = await as(browser, 'qa1');
+  await qaRec.getByRole('button', { name: 'Validation reports' }).click();
+  await qaRec.getByRole('row', { name: /QC-M-201/ }).click();
+  await qaRec.getByRole('button', { name: 'Approve (QA)' }).click();
+  await sign(qaRec);
+  await expect(qaRec.locator('.greeting')).toContainText('approved');
   const qa2 = await as(browser, 'qa2');
   await qa2.getByRole('row', { name: /QC-M-201/ }).getByRole('button', { name: 'Open' }).click();
   await qa2.getByRole('button', { name: 'Make effective' }).click();
   await qa2.getByRole('dialog').getByRole('button', { name: 'Make effective' }).click();
   await expect(qa2.locator('.d-title')).toContainText('Effective');
   await expect(qa2.locator('.timeline')).toContainText('change control CC-2026-031');
+  await qa2.getByRole('button', { name: '← Methods' }).click();
+  await expect(qa2.getByRole('row', { name: /QC-M-201/ })).toContainText('validated (outside LIMS)');
 });

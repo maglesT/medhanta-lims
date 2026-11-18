@@ -23,6 +23,19 @@ export function HeaderFields({ header, onChange }: { header: Header; onChange: (
         <label>Reference (monograph, chapter or in-house number)<input aria-label="Reference" value={header.reference} onChange={(e) => set('reference', e.target.value)} placeholder="e.g. Ph. Int. Paracetamol tablets" /></label>
         <label>Edition<input aria-label="Edition" value={header.edition ?? ''} placeholder="e.g. 12th ed. 2025"
           onChange={(e) => onChange(e.target.value ? { ...header, edition: e.target.value } : (({ edition: _, ...h }) => h)(header))} /></label>
+        <label>Source (what it needs before routine use)
+          <select aria-label="Source" value={header.origin ?? 'in-house'} onChange={(e) => onChange({ ...header, origin: e.target.value as Header['origin'] })}>
+            <option value="in-house">In-house method: validated</option>
+            <option value="pharmacopoeial">Pharmacopoeial method: verified</option>
+            <option value="transferred">Transferred from another laboratory: transfer report</option>
+          </select>
+        </label>
+        <label>Used for
+          <select aria-label="Used for" value={header.use ?? 'routine'} onChange={(e) => onChange({ ...header, use: e.target.value as Header['use'] })}>
+            <option value="routine">Routine analysis</option>
+            <option value="validation">Validation worksheet (validation, verification or transfer protocol)</option>
+          </select>
+        </label>
       </div>
     </div>
   );
@@ -49,7 +62,11 @@ export function NewMaster({ masters, copyOf, onCreated, onCancel }: {
     e.preventDefault();
     setError('');
     let doc: MasterDoc = { header, stages: [] };
-    if (start.kind === 'skeleton') doc.stages = skeletonStages(start.id);
+    if (start.kind === 'skeleton') {
+      doc.stages = skeletonStages(start.id);
+      // A validation skeleton is a validation worksheet (LIMS-02).
+      if (skeletons.find((s) => s.id === start.id)?.use === 'validation') doc = { ...doc, header: { ...header, use: 'validation' } };
+    }
     if (start.kind === 'copy' && source) doc = { ...source, header };
     if (!header.code.trim() || !header.name.trim()) return setError('Give the method code and name.');
     const parsed = masterSchema.safeParse(doc);

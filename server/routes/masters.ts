@@ -14,6 +14,8 @@ import { limitText } from '../../shared/master/spec.js';
 import { masterSchema, type MasterDoc, type MasterState } from '../../shared/master/schema.js';
 import { isHand, type Source } from '../../shared/engine/links.js';
 import { CHANGE_STEPS, approvedChange, namesProduct } from '../links.js';
+import { methodReportFacts } from './method-reports.js';
+import { useRefusal, type ReportFacts } from '../../shared/engine/method-validation.js';
 
 // Master versions: the model, the table, the draft routes, and the review and approval workflow (LIMS-01). A version
 // leaves draft only through that workflow (or, in tests, the database owner).
@@ -203,7 +205,9 @@ const REVIEW_NAMES = Object.keys(REVIEW_ACTIONS) as ReviewAction[];
 
 interface MasterEvent { id: number; kind: string; payload: { reason?: string; changeControl?: string; source?: { changeControl?: Source } }; person: number; personName: string; at: Date }
 // previous: the document of the version before this one of the same master (none for version 1).
-interface Loaded { v: VersionRow; events: MasterEvent[]; authors: number[]; problems: Problem[]; previous?: { id: number; versionNo: number; state: MasterState; doc: AnyDoc } }
+interface Loaded { v: VersionRow; events: MasterEvent[]; authors: number[]; problems: Problem[]; previous?: { id: number; versionNo: number; state: MasterState; doc: AnyDoc };
+  // A method's validation, verification and transfer reports (LIMS-02, LIMS-04).
+  reports: ReportFacts[] }
 
 async function loadReview(q: Sql | Tx, id: number, lock = false): Promise<Loaded | null> {
   const v = await masterVersion(q, id, lock);
@@ -218,7 +222,8 @@ async function loadReview(q: Sql | Tx, id: number, lock = false): Promise<Loaded
   const authors = [...new Set([v.createdBy, ...edited.map((r) => r.id), ...events.filter((e) => e.kind === 'submitted').map((e) => e.person)])];
   const [previous] = await q<NonNullable<Loaded['previous']>[]>`
     select id::int, version_no as "versionNo", state, doc from master_versions where master_id = ${v.masterId} and version_no < ${v.versionNo} order by version_no desc limit 1`;
-  return { v, events: [...events], authors, problems: await docProblems(q, v), ...(previous ? { previous } : {}) };
+  const reports = v.kind === 'method' ? await methodReportFacts(q, v.masterId) : [];
+  return { v, events: [...events], authors, problems: await docProblems(q, v), reports, ...(previous ? { previous } : {}) };
 }
 
 // What a signer is shown: the version's document, as it stands, after its last event.
@@ -255,11 +260,16 @@ export function reviewRefusal(action: ReviewAction, l: Loaded, user: SessionUser
     if (author || passed.person === user.id) return no(403, 'author_cannot_approve', 'QA approval is by a person who neither wrote nor checked this version.');
   }
   if (action === 'make-effective') {
+    // LIMS-02, LIMS-04: a method is used for routine work only once validated (in-house), verified (pharmacopoeial) or
+    // transferred (from another laboratory), by an approved report (method-reports.ts). Checked here, where the version
+    // becomes usable, so every analysis (release, stability, any sample) starts from a method that has it.
     // LIMS-01: a change control number typed by hand at approval (QMS absent or down) is confirmed by a second person.
     const approved = l.events.filter((e) => e.kind === 'approved').at(-1);
     if (isHand(approved?.payload.source?.changeControl) && approved!.person === user.id) {
       return no(403, 'same_person', 'The change control number was typed by hand at approval: another person makes the version effective, after checking the number and its QA approval in QMS or its paper record.');
     }
+    const notYet = l.v.kind === 'method' ? useRefusal(l.v.doc.header, l.v.versionNo, l.reports) : null;
+    if (notYet) return no(409, 'not_validated', notYet);
   }
   return null;
 }

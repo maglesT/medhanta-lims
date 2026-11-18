@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { call, freshApp, login, proofFor, seedUser, type TestApp } from './helpers.js';
+import { call, freshApp, login, proofFor, seedUser, type TestApp, validatedOutside } from './helpers.js';
 import { method, placed } from './engine-fixture.js';
 import { applySpec, limitFor, resultsOf, specChecks, specNames, specSchema, type SpecDoc, type SpecTest } from '../shared/master/spec.js';
 import type { MasterDoc } from '../shared/master/schema.js';
@@ -144,6 +144,7 @@ async function effective(kind: 'method' | 'spec', doc: object) {
     expect(res.statusCode, `${a}: ${res.body}`).toBe(200);
   }
   // Typed by hand (no QMS link): another QA person makes it effective.
+  await validatedOutside(t.owner, v.id);
   expect((await as('quality2', 'POST', `/api/master-versions/${v.id}/make-effective`, {})).statusCode).toBe(200);
   return v;
 }

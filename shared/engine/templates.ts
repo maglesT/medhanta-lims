@@ -31,6 +31,10 @@ export const TEMPLATES: Record<string, Template> = {
   L11: T.l11MicrobialCount, L12: T.l12Endotoxin, L13: T.l13MicrobialAssay,
   // Lab template, trends (build step 8): I-MR control chart with the eight Nelson rules and Cpk.
   L18: T.l18ControlChart,
+  // Lab templates, method validation (build step 8, ICH Q2(R2)): linearity, accuracy, precision, DL/QL, range, robustness,
+  // transfer comparison, specificity.
+  L27: T.l27Linearity, L28: T.l28Accuracy, L29: T.l29Precision, L30: T.l30DetectionLimits, L31: T.l31Range, L32: T.l32Robustness,
+  L33: T.l33TransferComparison, L34: T.l34Specificity,
 };
 
 /** Calls a template with arguments already resolved; a bug-level throw becomes a refusal so a analysis never crashes. */

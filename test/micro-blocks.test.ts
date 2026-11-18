@@ -6,7 +6,7 @@ import { masterSchema, type MasterDoc } from '../shared/master/schema.js';
 import { specSchema, type SpecDoc } from '../shared/master/spec.js';
 import { OOS_CHECKLIST } from '../shared/engine/oos.js';
 import { at, ev, unplaced } from './engine-fixture.js';
-import { call, freshApp, handLabels, login, proofFor, seedUser, type TestApp } from './helpers.js';
+import { call, freshApp, handLabels, login, proofFor, seedUser, type TestApp, validatedOutside } from './helpers.js';
 
 // The microbiology blocks run by the engine (invented demo numbers; the arithmetic in the comments), and a sterility
 // test with growth through the API: it opens an OOS, which is invalidated only through the OOS path of step 4 (an
@@ -169,6 +169,7 @@ async function effective(kind: 'method' | 'spec', doc: object) {
   for (const [who, a, x] of [['author', 'submit', {}], ['checker', 'pass', {}], ['quality', 'approve', { changeControl: 'CC-2026-070' }]] as const) {
     await ok(as(who, 'POST', `/api/master-versions/${v.id}/${a}`, { proof: proofFor(who), contentHash: await hash(who), ...x }));
   }
+  await validatedOutside(t.owner, v.id);
   await ok(as('quality2', 'POST', `/api/master-versions/${v.id}/make-effective`, {}));
   return v;
 }

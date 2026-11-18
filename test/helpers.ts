@@ -142,3 +142,25 @@ export function handLabels(field: string, kind: 'machine' | 'room' | 'lot'): Rec
   const names = { machine: ['clean', 'calibrated', 'inService', 'qualified'], room: ['clean', 'inService', 'qualified'], lot: ['released'] }[kind];
   return { ...Object.fromEntries(names.map((n) => [`${field}.${n}`, 'yes'])), ...(kind === 'lot' ? { [`${field}.expiry`]: '2099-12-31' } : {}) };
 }
+
+/**
+ * LIMS-02 in the tests that are not about it: before a method version is made effective, the database owner records it
+ * as validated outside LIMS (paper report) and approved, as the e2e journeys make versions effective by the owner.
+ * The rule itself is proven through the screens' routes in test/method-validation.test.ts. Specifications, protocols,
+ * plans and validation worksheets need nothing.
+ */
+export async function validatedOutside(owner: Sql, versionId: number): Promise<void> {
+  const [v] = await owner<{ masterId: number; versionNo: number; kind: string; use: string | null; origin: string | null }[]>`
+    select master_id::int as "masterId", version_no as "versionNo", kind, doc->'header'->>'use' as use, doc->'header'->>'origin' as origin
+    from master_versions where id = ${versionId}`;
+  if (!v || v.kind !== 'method' || v.use === 'validation') return;
+  const [u] = await owner<{ id: number }[]>`select id::int from users order by id limit 1`;
+  const kind = v.origin === 'pharmacopoeial' ? 'verification' : v.origin === 'transferred' ? 'transfer' : 'validation';
+  const [r] = await owner<{ id: number }[]>`
+    insert into method_reports (report_no, kind, outside, method_master_id, method_version_id, method_version_no, test_type, reference, sending_lab, receiving_lab,
+      inputs, outputs, conclusion, person_id)
+    values (${`MVR99${String(versionId % 10000).padStart(4, '0')}`}, ${kind}, true, ${v.masterId}, ${versionId}, ${v.versionNo}, 'other (as the protocol says)', 'VAL-PAPER-01',
+      ${kind === 'transfer' ? 'Sending lab' : null}, ${kind === 'transfer' ? 'Receiving lab' : null}, '{}', '{}', 'met', ${u!.id})
+    on conflict (report_no) do nothing returning id::int`;
+  if (r) await owner`insert into method_report_events (report_id, kind, person_id) values (${r.id}, 'approved', ${u!.id})`;
+}

@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { call, freshApp, login, proofFor, seedUser, type TestApp } from './helpers.js';
+import { call, freshApp, login, proofFor, seedUser, type TestApp, validatedOutside } from './helpers.js';
 import { method, placed } from './engine-fixture.js';
 
 // Review and approval of method versions (LIMS-01): the author sends for review (signs "prepared"), a second person
@@ -136,12 +136,14 @@ describe('master review and approval', () => {
     expect((await act('quality', id, 'approve', { changeControl: 'CC-2026-031' })).statusCode).toBe(200);
     expect((await review(id)).events.at(-1)).toMatchObject({ kind: 'approved', payload: { changeControl: 'CC-2026-031', source: { changeControl: { from: 'hand', link: 'qms' } } } });
     // Typed by hand: the QA person who approved cannot also make it effective.
+    await validatedOutside(t.owner, id);
     expect((await as('quality', 'POST', `/api/master-versions/${id}/make-effective`, {})).json().error).toBe('same_person');
   });
 
   it('LIMS-01 one effective version: making a new version effective retires the previous one', async () => {
     // Without QMS the change control number is typed by hand: a second person makes the version effective.
     const v1 = await approved();
+    await validatedOutside(t.owner, v1.id);
     expect((await as('qachecker', 'POST', `/api/master-versions/${v1.id}/make-effective`, {})).statusCode).toBe(200);
     expect(await state(v1.id)).toBe('effective');
     const next = await as('author', 'POST', `/api/masters/${v1.masterId}/versions`, {});
@@ -156,11 +158,14 @@ describe('master review and approval', () => {
     expect((await act('author', v2, 'submit')).statusCode).toBe(200);
     await act('checker', v2, 'pass');
     await act('quality', v2, 'approve', { changeControl: 'CC-2026-020' });
+    await validatedOutside(t.owner, v2);
     expect((await as('checker', 'POST', `/api/master-versions/${v2}/make-effective`, {})).statusCode).toBe(403);
+    await validatedOutside(t.owner, v2);
     expect((await as('qachecker', 'POST', `/api/master-versions/${v2}/make-effective`, {})).statusCode).toBe(200);
     expect([await state(v1.id), await state(v2)]).toEqual(['retired', 'effective']);
     const effective = await t.owner`select id from master_versions where master_id = ${v1.masterId} and state = 'effective'`;
     expect(effective).toHaveLength(1);
+    await validatedOutside(t.owner, v2);
     expect((await as('quality', 'POST', `/api/master-versions/${v2}/make-effective`, {})).json().error).toBe('wrong_state');
   });
 

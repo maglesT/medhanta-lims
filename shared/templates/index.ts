@@ -31,3 +31,7 @@ export {
   type L11Input, type L11Level, type L12Input, type L13Input, type Qualifier,
 } from './lab-micro.js';
 export { l18ControlChart, NELSON_RULES, type L18Input, type L18Output, type RuleBreak } from './lab-trend.js';
+export {
+  l27Linearity, l28Accuracy, l29Precision, l30DetectionLimits, l31Range, l32Robustness, l33TransferComparison, l34Specificity, leastSquares, requiredRange,
+  type L27Input, type L28Input, type L29Input, type L30Input, type L31Input, type L32Input, type L33Input, type L34Input,
+} from './lab-validation.js';

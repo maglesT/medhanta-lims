@@ -56,6 +56,15 @@ const ALL: [string, Record<string, unknown>, object?][] = [
     concentration: '10 mg/mL', dilution: '100', limit: { high: '0.25', unit: 'EU/mg', highStrict: true } }],
   ['microbial-assay', { design: 'completely randomised', responseUnit: 'mm', stdDose1: '1 IU/mL', stdDose2: '2 IU/mL', stdDose3: '4 IU/mL', testDose1: '1 IU/mL', testDose2: '2 IU/mL',
     testDose3: '4 IU/mL', assumedPotency: '1000 IU/mg', limit: { low: '900', high: '1100', unit: 'IU/mg' } }],
+  // The method validation blocks (build step 8).
+  ['specificity', { limit: { high: '0.5', unit: '%' }, resolutionLimit: { low: '2.0', unit: '' } }],
+  ['linearity', { levelUnit: 'mg/mL', target: '0.5 mg/mL', scale: 'linear', limit: { low: '0.999', unit: '' }, r2Limit: { low: '0.998', unit: '' }, interceptLimit: { low: '-2.0', high: '2.0', unit: '%' }, use: 'impurity', q: '80 %', reportingThreshold: '0.05 %', specLimit: '0.5 %', rangeLow: '80 %', rangeHigh: '120 %' }],
+  ['accuracy', { mode: 'recovery', amountUnit: 'mg', level1: '80 %', level2: '100 %', level3: '120 %', level4: '50 %', level5: '150 %', limit: { low: '98.0', high: '102.0', unit: '%' }, levelLimit: { low: '97.0', high: '103.0', unit: '%' }, ciLimit: { low: '98.0', high: '102.0', unit: '%' }, rsdLimit: { high: '2.0', unit: '%' } }],
+  ['precision', { mode: 'intermediate precision', resultUnit: '%', runs: 'Two analysts on two days', limit: { high: '2.0', unit: '%' }, repeatabilityLimit: { high: '1.0', unit: '%' }, differenceLimit: { high: '2.0', unit: '%' } }],
+  ['lod-loq', { levelUnit: 'µg/mL', sigma: 'residual SD', limit: { high: '0.5', unit: 'µg/mL' }, lodLimit: { high: '0.2', unit: 'µg/mL' } }],
+  ['signal-to-noise', { level: 'quantitation limit', levelUnit: '%', concentration: '0.05 %', limit: { low: '10', unit: '' }, rsdLimit: { high: '10', unit: '%' } }],
+  ['robustness', { resultUnit: '%', factor1: 'Flow 1.0 to 1.1 mL/min', factor2: 'Column 30 to 35 °C', factor3: 'pH 3.0 to 3.2', factor4: 'Organic 40 to 42 %', factor5: 'Column lot B', factor6: 'Wavelength 254 to 256 nm', limit: { high: '2.0', unit: '%' } }],
+  ['transfer-comparison', { mode: 'equivalence (TOST)', resultUnit: '%', margin: '2.0 %', rsdLimit: { high: '2.0', unit: '%' } }],
 ];
 const using = (id: string, settings: object, options: object = {}): MasterDoc => {
   const b = findBlock({ id, version: 1 })!;

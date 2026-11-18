@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { call, freshApp, login, proofFor, seedUser, type TestApp } from './helpers.js';
+import { call, freshApp, login, proofFor, seedUser, type TestApp, validatedOutside } from './helpers.js';
 import { small } from './engine-fixture.js';
 import { specSchema, testsFor, type SpecDoc } from '../shared/master/spec.js';
 
@@ -34,6 +34,7 @@ async function effective(kind: 'method' | 'spec', doc: object) {
     const res = await act(who, v.id, a, x);
     expect(res.statusCode, `${a}: ${res.body}`).toBe(200);
   }
+  await validatedOutside(t.owner, v.id);
   expect((await as('quality2', 'POST', `/api/master-versions/${v.id}/make-effective`, {})).statusCode).toBe(200);
   return v;
 }

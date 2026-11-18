@@ -78,7 +78,7 @@ export function App() {
           {can(me, 'analysis.review') && (
             <button className={release ? 'tab on' : 'tab'} onClick={() => { setPage('home'); go('#/release'); }}>To review</button>
           )}
-          {['master.author', 'master.check', 'master.approve', 'analysis.perform', 'view'].some((c) => can(me, c)) && (
+          {['master.author', 'master.check', 'master.approve', 'analysis.perform', 'analysis.review', 'view'].some((c) => can(me, c)) && (
             <button className={page === 'masters' && !release && !oos ? 'tab on' : 'tab'} onClick={() => { setPage('masters'); go('#/'); }}>{product.masters}</button>
           )}
           {['master.author', 'master.check', 'master.approve', 'view'].some((c) => can(me, c)) && (

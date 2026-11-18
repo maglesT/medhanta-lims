@@ -5,7 +5,7 @@ import { findBlock } from '../shared/blocks/index.js';
 import { analysisView, deviationText, fieldLabel, filedKey, handFields } from '../shared/engine/index.js';
 import { analysisRecordDoc } from '../server/analysis-record.js';
 import { loadAnalysis, recordInput } from '../server/routes/analyses.js';
-import { call, freshApp, handLabels, login, proofFor, seedUser, TEST_DATABASE_URL, type TestApp } from './helpers.js';
+import { call, freshApp, handLabels, login, proofFor, seedUser, TEST_DATABASE_URL, type TestApp, validatedOutside } from './helpers.js';
 import { at, ev, small, method, placed } from './engine-fixture.js';
 import { inLogbook } from '../shared/engine/picks.js';
 
@@ -344,6 +344,7 @@ describe('LIMS-01 QMS: a new master version needs a QA-approved change control',
       select payload from master_events where version_id = ${id} and kind = 'approved'`;
     expect(e!.payload.source.changeControl).toMatchObject({ from: 'qms', shown: expect.stringMatching(/^CC-2026-0001: Second HPLC column supplier \(implementation, QA approved /) });
     // Pulled from QMS: the approver may make it effective.
+    await validatedOutside(t.owner, id);
     expect((await as('quality', 'POST', `/api/master-versions/${id}/make-effective`, {})).statusCode).toBe(200);
     const picks = (await as('quality', 'GET', '/api/change-controls')).json() as { changes: { number: string }[] };
     expect(picks.changes.map((c) => c.number)).toEqual(['CC-2026-0005', 'CC-2026-0004', 'CC-2026-0001']);
@@ -373,7 +374,9 @@ describe('LIMS-01 QMS: a new master version needs a QA-approved change control',
     try {
       expect((await review('quality', 'approve', { changeControl: 'CC-PAPER-9' })).statusCode).toBe(200);
     } finally { await restore(S.qms); }
+    await validatedOutside(t.owner, id);
     expect((await as('quality', 'POST', `/api/master-versions/${id}/make-effective`, {})).json()).toMatchObject({ error: 'same_person' });
+    await validatedOutside(t.owner, id);
     expect((await as('quality2', 'POST', `/api/master-versions/${id}/make-effective`, {})).statusCode).toBe(200);
   });
 });

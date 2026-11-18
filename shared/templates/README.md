@@ -428,3 +428,29 @@ Plan 2.11, library L18. Not a worksheet step: the Trends screens and the out-of-
   of the same product or material (release and retest samples) or EM and water point and test, with the new one
   appended (`baseline` = the earlier ones): a break that includes the new point is the sample's OOT flag. A result
   outside its specification is an OOS, not a trend.
+
+## Lab templates, method validation (`lab-validation.ts`: L27-L34; build step 8)
+
+Plan 2.12 and library L16 ("method validation statistics"; W003 ICH Q2(R2)), with USP <1225>, <1226> and <1224> as the
+standard practice. Same rules as every template. The acceptance criteria are the validation protocol's settings
+(limits on the validation blocks: `shared/blocks/validation.ts`), never formulas. A failed criterion is a failed check
+(the step needs a deviation note; the characteristic is "not met" in the report). Tests:
+`test/templates/lab-validation.test.ts` (each figure checked by an independent float calculation; t from the tables).
+
+| ID | Name | Inputs | Output | Refusals and rules |
+|---|---|---|---|---|
+| L27 | Linearity (response) | levels (% of the test concentration, or a concentration with `target` the 100 % level), responses; `scale` linear or log; `limit` on r, `r2Limit`, `interceptLimit` (y-intercept as % of the response at 100 %) | r; `slope`, `intercept`, `r2`, `residuals`, `residualSd` (n − 2), `interceptSd`, `slopeSd`, `interceptPercent`, `low`/`high` (% levels) | fewer than 5 levels (ICH Q2); one response per level; all levels or responses the same; log scale with a value ≤ 0; an intercept limit without the 100 % level or on a log scale |
+| L28 | Accuracy (recovery) | per level (% of the test concentration or of the limit): amounts added and found (and unspiked results for **standard addition**); `confidence` (95); `limit` on the mean recovery, `levelLimit`, `ciLimit` (both ends), `rsdLimit` (each level) | mean recovery %; per level mean and RSD; `sd`, `t`, `ci` (x̄ ± t(1 − α/2; N − 1) s ÷ √N), `low`/`high` | added ≤ 0; found and added not paired; standard addition without unspiked results; fewer than 9 determinations over 3 levels is said in the worked line |
+| L29 | Precision | **repeatability**: the results; **intermediate precision**: the runs (days, analysts, instruments), one-way ANOVA; `limit` on the % RSD, `repeatabilityLimit`, `differenceLimit` (largest difference of run means as % of the grand mean) | % RSD (repeatability, or intermediate precision); `msWithin`, `msBetween`, `rsdRepeatability`, `rsdBetween`, `difference` | fewer than 2 runs of 2; a mean of zero; fewer than 6 repeatability determinations is said |
+| L30 | Detection and quantitation limits | **calibration**: low-range levels and responses, σ = residual SD, SD of the intercept or SD of blank responses (fixed by the protocol: the DL changes with it); **signal to noise**: H, h, the level tested, DL or QL, replicate results; `limit`, `lodLimit`, `rsdLimit` | calibration: the QL (`lod`, `loq`, `sigma`, `slope`); S/N: 2H ÷ h checked NLT 3 (DL) or NLT 10 (QL) unless the protocol sets its limit | slope ≤ 0; no σ source; noise ≤ 0 |
+| L31 | Range | the use (assay 80-120 %, content uniformity 70-130 %, dissolution Q − 45 % to 130 %, impurity reporting threshold to 120 % of the limit, as written: ICH Q2(R2) Table 2); linearity and accuracy levels and whether met; precision met | the range validated: from the higher lowest level to the lower highest level; check: all three met and the range covers the required one | no Q (dissolution); no reporting threshold or limit (impurity); no low/high (as written). Worked out by the report (`shared/engine/method-validation.ts`), not a block |
+| L32 | Robustness | results at the nominal conditions; per varied factor its name, results and whether system suitability was met; `limit` on the largest difference | largest \|varied − nominal\| ÷ nominal × 100; per factor mean and difference; `suitabilityCheck` | no factor name; system suitability not answered; a nominal mean of zero |
+| L33 | Transfer comparison | sending and receiving laboratory results, the acceptance `margin` (± in the results' unit); **equivalence (TOST)**: 90 % CI (Welch) of the difference inside ± margin; **difference**: the difference inside ± margin; `rsdLimit` (receiving) | receiving − sending mean; `ci`, `df`, `t`, `rsdReceiving` | a margin of another kind than the results or ≤ 0; no spread in both |
+| L34 | Specificity | the analyte's response at 100 %; responses at its position in the blank, placebo and each impurity or degradant; resolution of the closest pair; peak purity (yes/no); `limit`, `resolutionLimit` | the largest interference as % of the analyte's response; `resolutionCheck`, `purityCheck` | a response ≤ 0 for the analyte; a negative interference |
+
+Decisions taken while building:
+
+- **Not in this round** (library W003 V.15, V.16, owner decision of 18 Nov 2026): non-linear (4/5-parameter logistic)
+  and multivariate (PLS) calibration. The confidence interval of an SD, prediction and tolerance intervals stay with L14.
+- The range is worked out where its three inputs meet: in the report, from the last linearity, accuracy and precision
+  steps of the analyses it covers; the use (Table 2) is a setting of the linearity step.
