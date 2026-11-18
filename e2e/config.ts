@@ -21,6 +21,8 @@ export const E2E_RETEST_ID = '00000000-0000-4000-8000-000000000031';
 export const E2E_PRODUCT_ID = '00000000-0000-4000-8000-000000000101';
 // The product of the stability evaluation journey (its own, so the other journeys' studies are not in its evaluation).
 export const E2E_STAB_PRODUCT_ID = '00000000-0000-4000-8000-000000000102';
+// The EM journey's specification item (an EM specification is written for a master-data material) and its grade B room.
+export const E2E_EM_ID = '00000000-0000-4000-8000-000000000201';
 // Invented test people and the Medhanta LIMS permissions core gives them.
 export const USERS: Record<string, Permission[]> = {
   op1: ['lims.analysis.perform'],

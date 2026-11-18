@@ -20,6 +20,9 @@ export function ExcursionScreen({ id, onBack, onSample }: { id: number; onBack: 
   if (!d) return <>{error ? <p className="notice" role="alert">{error}</p> : <div className="skel skel-block" />}</>;
   const x = d.excursion;
   const r = d.refusals;
+  // Why this person cannot take the next step now (the step the status waits for).
+  const next = x.status === 'to confirm' ? r.confirm : x.status === 'investigation to open' ? r.deviation : x.status === 'deviation to check' ? r.check
+    : x.status === 'closed' ? null : r.close && `Not closed yet: ${r.close}`;
   const button = (label: string, refusal: string | null, onClick: () => void, primary = true) => refusal === null && <button className={primary ? 'primary' : ''} onClick={onClick}>{label}</button>;
   return (
     <>
@@ -49,7 +52,7 @@ export function ExcursionScreen({ id, onBack, onSample }: { id: number; onBack: 
           {button('Record an isolate', r.isolate, () => setDialog('isolate'), false)}
           {button('Close (QA)', r.close, () => setDialog('close'))}
         </div>
-        <ul className="muted small">{Object.entries(r).filter(([, why]) => why).map(([a, why]) => <li key={a}>{why}</li>)}</ul>
+        {next && <p className="muted small">{next}</p>}
       </section>
       <section className="dash-panel samples-waiting" aria-label="Entries">
         <div className="panel-head"><h2>Entries</h2></div>

@@ -1,6 +1,6 @@
 // Invented master data for the browser tests: what core's master_data views would list.
 import type { FakeMaster } from '../test/helpers.js';
-import { E2E_MATERIAL_ID, E2E_PRODUCT_ID, E2E_RETEST_ID, E2E_STAB_PRODUCT_ID } from './config.js';
+import { E2E_EM_ID, E2E_MATERIAL_ID, E2E_PRODUCT_ID, E2E_RETEST_ID, E2E_STAB_PRODUCT_ID } from './config.js';
 
 const item = (itemId: string, code: string, name: string) => ({ itemId, code, name, version: 1, active: true });
 export function seedMasterData(m: FakeMaster) {
@@ -20,6 +20,8 @@ export function seedMasterData(m: FakeMaster) {
   m.materials_.push({ ...item(E2E_MATERIAL_ID, 'RM-012', 'Demolol (active substance)'), category: 'API', unit: 'kg' });
   // The material of the retest journey.
   m.materials_.push({ ...item(E2E_RETEST_ID, 'RM-031', 'Exampline hydrochloride (active substance)'), category: 'API', unit: 'kg' });
+  // The EM journey: its specification's item.
+  m.materials_.push({ ...item(E2E_EM_ID, 'QC-EM', 'Environmental monitoring, sterile block'), category: 'EM', unit: 'nos' });
   // The product of the OOS journey.
   m.products_.push({ ...item(E2E_PRODUCT_ID, 'FG-DEM100', 'Demolol 100 mg tablets'), strength: '100 mg', dosageForm: 'Tablet' });
   // The product of the stability evaluation journey.
@@ -29,5 +31,7 @@ export function seedMasterData(m: FakeMaster) {
   m.rooms_.push(
     { ...item('rm-qcl', 'QCL-01', 'Wet chemistry laboratory'), area: 'QC laboratory', grade: 'D' },
     { ...item('rm-ins', 'INS-01', 'Instrument room 1'), area: 'Instrument room', grade: 'D' },
+    // The EM journey's grade B room.
+    { ...item('rm-b101', 'B101', 'Aseptic filling room'), area: 'Sterile block', grade: 'B' },
   );
 }
