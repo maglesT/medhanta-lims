@@ -16,3 +16,7 @@ export { t22SieveAnalysis, t22MixPsd, t23CompactStrength, t24SpecificEnergy, t25
 export { c6StagedTest } from './staged.js';
 export { c7SamplingPlan, codeLetter, plan } from './sampling.js';
 export { t27Expiry, c8PrintedData, c9SerialCodes, expiryMonth, printedMonth, gs1 } from './packing.js';
+export {
+  l5Dissolution, l6Titration, l7WaterKf, l8MassLoss, l10Reading, l14Statistics, l17Standardisation, l19SamplingPlan,
+  tQuantile, fQuantile, chi2Quantile,
+} from './lab-physchem.js';

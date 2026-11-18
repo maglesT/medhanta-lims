@@ -12,6 +12,7 @@ export type Kind =
   | 'number' | 'count' | 'mass' | 'volume' | 'length' | 'area' | 'time'
   | 'temperature' | 'temperature difference' | 'force' | 'pressure'
   | 'fraction' | 'mass concentration' | 'density' | 'rotation speed' | 'angle' | 'mass per area' | 'Strong-Cobb hardness'
+  | 'conductivity' | 'amount concentration' | 'volume fraction'
   | 'mass rate' | 'volume rate' | 'count rate' | 'current' | 'power' | 'specific energy'
   | 'relative humidity' | 'absolute humidity' | 'absolute humidity per volume' | 'log' | 'frequency' | 'rpm per Hz' | 'charge'
   | 'IU' | 'CFU' | 'activity units' | 'IU per mass' | 'CFU per mass' | 'activity units per mass' | 'mass per IU';
@@ -51,6 +52,7 @@ const TABLE: [string, Kind, Dec | string, string?][] = [
   ['%', 'fraction', '1'], ['%w/w', 'fraction', '1'], ['ppm', 'fraction', '0.0001'],
   ['µg/mg', 'fraction', '0.1'], ['mg/g', 'fraction', '0.1'], // potency per mass of material: 1000 µg/mg = 100 %
   ['%w/v', 'mass concentration', '10'], ['mg/mL', 'mass concentration', '1'], ['g/L', 'mass concentration', '1'],
+  ['µg/mL', 'mass concentration', '0.001'], // lab solutions (L1, L4, L9): 1000 µg/mL = 1 mg/mL
   ['g/mL', 'density', '1'], ['g/cm³', 'density', '1'], ['kg/L', 'density', '1'], ['kg/m³', 'density', '0.001'],
   ['rpm', 'rotation speed', '1'], ['rad/min', 'rotation speed', d(1).div(TWO_PI)], // 1 rpm = 2π rad/min
   ['°', 'angle', '1'],
@@ -64,6 +66,11 @@ const TABLE: [string, Kind, Dec | string, string?][] = [
   ['mA', 'current', '0.001'], ['A', 'current', '1'],
   ['W', 'power', '1'], ['kW', 'power', '1000'],
   ['kJ/kg', 'specific energy', '1'], ['kWh/kg', 'specific energy', '3600'],
+  // Lab results (L5-L19): g/g as Ph.Int writes water and ash limits (0.115 g/g = 11.5 %); ppb for TOC; dm for the
+  // polarimeter tube; KF drift; patch release per area; conductivity; VS molarity; alcohol strength (never a mass).
+  ['g/g', 'fraction', '100'], ['ppb', 'fraction', '0.0000001'], ['dm', 'length', '100'], ['µg/min', 'mass rate', '0.00006'],
+  ['µg/cm²', 'mass per area', '0.001'], ['µS/cm', 'conductivity', '1'], ['mS/cm', 'conductivity', '1000'],
+  ['mol/L', 'amount concentration', '1'], ['mmol/L', 'amount concentration', '0.001'], ['%v/v', 'volume fraction', '1'],
   ['%RH', 'relative humidity', '1'],
   ['g/kg', 'absolute humidity', '1'], // g water per kg dry air
   ['g/m³', 'absolute humidity per volume', '1'], // g water per m³ of air (T25)
@@ -84,6 +91,7 @@ const ALIASES: Record<string, string> = {
   ug: 'µg', 'mcg/mg': 'µg/mg', 'ug/mg': 'µg/mg', mcg: 'µg', μg: 'µg', ml: 'mL', l: 'L', uL: 'µL', μL: 'µL', 'cm3': 'mL', 'cm³': 'mL', mm3: 'mm³', deg: '°', 'mg/cm2': 'mg/cm²', 'g/m2': 'g/m²', um: 'µm', μm: 'µm',
   mm2: 'mm²', cm2: 'cm²', sec: 's', hr: 'h', degC: '°C', degF: '°F', kP: 'kp', Kp: 'kp',
   '% w/w': '%w/w', '% w/v': '%w/v', '% RH': '%RH', RH: '%RH', cfu: 'CFU', 'cfu/g': 'CFU/g', 'cfu/mg': 'CFU/mg',
+  M: 'mol/L', mM: 'mmol/L', 'g/100 mL': '%w/v', 'g/100mL': '%w/v', 'g/100 g': '%w/w', 'g/100g': '%w/w', 'uS/cm': 'µS/cm', 'μS/cm': 'µS/cm', '% v/v': '%v/v', 'ug/min': 'µg/min', 'mcg/min': 'µg/min', 'ug/cm2': 'µg/cm²', 'µg/cm2': 'µg/cm²',
   'kg/cm²': 'kgf/cm²', 'N/mm2': 'N/mm²', 'g/m3': 'g/m³', 'ft³/min': 'cfm', 'ft3/min': 'cfm', meq: 'mEq', mEQ: 'mEq', 'US gallon': 'US gal', 'imperial gallon': 'imp gal', 'kg/cm2': 'kgf/cm²', 'g/cm3': 'g/cm³', 'm3/h': 'm³/h', tablet: 'tablets', unit: 'units', pack: 'packs', no: 'nos', 'nos.': 'nos',
 };
 
