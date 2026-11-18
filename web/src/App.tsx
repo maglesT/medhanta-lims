@@ -7,11 +7,12 @@ import { go, useRoute } from './api-floor.js';
 import { Masters } from './designer/Masters.js';
 import { Specs } from './specs/Specs.js';
 import { Samples } from './samples/Samples.js';
+import { Inventory } from './inventory/Inventory.js';
 import { ToReview } from './release/ToReview.js';
 import { ReleaseScreen } from './release/ReleaseScreen.js';
 import { product } from './product.js';
 
-type Page = 'home' | 'masters' | 'specs' | 'samples';
+type Page = 'home' | 'masters' | 'specs' | 'samples' | 'inventory';
 
 export function App() {
   const [me, setMe] = useState<Me | null | undefined>(undefined);
@@ -79,6 +80,9 @@ export function App() {
           {['sample.register', 'view'].some((c) => can(me, c)) && (
             <button className={page === 'samples' && !release ? 'tab on' : 'tab'} onClick={() => { setPage('samples'); go('#/'); }}>Samples</button>
           )}
+          {['analysis.perform', 'analysis.review', 'view'].some((c) => can(me, c)) && (
+            <button className={page === 'inventory' && !release ? 'tab on' : 'tab'} onClick={() => { setPage('inventory'); go('#/'); }}>Inventory</button>
+          )}
         </nav>
         <span className="who">
           {me.fullName}
@@ -91,6 +95,7 @@ export function App() {
           {page === 'masters' && <Masters me={me} />}
           {page === 'specs' && <Specs me={me} />}
           {page === 'samples' && <Samples me={me} />}
+          {page === 'inventory' && <Inventory me={me} />}
         </>)}
       </main>
     </>

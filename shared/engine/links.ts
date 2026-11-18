@@ -12,8 +12,13 @@ export type Provider = (typeof PROVIDERS)[number];
 export type LinkState = 'absent' | 'down' | 'ok';
 export const PROVIDER_NAME: Record<Provider, string> = { deviations: 'Deviations', qms: 'QMS', logbook: 'Logbook', mms: 'MMS', recruitment: 'Recruitment', truebatch: 'TrueBatch' };
 
-/** Pulled through a link (with what was read, PL-07), or typed by hand while the link was absent or down. */
-export type Source = { from: 'hand'; link: Provider; state: 'absent' | 'down' } | { from: Provider; asOf: string | null; shown: string };
+/**
+ * Pulled through a link (with what was read, PL-07), or typed by hand while the link was absent or down; or taken from
+ * this product's own lab inventory (a standard's potency, a VS factor: shared/engine/items.ts), never typed.
+ */
+export type Source = { from: 'hand'; link: Provider; state: 'absent' | 'down' } | { from: Provider | 'inventory'; asOf: string | null; shown: string };
+/** Where a pulled value came from, in words. */
+export const SOURCE_NAME: Record<Provider | 'inventory', string> = { ...PROVIDER_NAME, inventory: 'the LIMS inventory' };
 export const isHand = (s: Source | undefined): s is Extract<Source, { from: 'hand' }> => s?.from === 'hand';
 
 /** The link that gives a field kind's value. */

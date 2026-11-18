@@ -234,3 +234,39 @@ parts are removed.
 
 Permissions (`lims.*`): master.author, master.check, master.approve (methods and specs), sample.register,
 analysis.perform, analysis.check, analysis.review, qc.approve, view, demo.skip.
+
+## Step 4: lab inventory (build step 4, 18 Nov 2026)
+Copied from the Logbook's item + entries + derived status, as samples are (`db/migrations/0011`, `server/routes/inventory.ts`,
+`shared/engine/items.ts`). "May this item be used now, and if not, why" is computed once (`itemStatus`, a pure function)
+and shown in the inventory and at the worksheet step.
+- **Items** (`lab_items`, insert-only): reference standard (primary or official: issued by, lot, potency and basis from
+  its certificate, expiry or retest date), working standard (qualified against one primary, its parent), reagent
+  (supplier, lot, expiry, use period after opening), prepared or test solution and volumetric solution (procedure,
+  use-by, the items it was made from; a VS its stated molarity), column (type, serial), culture medium (lot,
+  sterilisation, use-by), culture (organism, strain; its passage is its parent culture's plus one, 0 for the reference
+  culture). Registering is the receipt (bought) or the preparation (made); the number is the kind's prefix, plant year
+  and a counter per kind: RS, WS, RG, SO, VS, CO, MD, CU (RS260001). What it was made from must be usable then
+  (`registerProblems`); a culture past passage 5 is refused (LIMS-35).
+- **Entries** (`lab_item_events`, insert-only): opened, standardised (VS: factor 0.900 to 1.100, next due, against
+  what), qualified (working standard: potency, basis, next re-qualification; its primary must be usable), growth
+  promotion (passed or failed, organisms), checked (a second person, not the one who recorded it, checks the latest
+  standardisation, qualification or growth promotion; until then the item is not usable and its values are not used),
+  retest (a reference standard's new retest date), blocked, unblocked, disposed (a column: retired), note.
+- **Why not usable** (all reasons at once): disposed or retired, blocked, expired or past its use-by date, past its
+  retest date, its use period after opening over, not qualified or re-qualification overdue, not standardised or
+  standardisation overdue, growth promotion not tested or failed, an entry waiting for its check, passage beyond 5.
+- **Worksheet field kind `item`** (`shared/blocks/format.ts`, with `itemKinds`): copied from the `lot` field. The step
+  offers only usable items of those kinds and names those left out with why (`GET /api/inventory/picks`); the server
+  reads the item again when it is recorded and refuses an unusable one in plain words (`server/pull.ts` pullLabItem).
+  Its values fill the block's fields named after it, with source "from the LIMS inventory", never typed and never
+  typed over: the assay's `std` (reference or working standard) fills `stdPotency` and `stdBasis`; the titration's
+  `vs` fills `vsFactor` and `excess` fills `excessFactor` (the factor of the checked standardisation); the instrument
+  run's `column` names the column. No hand fallback: the inventory is this product's own. The other blocks are
+  unchanged (the dissolution block's optional standard potency is still typed).
+- **Usage log** (LIMS-14 look-back, LIMS-12 column runs): an item's screen lists every analysis step whose recorded
+  values name it (`lab:<id>` in the step events), with the analysis, its sample, who and when; nothing is stored twice.
+- **Screens**: the Inventory tab (list by kind with status and why, search, register), the item screen (facts, status,
+  made from and used to make, entries, usage), the register and entry dialogs. Permissions: registering and entries
+  `lims.analysis.perform`; the second person's check `lims.analysis.review`; reading also `lims.view`. No new code.
+- Not in this round: printed labels, stability chambers (with stability, step 6) and instruments with the Logbook and
+  Qualification links (step 4, instruments).

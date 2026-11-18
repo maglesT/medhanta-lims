@@ -11,6 +11,7 @@ import { FieldInput } from './Fields.js';
 import { DemoSkip } from './DemoSkip.js';
 import { ReasonDialog } from './ReasonDialog.js';
 import { CERTIFICATE, fieldLabel, handEntered, LINK_OF } from '../../../shared/engine/links.js';
+import { itemFills } from '../../../shared/engine/items.js';
 import { askedFields, cutShort, notYetText } from '../../../shared/engine/analysis.js';
 import { plantText } from '../../../shared/plant-time.js';
 import { emptyNote, inLogbook, machineRefusal, roomRefusal } from '../../../shared/engine/picks.js';
@@ -99,10 +100,22 @@ export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: Ana
   const fits = (f: BlockField) => (f.kind === 'room' ? md.room.filter((r) => r.active && !roomRefusal(stage, r))
     : f.kind === 'machine' ? md.machine.filter((m) => m.active && !machineRefusal(stage, f, m, md.room)) : []);
   const pickOf = (f: BlockField) => inLogbook(fits(f), logbook);
-  const picksFor = (f: BlockField) => pickOf(f).offered;
+  // A lab inventory item (LIMS-12, 13, 14): only the usable ones are offered; those left out are named with why.
+  const [inv, setInv] = useState<Record<string, { items: PickItem[]; leftOut: { code: string; name: string; why: string[] }[] }>>({});
+  useEffect(() => {
+    let live = true;
+    for (const f of block.fields.filter((x) => x.kind === 'item')) {
+      void api<{ items: PickItem[]; leftOut: { code: string; name: string; why: string[] }[] }>('GET', `/api/inventory/picks?kinds=${f.itemKinds!.join(',')}`)
+        .then((r) => live && setInv((p) => ({ ...p, [f.name]: r })), () => {});
+    }
+    return () => { live = false; };
+  }, [block, last]);
+  const fills = itemFills(block);
+  const picksFor = (f: BlockField) => (f.kind === 'item' ? inv[f.name]?.items ?? [] : pickOf(f).offered);
   // An empty picker says why (once master data is read) and what the Logbook leaves out; one with choices says nothing.
   const mdRead = md.room.length > 0 && (md.machine.length > 0 || !block.fields.some((x) => x.kind === 'machine'));
-  const noteFor = (f: BlockField) => [mdRead && !fits(f).length ? emptyNote(stage, f, md.machine, md.room) : null, pickOf(f).note];
+  const noteFor = (f: BlockField) => (f.kind === 'item' ? (inv[f.name]?.leftOut ?? []).map((x) => `Not offered: ${x.code} ${x.name}: ${x.why.join('; ')}.`)
+    : [mdRead && !fits(f).length ? emptyNote(stage, f, md.machine, md.room) : null, pickOf(f).note]);
 
   const post = (action: string, body: object = {}, key = row.id) => api('POST', `/api/analyses/${d.analysis.id}/steps/${key}/${action}`, body);
   const run = async (fn: () => Promise<unknown>) => {
@@ -177,8 +190,9 @@ export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: Ana
     }
     const unit = shownUnit(f);
     const src = row.source[f.name];
-    // Pulled through a link: shown, never typed over. Certificate values come only with an MMS lot.
-    const pulled = (src && src.from !== 'hand' && !LINK_OF[f.kind]) || (lotPulled && CERTIFICATE[f.name] !== undefined);
+    // Pulled through a link: shown, never typed over. Certificate values come only with an MMS lot; a standard's potency
+    // or a VS factor only with the item picked from the inventory.
+    const pulled = (src && src.from !== 'hand' && !LINK_OF[f.kind] && f.kind !== 'item') || (lotPulled && CERTIFICATE[f.name] !== undefined) || fills[f.name] !== undefined;
     if (pulled && v === undefined) return null;
     if (!pulled && (can('record') || (v === undefined && row.state === 'open') || (f.count && v !== undefined))) {
       return (

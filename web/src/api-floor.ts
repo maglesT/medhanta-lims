@@ -5,7 +5,7 @@ import type { Block, BlockField } from '../../shared/blocks/format.js';
 import type { MasterDoc, Step } from '../../shared/master/schema.js';
 import type { Action, EventKind, Payload, State, StepKey } from '../../shared/engine/state.js';
 import type { Stored, Value } from '../../shared/engine/values.js';
-import { PROVIDER_NAME, type Source } from '../../shared/engine/links.js';
+import { PROVIDER_NAME, SOURCE_NAME, type Source } from '../../shared/engine/links.js';
 import { stepTitle as sharedStepTitle, TERMINATED_STATE } from '../../shared/engine/analysis.js';
 import { plantClock, plantText } from '../../shared/plant-time.js';
 import { statusWords } from '../../shared/engine/release.js';
@@ -47,7 +47,7 @@ export interface PickItem { itemId: string; code: string; name: string; active: 
 /** Where a value came from, in plain words. */
 export const sourceWords = (s: Source | undefined) => (!s ? '' : s.from === 'hand'
   ? `Typed by hand: ${PROVIDER_NAME[s.link]} ${s.state === 'down' ? 'link is down' : 'is not linked'}. A second person checks it.`
-  : `From ${PROVIDER_NAME[s.from]}: ${plantText(s.shown)}`);
+  : `From ${SOURCE_NAME[s.from]}: ${plantText(s.shown)}`);
 
 /** A pick list read through a link (pull, don't type): empty when the link is absent or down, and then the value is typed. */
 export function useLinked<T>(url: string | null, list: string): T[] {

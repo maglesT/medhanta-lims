@@ -1,9 +1,12 @@
 import type { FastifyInstance } from 'fastify';
 import type { MasterEquipment, MasterRoom } from './master.js';
 import type { Block, BlockField } from '../shared/blocks/index.js';
-import { CERTIFICATE, PROVIDER_NAME, clauses, type Provider, type Source, type Value } from '../shared/engine/index.js';
+import { CERTIFICATE, SOURCE_NAME, clauses, type Provider, type Source, type Value } from '../shared/engine/index.js';
 import { LOT_USABLE } from './links.js';
 import { plantDate } from '../shared/plant-time.js';
+import type { Tx } from './db.js';
+import { ITEM_KIND_NAME, itemFills, labItemId, parseLabItemId, unusableText } from '../shared/engine/items.js';
+import { loadItem, plantToday } from './routes/inventory.js';
 
 // What a link gives a step value at write time (owner 15 Nov 2026, LIMS-12, TA-12): the value as read now, or a
 // refusal in plain words; when the link is absent or down, the value is typed by hand (its questions in
@@ -90,4 +93,32 @@ export function handProblem(f: BlockField, v: string, now: Date, tz: string): st
   return null;
 }
 
-export const pulledWords = (s: Source) => (s.from === 'hand' ? '' : `comes from ${PROVIDER_NAME[s.from]} and cannot be typed over`);
+export const pulledWords = (s: Source) => (s.from === 'hand' ? '' : `comes from ${SOURCE_NAME[s.from]} and cannot be typed over`);
+
+/**
+ * LIMS-12, LIMS-13, LIMS-14, LIMS-34, LIMS-35: a lab inventory item of the field's kinds that may be used now, or a
+ * refusal with why not. Its values (a standard's potency and basis, a VS factor) fill the block's fields named after the
+ * field (std → stdPotency), from the LIMS inventory: they cannot be typed over. There is no hand fallback: the inventory
+ * is this product's own.
+ */
+export async function pullLabItem(tx: Tx, block: Block, f: BlockField, raw: unknown, now: Date): Promise<{ value: Value } & Pulled> {
+  const id = typeof raw === 'string' ? parseLabItemId(raw) : null;
+  const l = id === null ? null : await loadItem(tx, id, plantToday(now));
+  const none = { value: '', ...refused() };
+  if (!l) return { ...none, problems: [`${f.label}: pick an item from the inventory.`] };
+  const { row, status } = l;
+  if (!f.itemKinds?.includes(row.kind)) return { ...none, problems: [`${f.label}: ${row.itemNo} is a ${ITEM_KIND_NAME[row.kind].toLowerCase()}; pick a ${f.itemKinds?.map((k) => ITEM_KIND_NAME[k].toLowerCase()).join(' or ')}.`] };
+  if (!status.usable) return { ...none, problems: [unusableText(row.itemNo, row.name, status)] };
+  const facts = [row.itemNo, row.name, row.facts.lot && `lot ${row.facts.lot}`, status.due && `in use until ${plantDate(status.due)}`].filter(Boolean).join(', ');
+  const source: Source = { from: 'inventory', asOf: now.toISOString(), shown: facts };
+  const out: { value: Value } & Pulled = { value: { itemId: labItemId(row.id), code: row.itemNo, name: row.name, version: 1, type: row.kind }, source, values: {}, sources: {}, problems: [] };
+  for (const [name, x] of Object.entries(itemFills(block)).filter(([, x]) => x.item.name === f.name)) {
+    const v = status.values[x.value];
+    const target = block.fields.find((y) => y.name === name)!;
+    if (v === undefined) { if (!target.optional) out.problems.push(`${row.itemNo} has no ${x.value} in the inventory.`); continue; }
+    if (target.kind === 'choice' && !target.options?.includes(v)) { out.problems.push(`${target.label}: ${row.itemNo} gives "${v}", which this step does not take.`); continue; }
+    out.values[name] = target.kind === 'number' ? { value: v, unit: target.unit ?? '' } : v;
+    out.sources[name] = { from: 'inventory', asOf: now.toISOString(), shown: `${x.value} ${v}${target.unit === '%' ? ' %' : ''} of ${row.itemNo}${x.value === 'potency' && status.values.basis ? ` (${status.values.basis})` : ''}` };
+  }
+  return out;
+}

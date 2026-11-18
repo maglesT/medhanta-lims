@@ -5,7 +5,8 @@ import { audit } from '../audit.js';
 import { parseId, requirePermission, type SessionUser } from '../auth.js';
 import { usableItem } from '../master.js';
 import { machineRefusal, roomRefusal } from '../../shared/engine/picks.js';
-import { handProblem, pullItem, pullLot, pulledWords } from '../pull.js';
+import { handProblem, pullItem, pullLabItem, pullLot, pulledWords } from '../pull.js';
+import { itemFills } from '../../shared/engine/items.js';
 import { SignError, authenticateSigner, contentHash, sign, signBody } from '../signatures.js';
 import { masterVersion } from './masters.js';
 import { analysisRecordDoc, type RecordInput, type Signature } from '../analysis-record.js';
@@ -139,9 +140,13 @@ async function readValues(app: FastifyInstance, tx: Tx, doc: MasterDoc, key: Ste
   // 1. the linked values: machines, rooms and lots
   for (const [name, x] of Object.entries(raw)) {
     const f = block.fields.find((y) => y.name === name);
-    if (!f || !LINK_OF[f.kind]) continue;
+    if (!f || (!LINK_OF[f.kind] && f.kind !== 'item')) continue;
     let pulled;
-    if (f.kind === 'machine' || f.kind === 'room') {
+    if (f.kind === 'item') {
+      // A lab inventory item (LIMS-12, 13, 14): usable now, its values with it.
+      pulled = await pullLabItem(tx, block, f, x, now);
+      if (!pulled.problems.length) out[name] = pulled.value;
+    } else if (f.kind === 'machine' || f.kind === 'room') {
       const rooms = await app.master.rooms();
       const item = f.kind === 'machine' ? usableItem(await app.master.equipment(), String(x), 'machine') : usableItem(rooms, String(x), 'room');
       const type = 'type' in item ? item.type : item.area;
@@ -168,10 +173,13 @@ async function readValues(app: FastifyInstance, tx: Tx, doc: MasterDoc, key: Ste
   const sources = { ...current.source, ...source };
   const fields = [...block.fields, ...handFields(block.fields, sources)];
   const lot = block.fields.find((f) => f.kind === 'lot');
+  const fills = itemFills(block);
   for (const [name, x] of Object.entries(raw)) {
     const f = fields.find((y) => y.name === name);
     if (!f) { problems.push(`There is no field ${name}`); continue; }
-    if (LINK_OF[f.kind]) continue;
+    if (LINK_OF[f.kind] || f.kind === 'item') continue;
+    // A standard's potency, a VS factor: only with the item picked from the inventory, never typed.
+    if (fills[name]) { problems.push(`${f.label} comes from the LIMS inventory with the ${fills[name].item.label.toLowerCase()} and cannot be typed`); continue; }
     if (taken.has(name)) continue;
     const was = source[name] ?? current.source[name];
     // While the step's lot is typed by hand (its link off or down), the lot's date and certificate values are typed from

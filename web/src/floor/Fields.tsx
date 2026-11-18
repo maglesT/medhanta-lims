@@ -79,9 +79,10 @@ export function FieldInput({ f, unit, saved, picks = [], note, options = [], dis
         ))}
       </div>
     );
-  } else if (f.kind === 'machine' || f.kind === 'room') {
+  } else if (f.kind === 'machine' || f.kind === 'room' || f.kind === 'item') {
     input = <>
-      {picks.length === 0 ? !notes.length && <p className="muted">No {f.kind === 'room' ? 'room this stage allows' : `${f.label.toLowerCase()} of the types and rooms this stage allows`} is active in master data.</p> : (
+      {picks.length === 0 ? (f.kind === 'item' ? <p className="muted">No usable {f.label.toLowerCase()} is in the inventory.</p>
+        : !notes.length && <p className="muted">No {f.kind === 'room' ? 'room this stage allows' : `${f.label.toLowerCase()} of the types and rooms this stage allows`} is active in master data.</p>) : (
         <div className="picks" role="group" aria-label={f.label}>
           {picks.map((p) => (
             <button key={p.itemId} type="button" className={raw === p.itemId ? 'on' : ''} aria-pressed={raw === p.itemId} disabled={disabled} onClick={() => tap(p.itemId)}>
@@ -105,7 +106,7 @@ export function FieldInput({ f, unit, saved, picks = [], note, options = [], dis
   }
   return (
     <div className="fl-field">
-      <label className="lbl" htmlFor={f.count || ['yes-no', 'choice', 'machine', 'room', 'timer'].includes(f.kind) ? undefined : id}>
+      <label className="lbl" htmlFor={f.count || ['yes-no', 'choice', 'machine', 'room', 'item', 'timer'].includes(f.kind) ? undefined : id}>
         <span>{f.label}{f.optional && <small> (if it applies)</small>}</span>
         {status === 'saving' && <span className="saving">Saving…</span>}
         {status === 'saved' && <span className="saved">✓ Saved</span>}

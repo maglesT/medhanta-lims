@@ -2,7 +2,8 @@ import type { Block, BlockField, BlockSetting } from './format.js';
 import { meanCalcs } from './assay.js';
 
 // Titration (L6), direct or back, for up to 3 sample preparations: the titre of each (less the blank), the VS's
-// stated molarity times its factor (the factor typed from the VS label, checked by a second person; safety rule S5:
+// stated molarity times its factor (the VS picked from the lab inventory: its factor, from its checked standardisation,
+// comes with it and cannot be typed, LIMS-13; safety rule S5:
 // the equivalence follows the VS's molarity, and a back titration without a blank uses each VS's own factor), the
 // equivalence (mg per mL of VS of the molarity it is written for), an aliquot titrated, % of the sample (on a basis)
 // or per unit. The mean of the preparations is the result.
@@ -11,13 +12,15 @@ const opt = (k: number) => (k > 1 ? { optional: true } : {});
 
 export const titration: Block = {
   id: 'titration', version: 1, name: 'Titration', checker: true,
-  instruction: 'Titrate each sample preparation with the volumetric solution (VS) to the end point the method gives, and record the titre. Record the blank titration when the method has one, and the factor of each VS from its label.',
+  instruction: 'Titrate each sample preparation with the volumetric solution (VS) to the end point the method gives, and record the titre. Record the blank titration when the method has one, and pick each VS used from the inventory: its factor comes with it.',
   fields: [
     { name: 'titrator', label: 'Titrator', kind: 'machine', types: ['titrator'], notTypes: ['karl fischer'], optional: true },
-    { name: 'vsFactor', label: 'VS titrated: factor (from its label)', kind: 'text' },
+    { name: 'vs', label: 'VS titrated', kind: 'item', itemKinds: ['vs'] },
+    { name: 'vsFactor', label: 'VS titrated: factor (from the inventory)', kind: 'text' },
     ...preps.map((k): BlockField => ({ name: `titre${k}`, label: `Preparation ${k}: titre`, kind: 'number', unit: 'mL', ...opt(k) })),
     { name: 'blank', label: 'Blank titration: titre', kind: 'number', unit: 'mL', optional: true },
-    { name: 'excessFactor', label: 'VS added in excess: factor (from its label)', kind: 'text', optional: true },
+    { name: 'excess', label: 'VS added in excess (back titration)', kind: 'item', itemKinds: ['vs'], optional: true },
+    { name: 'excessFactor', label: 'VS added in excess: factor (from the inventory)', kind: 'text', optional: true },
   ],
   settings: [
     { name: 'mode', label: 'Titration', kind: 'text', options: ['direct', 'back'] },

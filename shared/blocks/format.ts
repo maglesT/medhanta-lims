@@ -11,10 +11,11 @@
 import { z } from 'zod';
 import { findUnit } from '../templates/index.js';
 import { TEMPLATES } from '../engine/templates.js';
+import { ITEM_KINDS } from '../engine/items.js';
 
 const name = z.string().regex(/^[a-z][a-zA-Z0-9]{0,39}$/);
 
-export const FIELD_KINDS = ['number', 'text', 'yes-no', 'choice', 'timer', 'lot', 'machine', 'room'] as const;
+export const FIELD_KINDS = ['number', 'text', 'yes-no', 'choice', 'timer', 'lot', 'machine', 'room', 'item'] as const;
 export const fieldSchema = z.object({
   name,
   label: z.string().min(1),
@@ -34,6 +35,9 @@ export const fieldSchema = z.object({
   // with one of the notTypes words is not taken (a production "Platform balance" is not a lab balance).
   types: z.array(z.string().regex(/^[a-z][a-z ]*$/)).optional(),
   notTypes: z.array(z.string().regex(/^[a-z][a-z ]*$/)).optional(),
+  // item: the kinds of lab inventory item it takes (shared/engine/items.ts), e.g. ["reference", "working"]. Only a usable
+  // item can be picked; its values fill the block's fields named after it (std → stdPotency, stdBasis; vs → vsFactor).
+  itemKinds: z.array(z.enum(ITEM_KINDS)).min(1).optional(),
 }).strict();
 
 export const SETTING_KINDS = ['quantity', 'limit', 'number', 'text', 'material'] as const;
@@ -104,6 +108,7 @@ export function blockProblems(b: Block): string[] {
     if (f.kind === 'number' && !f.unit) p.push(`field ${f.name}: a number needs a unit`);
     if (f.unit?.startsWith('$') ? !settings.has(f.unit.slice(1)) : f.unit !== undefined && !findUnit(f.unit)) p.push(`field ${f.name}: unknown unit ${f.unit}`);
     if (f.kind === 'choice' && !f.options?.length) p.push(`field ${f.name}: a choice needs options`);
+    if ((f.kind === 'item') !== (f.itemKinds !== undefined)) p.push(`field ${f.name}: an item field, and only an item field, names its itemKinds`);
     if (f.minCount !== undefined && (f.count === undefined || f.minCount > f.count)) p.push(`field ${f.name}: minCount needs a count at least as large`);
   }
   for (const s of b.settings) if (s.options && (s.kind !== 'text' || !s.options.length)) p.push(`setting ${s.name}: only a text setting has a list`);

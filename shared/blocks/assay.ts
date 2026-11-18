@@ -6,7 +6,8 @@ import type { Block, BlockField, BlockSetting } from './format.js';
 // basis with the sample's own loss on drying or water) or per unit (with the average unit weight, as % of the label
 // claim when the specification gives it). The reportable result is the mean of the preparations (T7), checked
 // against the limit; the preparations' agreement (% RSD) may have its own limit, and every preparation the method
-// sets must have its result (C2). The standard's potency is typed from its certificate (checked by a second person).
+// sets must have its result (C2). The standard is picked from the lab inventory (a usable reference or working
+// standard, LIMS-14): its potency and basis come with it and cannot be typed.
 const preps = [1, 2, 3] as const;
 const opt = (k: number) => (k > 1 ? { optional: true } : {});
 
@@ -45,13 +46,14 @@ export const meanCalcs = (label: string): Block['calcs'] => [
 
 export const assay: Block = {
   id: 'assay', version: 1, name: 'Assay by external standard', checker: true,
-  instruction: 'From the run, record the responses of the standard (and of the bracketing standards after the samples) and of each sample preparation. Record the standard\'s potency and its basis from its certificate. The masses and dilutions come from the weigh and dilute steps.',
+  instruction: 'From the run, record the responses of the standard (and of the bracketing standards after the samples) and of each sample preparation. Pick the reference or working standard used: its potency and basis come from the inventory. The masses and dilutions come from the weigh and dilute steps.',
   fields: [
     { name: 'stdResponses', label: 'Standard: responses', kind: 'number', unit: '$responseUnit', count: 6, minCount: 1 },
     { name: 'stdResponsesAfter', label: 'Standard after the samples (bracketing): responses', kind: 'number', unit: '$responseUnit', count: 6, minCount: 1, optional: true },
     ...assayFields('$responseUnit'),
-    { name: 'stdPotency', label: 'Standard: potency (from its certificate)', kind: 'number', unit: '%' },
-    { name: 'stdBasis', label: 'Standard: basis of the potency', kind: 'choice', options: ['as is', 'dried', 'anhydrous'] },
+    { name: 'std', label: 'Reference or working standard used', kind: 'item', itemKinds: ['reference', 'working'] },
+    { name: 'stdPotency', label: 'Standard: potency (from the inventory)', kind: 'number', unit: '%' },
+    { name: 'stdBasis', label: 'Standard: basis of the potency (from the inventory)', kind: 'choice', options: ['as is', 'dried', 'anhydrous'] },
     { name: 'stdLod', label: 'Standard: loss on drying (potency on the dried basis, used as it is)', kind: 'number', unit: '%', optional: true },
     { name: 'stdWater', label: 'Standard: water content (potency on the anhydrous basis, used as it is)', kind: 'number', unit: '%', optional: true },
     { name: 'stdDried', label: 'Standard dried before weighing', kind: 'yes-no', optional: true },
