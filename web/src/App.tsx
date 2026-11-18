@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { api, ApiError, can, type Me } from './api.js';
 import { Login } from './pages/Login.js';
 import { MyWork } from './floor/MyWork.js';
-import { BatchScreen } from './floor/BatchScreen.js';
+import { AnalysisScreen } from './floor/AnalysisScreen.js';
 import { go, useRoute } from './api-floor.js';
 import { Masters } from './designer/Masters.js';
 import { ToReview } from './release/ToReview.js';
@@ -18,7 +18,7 @@ export function App() {
   const [demo, setDemo] = useState(false);
   useEffect(() => { void api<{ demo?: boolean }>('GET', '/api/health', undefined, true).then((h) => setDemo(!!h.demo), () => {}); }, []);
   const banner = demo && <div className="demo-banner" role="note">DEMO · a demonstration installation, not for GMP use · waits can be skipped</div>;
-  // Floor screens: #/batch/12, #/batch/12/step/0.1.0.1, #/batch/12/approve (the tablet's back button works); the QC
+  // Floor screens: #/analysis/12, #/analysis/12/step/0.1.0.1, #/analysis/12/approve (the tablet's back button works); the QC
   // and QA screens: #/release, #/release/12.
   const route = useRoute();
   const release = route.release;
@@ -45,8 +45,8 @@ export function App() {
     window.addEventListener('keydown', used);
     return () => { window.removeEventListener('pointerdown', used); window.removeEventListener('keydown', used); };
   }, [refresh]);
-  // A batch opened from another page (a batch just issued from the master records) shows on the floor screens.
-  useEffect(() => { if (route.batch) setPage('home'); }, [route.batch]);
+  // A analysis opened from another page (a analysis just issued from the master records) shows on the floor screens.
+  useEffect(() => { if (route.analysis) setPage('home'); }, [route.analysis]);
 
   if (me === undefined) return <>{banner}<main className="page">Loading…</main></>;
   if (me === null) return <>{banner}<Login /></>;
@@ -62,13 +62,13 @@ export function App() {
     <>
       {banner}
       <header className="bar">
-        <span className="brand"><img className="brand-mark" src="/truebatch-mark.svg" alt="TrueBatch" /><span><b>{product.name}</b><small>by Medhanta</small></span></span>
+        <span className="brand"><img className="brand-mark" src="/truebatch-mark.svg" alt="" /><span><b>{product.name}</b><small>by Medhanta</small></span></span>
         <nav>
-          <button className={page === 'home' && !route.batch && !release ? 'tab on' : 'tab'} onClick={() => { setPage('home'); go('#/'); }}>My work</button>
-          {['qc.approve', 'qa.release'].some((c) => can(me, c)) && (
+          <button className={page === 'home' && !route.analysis && !release ? 'tab on' : 'tab'} onClick={() => { setPage('home'); go('#/'); }}>My work</button>
+          {can(me, 'analysis.review') && (
             <button className={release ? 'tab on' : 'tab'} onClick={() => { setPage('home'); go('#/release'); }}>To review</button>
           )}
-          {['master.author', 'master.check', 'master.approve', 'batch.issue', 'view'].some((c) => can(me, c)) && (
+          {['master.author', 'master.check', 'master.approve', 'analysis.perform', 'view'].some((c) => can(me, c)) && (
             <button className={page === 'masters' && !release ? 'tab on' : 'tab'} onClick={() => { setPage('masters'); go('#/'); }}>{product.masters}</button>
           )}
         </nav>
@@ -79,7 +79,7 @@ export function App() {
       </header>
       <main className="page">
         {release ? (release === 'list' ? <ToReview me={me} /> : <ReleaseScreen me={me} id={release} />) : (<>
-          {page === 'home' && (route.batch ? <BatchScreen me={me} id={route.batch} step={route.step} approve={route.approve} /> : <MyWork me={me} />)}
+          {page === 'home' && (route.analysis ? <AnalysisScreen me={me} id={route.analysis} step={route.step} approve={route.approve} /> : <MyWork me={me} />)}
           {page === 'masters' && <Masters me={me} />}
         </>)}
       </main>

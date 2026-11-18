@@ -1,10 +1,10 @@
 /**
  * Recorded values and the results of the block's calculations. Every GMP number comes from the templates library:
- * this file only picks the inputs (fields, settings, earlier steps, formula lines) and calls the templates.
+ * this file only picks the inputs (fields, settings, earlier steps) and calls the templates.
  */
 import { Dec, findUnit, type Outcome, type Q, type ResultValue } from '../templates/index.js';
 import { findBlock, type Block, type BlockField } from '../blocks/index.js';
-import type { FormulaLine, Limit, MasterDoc, SettingValue, Step } from '../master/schema.js';
+import type { Limit, MasterDoc, SettingValue, Step } from '../master/schema.js';
 import { callTemplate } from './templates.js';
 import { keyId, type StepEvent, type StepKey } from './state.js';
 import type { Source } from './links.js';
@@ -79,8 +79,12 @@ export function readValue(f: BlockField, raw: unknown, unit: string): Value | { 
   if (f.kind === 'number') {
     const one = (x: unknown) => (typeof x === 'string' && NUMBER.test(x.trim()) ? { value: x.trim(), unit } : null);
     if (f.count === undefined) return one(raw) ?? bad('type a number, e.g. "50.300"');
-    if (!Array.isArray(raw) || raw.length !== f.count) return bad(`give exactly ${f.count} readings`);
-    const list = raw.map(one);
+    // With minCount (replicate injections: 5 or 6), blank readings are left out and minCount to count are taken.
+    const given = f.minCount && Array.isArray(raw) ? raw.filter((x) => !(typeof x === 'string' && !x.trim())) : raw;
+    if (!Array.isArray(given) || given.length > f.count || given.length < (f.minCount ?? f.count)) {
+      return bad(f.minCount ? `give ${f.minCount} to ${f.count} readings` : `give exactly ${f.count} readings`);
+    }
+    const list = given.map(one);
     return list.every((x) => x !== null) ? (list as { value: string; unit: string }[]) : bad('every reading must be a number');
   }
   if (typeof raw !== 'string' || !raw.trim() || raw.length > 2000) return bad('missing');
@@ -128,7 +132,7 @@ function latestValues(events: readonly StepEvent[], stage: number, sub: number, 
   return currentValues(these);
 }
 
-/** An earlier step's field or calculation, "stage/step/name". In the same sub-batch stage: the same copy. */
+/** An earlier step's field or calculation, "stage/step/name". In the same replicate stage: the same copy. */
 function refValue(doc: MasterDoc, events: readonly StepEvent[], here: StepKey, ref: string, uses: number[]): unknown {
   const [sk, tk, name] = ref.split('/') as [string, string, string];
   const si = doc.stages.findIndex((s) => s.key === sk);
@@ -138,69 +142,8 @@ function refValue(doc: MasterDoc, events: readonly StepEvent[], here: StepKey, r
   return name in c.values ? c.values[name] : c.results[name] ? asQ(c.results[name]) : undefined;
 }
 
-const tablets = (doc: MasterDoc) => `${doc.header.batchSize} tablets`;
-const perBatch = (mg: string, doc: MasterDoc) => callTemplate('T8', { mode: 'per unit', perUnit: `${mg} mg`, count: tablets(doc), unit: 'kg' });
-
-/** A header value: as written, or the batch weight (T8: weight per tablet × batch size). */
-export function headerValue(doc: MasterDoc, h: 'batchSize' | 'coreWeight' | 'coatedWeight' | 'coreBatch' | 'coatedBatch'): string | Stored {
-  const { coreWeightMg: core, coatedWeightMg: coated } = doc.header;
-  if (h === 'batchSize') return tablets(doc);
-  if (h === 'coreWeight') return `${core} mg`;
-  if (h === 'coreBatch') return store(perBatch(core, doc));
-  if (coated === undefined) return { ok: false, message: 'The master has no coated tablet weight' };
-  return h === 'coatedWeight' ? `${coated} mg` : store(perBatch(coated, doc));
-}
-
-/** The adjusted quantity a step recorded for a formula line (its setting that asks for the adjusted line). */
-function recordedAdjusted(doc: MasterDoc, events: readonly StepEvent[], here: StepKey, lineKey: string, uses: number[]): Stored | undefined {
-  for (const [si, s] of doc.stages.entries()) for (const [ti, t] of s.steps.entries()) {
-    for (const [name, v] of Object.entries(t.settings)) {
-      if (typeof v === 'object' && 'formula' in v && v.formula === lineKey && v.adjusted) {
-        const r = latestValues(events, si, si === here.stage ? here.sub : 1, ti, uses).results[name];
-        if (r) return r;
-      }
-    }
-  }
-  return undefined;
-}
-
 /**
- * A formula line's batch quantity: T8 (mg per tablet × batch size), then, when adjusted, the line's adjustments in
- * order: T11 salt factor, T9 potency (with the lot's assay, water, LOD from this step) or T18 content, T16 overage,
- * or T10 for a filler that compensates other lines. The worked lines are joined.
- */
-export function lineQuantity(doc: MasterDoc, events: readonly StepEvent[], here: StepKey, line: FormulaLine, adjusted: boolean, values: Record<string, Value>, uses: number[] = []): Stored {
-  let q: Outcome<object> = perBatch(line.mgPerTablet, doc);
-  const shown: string[] = [];
-  const next = (o: Outcome<object>) => { if (q.ok) shown.push(q.shown); q = o; };
-  const a = adjusted ? line.adjust : undefined;
-  const certificate = (k: string) => values[k] as Q | undefined;
-  if (a?.salt && q.ok) next(callTemplate('T11', { quantity: exact(q.value, q.unit), from: a.salt.from, to: a.salt.to, unit: 'kg' }));
-  if (a?.potency && q.ok) {
-    next(callTemplate('T9', { ...a.potency, standard: a.salt ? q : exact(q.value, q.unit),
-      assay: certificate('assay'), water: certificate('water'), lod: certificate('lod'), unit: 'kg' }));
-  } else if (a?.content && q.ok) {
-    next(callTemplate('T18', { ...a.content, target: exact(q.value, q.unit), content: certificate('content'), unit: 'kg' }));
-  }
-  if (a?.overage && q.ok) next(callTemplate('T16', { quantity: exact(q.value, q.unit), overagePercent: a.overage.percent, maxOveragePercent: a.overage.maxPercent, unit: 'kg' }));
-  if (a?.compensates?.length && q.ok) {
-    const others = a.compensates.map((k) => ({ k, l: doc.formula.find((f) => f.key === k), r: recordedAdjusted(doc, events, here, k, uses) }));
-    const missing = others.find((o) => !o.r?.ok);
-    if (missing) return { ok: false, message: `Weigh ${missing.l?.name ?? missing.k} first: ${line.name} compensates its adjusted quantity` };
-    next(callTemplate('T10', { fillers: [{ name: line.name, standard: exact(q.value, q.unit) }], unit: 'kg',
-      adjusted: others.map((o) => ({ name: o.l?.name ?? o.k, standard: perBatchQ(doc, o.l), adjusted: asQ(o.r!) })) }));
-  }
-  const r = store(q);
-  return r.ok && shown.length ? { ...r, shown: [...shown, r.shown].join('; then ') } : r;
-}
-const perBatchQ = (doc: MasterDoc, l: FormulaLine | undefined) => {
-  const r = l ? store(perBatch(l.mgPerTablet, doc)) : undefined;
-  return r ? asQ(r) : undefined;
-};
-
-/**
- * The results of a step's calculations for its current values: settings that refer to the formula or the header are
- * worked out first (they show their own worked line), then the block's calculations in order. A calculation whose
+ * The results of a step's calculations for its current values: the block's calculations in order. A calculation whose
  * inputs are not all there yet is left out until they are. The ids of the other steps' events used go into `uses`.
  */
 export function evaluate(doc: MasterDoc, events: readonly StepEvent[], key: StepKey, values: Record<string, Value>, uses: number[] = []): Record<string, Stored> {
@@ -228,17 +171,8 @@ export function evaluate(doc: MasterDoc, events: readonly StepEvent[], key: Step
     if (v === undefined) continue;
     if (typeof v === 'string' || 'unit' in v) { inputs[s.name] = v; continue; }
     if ('ref' in v) { const r = refValue(doc, events, key, v.ref, uses); if (r !== undefined) inputs[s.name] = r; continue; }
-    if ('formula' in v) {
-      const line = doc.formula.find((l) => l.key === v.formula);
-      if (s.kind === 'material' || !line) continue;
-      results[s.name] = lineQuantity(doc, events, key, line, v.adjusted ?? false, values, uses);
-    } else {
-      const h = headerValue(doc, v.header);
-      if (typeof h === 'string') { inputs[s.name] = h; continue; }
-      results[s.name] = h;
-    }
-    const r = results[s.name]!;
-    if (r.ok) { inputs[s.name] = asQ(r); asResults[s.name] = { ok: true, value: new Dec(r.value), unit: r.unit }; }
+    // { spec: name } is replaced by the spec's value before an analysis runs (applySpec); left alone (a method on its
+    // own, in the designer's preview) it is not there yet, and the calculations that need it wait.
   }
   for (const c of block.calcs) {
     // A limit check of an optional value that was not given, or against an optional limit the master did not set,
@@ -261,7 +195,7 @@ export function evaluate(doc: MasterDoc, events: readonly StepEvent[], key: Step
   return results;
 }
 
-/** Demo only: the timer id of a block's minimum duration (a mixing time) in one step instance (batch.ts timers). */
+/** Demo only: the timer id of a block's minimum duration (a mixing time) in one step instance (analysis.ts timers). */
 export const durationId = (k: StepKey, calc: string) => `dur:${keyId(k)}:${calc}`;
 const DEMO_SKIPPED = ' · DEMO: wait skipped';
 // The limit without its lower bound: the wait was skipped, the upper limit still applies.

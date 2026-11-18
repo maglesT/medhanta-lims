@@ -1,28 +1,28 @@
-// The selected step's settings: the instruction, what the operator records, the calculations and checks as
+// The selected step's settings: the instruction, what the analyst records, the calculations and checks as
 // sentences whose inputs are picked from lists (only compatible kinds offered), a live worked example, signatures,
 // critical, the flow, and "More options" for the rare settings.
 import { useEffect, useState } from 'react';
 import { findBlock, type Block } from '../../../shared/blocks/index.js';
-import { stepTitle } from '../../../shared/engine/batch.js';
+import { stepTitle } from '../../../shared/engine/analysis.js';
 import type { Stored, Value } from '../../../shared/engine/index.js';
 import type { Kind } from '../../../shared/templates/index.js';
-import { HEADER_VALUES, materialLines, type Limit, type MasterDoc, type SettingValue, type Step } from '../../../shared/master/schema.js';
+import type { Limit, MasterDoc, SettingValue, Step } from '../../../shared/master/schema.js';
 import { usedFields, verdictless, workedExample } from './example.js';
-import { earlierRefs, HEADER_LABEL, kindOfUnit, neededKind, unitLabel, unitsOf } from './model.js';
+import { earlierRefs, kindOfUnit, neededKind, unitLabel, unitsOf } from './model.js';
 import { lower, sentence, slotsOf, type Part } from './sentences.js';
 import { Decimal } from './ui.js';
 import { api } from '../api.js';
 import { skillText } from '../../../shared/engine/training.js';
 
 type Settings = Step['settings'];
-const FLOWS = [['none', 'Once'], ['repeat-until', 'Repeat until a check passes'], ['optional-with-reason', 'Optional (skipped with a reason)'], ['qa-hold', 'QA hold (QA releases before the next step)']] as const;
+const FLOWS = [['none', 'Once'], ['repeat-until', 'Repeat until a check passes'], ['optional-with-reason', 'Optional (skipped with a reason)']] as const;
 
 export function StepSettings({ doc, si, ti, onChange }: { doc: MasterDoc; si: number; ti: number; onChange: (t: Step) => void }) {
   const step = doc.stages[si]!.steps[ti]!;
   const block = findBlock(step.block);
   if (!block) return <p className="error">No block {step.block.id} version {step.block.version} in the library.</p>;
   // An optional step field: set, or left out when undefined.
-  const opt = <K extends 'everyMinutesLater' | 'onlyIf' | 'orderAfter' | 'applyPerCharge'>(k: K, v: Step[K] | undefined) => {
+  const opt = <K extends 'everyMinutesLater' | 'orderAfter'>(k: K, v: Step[K] | undefined) => {
     const next: Step = { ...step, [k]: v };
     if (v === undefined) delete next[k];
     onChange(next);
@@ -42,13 +42,13 @@ export function StepSettings({ doc, si, ti, onChange }: { doc: MasterDoc; si: nu
       <h2>{block.name}</h2>
       <label>Name of the step (as people read it)<input value={step.name ?? ''} placeholder={stepTitle(doc, { ...step, name: undefined })}
         onChange={(e) => { const { name: _, ...rest } = step; onChange(e.target.value ? { ...rest, name: e.target.value } : rest); }} /></label>
-      <label>Instruction to the operator
+      <label>Instruction to the analyst
         <textarea value={step.instruction ?? block.instruction} onChange={(e) => onChange({ ...step, instruction: e.target.value === block.instruction ? undefined : e.target.value })} />
       </label>
       {step.instruction !== undefined && <button type="button" className="link dark small" onClick={() => { const { instruction: _, ...rest } = step; onChange(rest as Step); }}>Use the block's text again</button>}
 
       <div className="d-section">
-        <h3>The operator records</h3>
+        <h3>The analyst records</h3>
         <p className="tokens">{block.fields.map((f) => <span key={f.name} className="tok field">{f.label}{f.count ? ` (${f.count} readings)` : ''}{f.unit && !f.unit.startsWith('$') ? `, ${f.unit}` : ''}{f.optional ? ' · if given' : ''}</span>)}</p>
       </div>
 
@@ -108,14 +108,8 @@ export function StepSettings({ doc, si, ti, onChange }: { doc: MasterDoc; si: nu
             <label>After (minutes from the first round)<input type="number" min={1} value={step.everyMinutesLater?.afterMinutes ?? ''} onChange={(e) => opt('everyMinutesLater', e.target.value ? { afterMinutes: Number(e.target.value), everyMinutes: step.everyMinutesLater?.everyMinutes ?? step.everyMinutes! } : undefined)} /></label>
             {step.everyMinutesLater && <label>then a round every (minutes)<input type="number" min={1} value={step.everyMinutesLater.everyMinutes} onChange={(e) => opt('everyMinutesLater', { ...step.everyMinutesLater!, everyMinutes: Number(e.target.value) || 1 })} /></label>}
           </>}
-          <label>Only when the core batch is at most (kg)<Decimal label="Only when the core batch is at most (kg)" placeholder="always" value={step.onlyIf?.limit.high}
-            onChange={(v) => opt('onlyIf', v ? { header: 'coreBatch', limit: { high: v, unit: 'kg' } } : undefined)} /></label>
           <label>Order-critical: must come after<select value={step.orderAfter ?? ''} onChange={(e) => opt('orderAfter', e.target.value || undefined)}>
             <option value="">(not order-critical)</option>{doc.stages[si]!.steps.map((t, j) => t.key !== step.key && <option key={t.key} value={t.key}>{j + 1}. {stepTitle(doc, t)}</option>)}</select></label>
-          {/^(coat|spray-coat)$/.test(block.id) && <>
-            <label>Liquid to apply<input aria-label="Liquid to apply" placeholder="e.g. 971 g" value={step.applyPerCharge?.liquid ?? ''} onChange={(e) => opt('applyPerCharge', e.target.value ? { liquid: e.target.value, charge: step.applyPerCharge?.charge ?? '' } : undefined)} /></label>
-            {step.applyPerCharge && <label>per charge of<input aria-label="per charge of" placeholder="e.g. 150 g" value={step.applyPerCharge.charge} onChange={(e) => opt('applyPerCharge', { ...step.applyPerCharge!, charge: e.target.value })} /></label>}
-          </>}
         </div>
       </details>
     </div>
@@ -173,7 +167,15 @@ function Slot({ doc, si, ti, block, settings, name, onChange }: {
   const kind = neededKind(block, name, settings);
   const missing = v === undefined && !s.optional;
   const cls = missing ? 'missing' : '';
-  if (s.kind === 'number') return <Decimal label={s.label} placeholder="set" value={typeof v === 'string' ? v : ''} onChange={(x) => onChange(x || undefined)} width={5} />;
+  // A value the product's specification gives (a label claim, an average weight, a result's limit): named here, filled
+  // from the sample's specification when an analysis runs.
+  if (typeof v === 'object' && 'spec' in v) {
+    return <span className="spec-slot">from the specification, as <input aria-label={`${s.label}: name in the specification`} value={v.spec} size={14}
+      onChange={(e) => onChange({ spec: e.target.value.replace(/[^a-zA-Z0-9]/g, '') || 'value' })} />{' '}
+      <button type="button" className="link dark small" onClick={() => onChange(undefined)}>set it here instead</button></span>;
+  }
+  const fromSpec = s.kind !== 'material' && <>{' '}<button type="button" className="link dark small" onClick={() => onChange({ spec: name })}>the specification gives it</button></>;
+  if (s.kind === 'number') return <><Decimal label={s.label} placeholder="set" value={typeof v === 'string' ? v : ''} onChange={(x) => onChange(x || undefined)} width={5} />{fromSpec}</>;
   if (s.kind === 'text' && s.options) {
     return <select className={cls} aria-label={s.label} value={typeof v === 'string' ? v : '?'} onChange={(e) => onChange(e.target.value === '?' ? undefined : e.target.value)}>
       <option value="?">(choose)</option>{s.options.map((o) => <option key={o} value={o}>{o}</option>)}</select>;
@@ -186,18 +188,15 @@ function Slot({ doc, si, ti, block, settings, name, onChange }: {
     }
     return <input className={cls} aria-label={s.label} value={typeof v === 'string' ? v : ''} onChange={(e) => onChange(e.target.value || undefined)} />;
   }
-  if (s.kind === 'material') {
-    return <select className={cls} aria-label={s.label} value={typeof v === 'object' && 'formula' in v ? v.formula : ''} onChange={(e) => onChange(e.target.value ? { formula: e.target.value } : undefined)}>
-      <option value="">(choose a material)</option>{materialLines(doc).map((l) => <option key={l.key} value={l.key}>{l.code} {l.name}</option>)}</select>;
-  }
+  if (s.kind === 'material') return <span className="muted">(not used in a method)</span>;
   if (s.kind === 'limit') {
     const field = block.fields.find((f) => f.kind === 'number' && f.unit && !f.unit.startsWith('$') && kindOfUnit(f.unit) === kind);
     const unitSetting = block.fields.find((f) => f.unit?.startsWith('$'))?.unit?.slice(1);
     const k = kind ?? (unitSetting ? kindOfUnit(settings[unitSetting] as string) : undefined);
     const def = kind === 'fraction' ? '%' : field?.unit ?? (unitSetting && typeof settings[unitSetting] === 'string' ? settings[unitSetting] as string : unitsOf(k)[0]?.symbol ?? '');
-    return <LimitEdit label={s.label} value={typeof v === 'object' && 'unit' in v ? v : undefined} kind={k} unit={def} onChange={onChange} missing={missing} />;
+    return <><LimitEdit label={s.label} value={typeof v === 'object' && 'unit' in v ? v : undefined} kind={k} unit={def} onChange={onChange} missing={missing} />{fromSpec}</>;
   }
-  return <QuantitySource doc={doc} si={si} ti={ti} label={s.label} kind={kind} value={v} onChange={onChange} missing={missing} />;
+  return <><QuantitySource doc={doc} si={si} ti={ti} label={s.label} kind={kind} value={v} onChange={onChange} missing={missing} />{fromSpec}</>;
 }
 
 function LimitEdit({ label, value, kind, unit, onChange, missing }: { label: string; value?: Limit; kind?: Kind; unit: string; onChange: (l: Limit | undefined) => void; missing: boolean }) {
@@ -218,18 +217,17 @@ function LimitEdit({ label, value, kind, unit, onChange, missing }: { label: str
   );
 }
 
-/** Where a quantity comes from: a typed value, a formula line, the header, or an earlier step (compatible kinds only). */
+/** Where a quantity comes from: a typed value or an earlier step (compatible kinds only). */
 function QuantitySource({ doc, si, ti, label, kind, value, onChange, missing }: {
   doc: MasterDoc; si: number; ti: number; label: string; kind?: Kind; value?: SettingValue; onChange: (v: SettingValue | undefined) => void; missing: boolean;
 }) {
   const fits = (k: Kind | undefined) => !kind || k === kind;
   const refs = earlierRefs(doc, si, ti).filter((r) => fits(r.kind));
-  const code = value === undefined ? '' : typeof value === 'string' ? 'type' : 'formula' in value ? `${value.adjusted ? 'fa' : 'f'}:${value.formula}` : 'header' in value ? `h:${value.header}` : 'ref' in value ? `r:${value.ref}` : '';
+  const code = value === undefined ? '' : typeof value === 'string' ? 'type' : 'ref' in value ? `r:${value.ref}` : '';
   const pick = (c: string) => {
     const [k, ...rest] = c.split(':');
     const x = rest.join(':');
-    onChange(k === 'type' ? `0 ${kind ? unitsOf(kind)[0]?.symbol ?? '' : 'kg'}`.trim() : k === 'f' || k === 'fa' ? { formula: x, ...(k === 'fa' ? { adjusted: true } : {}) }
-      : k === 'h' ? { header: x as (typeof HEADER_VALUES)[number] } : k === 'r' ? { ref: x } : undefined);
+    onChange(k === 'type' ? `0 ${kind ? unitsOf(kind)[0]?.symbol ?? '' : 'mg'}`.trim() : k === 'r' ? { ref: x } : undefined);
   };
   const typed = typeof value === 'string' ? /^(\S*)\s*(.*)$/.exec(value) : null;
   return (
@@ -237,19 +235,6 @@ function QuantitySource({ doc, si, ti, label, kind, value, onChange, missing }: 
       <select aria-label={label} value={code} onChange={(e) => pick(e.target.value)}>
         <option value="">({label.toLowerCase()}: choose)</option>
         <option value="type">a value I type</option>
-        {fits('mass') && doc.formula.length > 0 && (
-          <optgroup label="Formula: batch quantity">
-            {doc.formula.flatMap((l) => [
-              <option key={`f${l.key}`} value={`f:${l.key}`}>{l.name}</option>,
-              ...(l.adjust ? [<option key={`fa${l.key}`} value={`fa:${l.key}`}>{l.name}, adjusted for the lot</option>] : []),
-            ])}
-          </optgroup>
-        )}
-        {HEADER_VALUES.some((h) => fits(HEADER_LABEL[h].kind)) && (
-          <optgroup label="Header">
-            {HEADER_VALUES.filter((h) => fits(HEADER_LABEL[h].kind) && (!h.startsWith('coated') || doc.header.coatedWeightMg)).map((h) => <option key={h} value={`h:${h}`}>{HEADER_LABEL[h].label}</option>)}
-          </optgroup>
-        )}
         {refs.length > 0 && <optgroup label="An earlier step">{refs.map((r) => <option key={r.ref} value={`r:${r.ref}`}>{r.label}</option>)}</optgroup>}
       </select>
       {typed && (

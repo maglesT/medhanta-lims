@@ -1,12 +1,12 @@
 /**
- * What is open in a batch, and its timers, computed from the master version and the step events. Nothing is stored:
+ * What is open in a analysis, and its timers, computed from the master version and the step events. Nothing is stored:
  * the event log is the single source of truth.
  */
 import { findBlock, type Block } from '../blocks/index.js';
-import { materialLines, type MasterDoc, type Step } from '../master/schema.js';
+import type { MasterDoc, Step } from '../master/schema.js';
 import { keyId, stepState, type EventKind, type State, type StepEvent, type StepKey } from './state.js';
-import { c1WithinLimits, convert, Dec, findUnit } from '../templates/index.js';
-import { currentValues, durationId, durations, evaluate, failed, headerValue, inputChanges, type Current } from './values.js';
+import { convert, Dec, findUnit } from '../templates/index.js';
+import { currentValues, durationId, durations, evaluate, failed, inputChanges, type Current } from './values.js';
 import { CERTIFICATE, fieldLabel, handEntered, handFields } from './links.js';
 
 export interface StepView extends Current {
@@ -22,24 +22,15 @@ export interface StepView extends Current {
   // The changes to inputs from other steps since the results were worked out: the results shown are worked out
   // again (not stored), and the step must be signed again (and checked again).
   inputChanged: StepEvent[];
-  // F4 by rule: the master's rule left this step out (it is not applicable without an operator's choice).
-  leftOut?: string;
   // The stop check of a repeat-until round that may still be repeated has not passed: "not yet", not out of limits.
   notYet?: string;
 }
 
-/**
- * A step as people name it: the master's name for it, or the block's name and the formula line or the thing checked.
- * A packing material step names its material first ("Issue Printed aluminium foil (PM-101)"), so the issue steps of
- * the pack's materials never look alike.
- */
-export function stepTitle(doc: MasterDoc, st: Step): string {
+/** A step as people name it: the method's name for it, or the block's name and the thing it is about. */
+export function stepTitle(_doc: MasterDoc, st: Step): string {
   if (st.name) return st.name;
   const block = findBlock(st.block);
-  const line = Object.values(st.settings).find((v): v is { formula: string } => typeof v === 'object' && 'formula' in v);
-  const m = line && materialLines(doc).find((l) => l.key === line.formula);
-  if (m && block?.title) return block.title.replace('{material}', `${m.name} (${m.code})`);
-  const what = line ? m?.name : typeof st.settings.what === 'string' ? st.settings.what : undefined;
+  const what = typeof st.settings.what === 'string' ? st.settings.what : undefined;
   return [block?.name ?? st.key, what].filter(Boolean).join(': ');
 }
 /** The fields a step asks for: a pack without a leaflet is not asked about a leaflet. */
@@ -51,28 +42,20 @@ export function stepLabel(doc: MasterDoc, k: StepKey): string {
   const s = doc.stages[k.stage];
   const st = s?.steps[k.step];
   if (!s || !st) return `step ${keyId(k)}`;
-  const extra = [s.kind === 'sub-batch' ? `sub-batch ${k.sub}` : '', st.flow.kind === 'repeat-until' ? `round ${k.round}` : ''].filter(Boolean).join(', ');
+  const extra = [s.kind === 'replicate' ? `replicate ${k.sub}` : '', st.flow.kind === 'repeat-until' ? `round ${k.round}` : ''].filter(Boolean).join(', ');
   return `${s.name} › ${stepTitle(doc, st)}${extra ? ` (${extra})` : ''}`;
 }
 
 /**
  * A step as the other products read it (equipment_use_v1.step_name, material_use_v1.step_name): "Granulation ›
- * Granulate to an end point", with the sub-batch, without the round. Kept with the step's "started" event.
+ * Granulate to an end point", with the replicate, without the round. Kept with the step's "started" event.
  */
 export function stepPlace(doc: MasterDoc, k: StepKey): string {
   const s = doc.stages[k.stage];
   const st = s?.steps[k.step];
-  return s && st ? `${s.name} › ${stepTitle(doc, st)}${s.kind === 'sub-batch' ? ` (sub-batch ${k.sub})` : ''}` : `step ${keyId(k)}`;
+  return s && st ? `${s.name} › ${stepTitle(doc, st)}${s.kind === 'replicate' ? ` (replicate ${k.sub})` : ''}` : `step ${keyId(k)}`;
 }
 
-/** F4 by a rule of the master on a header value (e.g. the bag premix only for a batch of at most 50 kg); null when the step is in. */
-export function leftOutBy(doc: MasterDoc, st: Step): string | null {
-  if (!st.onlyIf) return null;
-  const h = headerValue(doc, st.onlyIf.header);
-  const value = typeof h === 'string' ? h : h.ok ? { value: h.value, unit: h.unit } : undefined;
-  const r = value === undefined ? undefined : c1WithinLimits({ value, limit: st.onlyIf.limit });
-  return r?.ok && r.check?.pass ? null : `Left out by the master's rule: only when the ${st.onlyIf.header === 'batchSize' ? 'batch size' : 'core batch weight'} is ${r?.ok ? r.check?.shown ?? '' : 'within its limit'}`;
-}
 export interface StageView { index: number; key: string; name: string; open: boolean; blocked?: string; closed: boolean }
 export interface Timer {
   id: string;
@@ -113,17 +96,17 @@ const notYetOf = (st: Step, round: number, results: Current['results']) => {
 };
 /** The results out of limits: a real limit failure, never a round that is "not yet" (LIMS-17). */
 export const outOfLimits = (v: StepView) => Object.entries(v.results).filter(([n, r]) => n !== v.notYet && failed(r));
-/** A "not yet" worked line in plain words: the stop check is not reached yet and the rounds go on (a terminated batch: they do not). */
-export const notYetText = (shown: string, terminated = false) => shown.replace(/:\s*OUT OF LIMITS(?: \([^)]*\))?/g, terminated ? ': not reached (terminated)' : ': not reached yet, the rounds go on')
-  .replace(/:\s*FAIL\b/g, terminated ? ': not reached (terminated)' : ': not yet, the rounds go on');
-/** A round of a terminated batch whose stop check is "not reached (terminated)": only the last round of its step. An earlier round was followed by another: its rounds went on. */
+/** A "not yet" worked line in plain words: the stop check is not reached yet and the rounds go on (a stopped analysis: they do not). */
+export const notYetText = (shown: string, terminated = false) => shown.replace(/:\s*OUT OF LIMITS(?: \([^)]*\))?/g, terminated ? ': not reached (stopped)' : ': not reached yet, the rounds go on')
+  .replace(/:\s*FAIL\b/g, terminated ? ': not reached (stopped)' : ': not yet, the rounds go on');
+/** A round of a stopped analysis whose stop check is "not reached (stopped)": only the last round of its step. An earlier round was followed by another: its rounds went on. */
 // A later round counts only if it was started: a next round that never started (waiting or open) does not mean the rounds went on.
 export const cutShort = (terminated: unknown, v: { key: StepKey }, all: readonly { key: StepKey; state?: string }[]) =>
   !!terminated && !all.some((o) => o.key.stage === v.key.stage && o.key.sub === v.key.sub && o.key.step === v.key.step && o.key.round > v.key.round
     && o.state !== 'waiting' && o.state !== 'open');
-/** A step a terminated batch left unfinished, in words that never say it is still to come (PDF and screens; owner 16 Nov 2026). */
+/** A step a stopped analysis left unfinished, in words that never say it is still to come (PDF and screens; owner 16 Nov 2026). */
 export const TERMINATED_STATE: Partial<Record<State, string>> = {
-  waiting: 'terminated, not started', open: 'terminated, not started', in_progress: 'terminated, not finished', done_awaiting_check: 'terminated, not checked',
+  waiting: 'stopped, not started', open: 'stopped, not started', in_progress: 'stopped, not finished', done_awaiting_check: 'stopped, not checked',
 };
 function stopPassed(v: StepView, st: Step): boolean {
   const r = v.results[stopName(st) ?? ''];
@@ -138,7 +121,6 @@ function after(doc: MasterDoc, st: Step, last: StepView, wait: boolean): string 
   const label = `“${stepTitle(doc, st)}”`;
   if (!finished(last, wait)) return `Waits for ${label}${last.state === 'done_awaiting_check' ? ' to be checked' : ''}`;
   if (last.state === 'not_applicable') return null;
-  if (st.flow.kind === 'qa-hold' && !last.events.some((e) => e.kind === 'qa_released_hold')) return `Waits for QA to release the hold on ${label}`;
   if (st.flow.kind === 'repeat-until' && !stopPassed(last, st) && !noteAfter(last.events, latest(last.events, ['done']))) {
     return `${label}: the stop check did not pass in ${last.key.round} round(s), the most allowed: a deviation note is needed`;
   }
@@ -171,7 +153,7 @@ export function holdTimers(doc: MasterDoc, events: readonly StepEvent[], now: Da
  * Every step instance with its state. The next step opens when the previous is done (or checked, when the master
  * says wait for the check); the next stage opens when the previous stage is closed. Preparation stages open any time
  * and must be closed before the stage that uses them. Repeat-until: rounds of the same step until its stop check
- * passes or the most rounds are reached. A sub-batch stage runs N numbered copies side by side.
+ * passes or the most rounds are reached. A replicate stage runs N numbered copies side by side.
  */
 export function openSteps(doc: MasterDoc, events: readonly StepEvent[], now: Date): { stages: StageView[]; steps: StepView[] } {
   const byKey = new Map<string, StepEvent[]>();
@@ -192,7 +174,7 @@ export function openSteps(doc: MasterDoc, events: readonly StepEvent[], now: Dat
       if (h.key.stage === si && h.state === 'late' && !earliest(mine, 'started') && !noteAfter(mine, h.at)) why.push(`${h.label} ran out: a deviation note is needed`);
     }
     let closed = true;
-    for (let sub = 1; sub <= (s.kind === 'sub-batch' ? s.count ?? 1 : 1); sub++) {
+    for (let sub = 1; sub <= (s.kind === 'replicate' ? s.count ?? 1 : 1); sub++) {
       let gate: string | null = why[0] ?? null;
       s.steps.forEach((st, ti) => {
         let last: StepView;
@@ -203,15 +185,13 @@ export function openSteps(doc: MasterDoc, events: readonly StepEvent[], now: Dat
           const inputChanged = inputChanges(events, c.uses);
           // A value entered by hand (a link absent or down) needs a second-person check (owner 15 Nov 2026).
           let { state, needsResign } = stepState(evs, st.checker || handEntered(c.source));
-          const leftOut = leftOutBy(doc, st);
-          if (leftOut) state = 'not_applicable';
           if (inputChanged.length) {
             c.results = evaluate(doc, events, key, c.values);
             if (state === 'done' || state === 'done_awaiting_check' || state === 'checked') [state, needsResign] = ['in_progress', true];
           }
           const notYet = notYetOf(st, round, c.results);
           last = { key, id: keyId(key), stageKey: s.key, stepKey: st.key, state: state === 'waiting' && gate === null ? 'open' : state, needsResign,
-            ...(state === 'waiting' && gate !== null ? { blocked: gate } : {}), events: evs, ...c, inputChanged, ...(leftOut ? { leftOut } : {}), ...(notYet ? { notYet } : {}) };
+            ...(state === 'waiting' && gate !== null ? { blocked: gate } : {}), events: evs, ...c, inputChanged, ...(notYet ? { notYet } : {}) };
           steps.push(last);
           // A round that has events is always shown (an earlier round may be back in progress after a correction).
           if (!byKey.has(keyId({ ...key, round: round + 1 })) && (st.flow.kind !== 'repeat-until' || !finished(last, st.waitForCheck) || stopPassed(last, st) || round >= maxRounds(st))) break;

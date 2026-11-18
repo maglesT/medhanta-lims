@@ -3,45 +3,28 @@ import { api, ApiError, type Me } from '../api.js';
 import { SignDialog } from '../components/SignDialog.js';
 import {
   blockOf, changed, go, headline, plainClock, plainLine, withoutVerdict, plainError, rawOf, sourceWords, stateLabel, stepLink, stepOf, stepTitle, timeLeft, tone, unitOf, useLinked, useLogbookItems, valueText, words,
-  type BatchDetail, type Block, type Deviation, type BlockField, type FloorEvent, type History, type PickItem, type Step, type StepRow, type Stored,
+  type AnalysisDetail, type Block, type Deviation, type BlockField, type FloorEvent, type History, type PickItem, type Step, type StepRow, type Stored, unitName,
 } from '../api-floor.js';
-import { Alerts } from './BatchScreen.js';
+import { Alerts } from './AnalysisScreen.js';
 import { deviationText } from '../../../shared/engine/release.js';
 import { FieldInput } from './Fields.js';
 import { DemoSkip } from './DemoSkip.js';
 import { ReasonDialog } from './ReasonDialog.js';
 import { CERTIFICATE, fieldLabel, handEntered, LINK_OF } from '../../../shared/engine/links.js';
-import { askedFields, cutShort, notYetText } from '../../../shared/engine/batch.js';
-import { lineQuantity } from '../../../shared/engine/values.js';
+import { askedFields, cutShort, notYetText } from '../../../shared/engine/analysis.js';
 import { plantText } from '../../../shared/plant-time.js';
-import { dispensingRooms, emptyNote, inLogbook, machineRefusal, roomRefusal } from '../../../shared/engine/picks.js';
-import { materialLines } from '../../../shared/master/schema.js';
-import { unitName } from '../../../shared/engine/stock.js';
+import { emptyNote, inLogbook, machineRefusal, roomRefusal } from '../../../shared/engine/picks.js';
 import { neededText, tickText, trainingOf, trainingText, type Skill, type Training } from '../../../shared/engine/training.js';
 
 type Dialog = { kind: 'done' | 'repeat' | 'check' | 'na' | 'send-back' | 'note' } | { kind: 'na-sign'; reason: string } | { kind: 'correct'; field: BlockField };
 const INVOLVING = ['started', 'value', 'done', 'corrected', 'not_applicable'];
 const same = (a: StepRow['key'], b: StepRow['key']) => a.stage === b.stage && a.sub === b.sub && a.step === b.step;
 
-// The value at the end of a worked line ("10.0 mg × 100000 tablets = 1.000 kg" → "1.000 kg").
-const endOf = (r: Stored) => (r.ok ? /=\s*([^=;]+)$/.exec(r.shown)?.[1]?.trim() ?? `${r.value} ${r.unit}` : '');
-
-/**
- * The material, limits and values the master set for this step, in words; a quantity of a formula line with its amount.
- * `mdUnit`: master data's unit of the material, its name shown for the same unit (nos for units).
- */
-function settingsText(doc: BatchDetail['master']['doc'], block: Block, st: Step, row: StepRow, mdUnit: string | null): [string, string][] {
+/** The limits and values the method set for this step, in words (`_mdUnit`: kept for the callers). */
+function settingsText(_doc: AnalysisDetail['master']['doc'], block: Block, st: Step, _row: StepRow, _mdUnit: string | null): [string, string][] {
   return block.settings.flatMap((s): [string, string][] => {
     const v = st.settings[s.name];
-    const m = v && typeof v === 'object' && 'formula' in v ? materialLines(doc).find((l) => l.key === v.formula) : undefined;
-    const what = m && `${m.code} · ${m.name}`;
-    if (m && s.kind === 'quantity' && 'mgPerTablet' in m && typeof v === 'object' && 'formula' in v) {
-      // Worked out by the server once a value is recorded; before that, the batch quantity (an adjusted one needs the lot).
-      const r = row.results[s.name] ?? (v.adjusted ? undefined : lineQuantity(doc, [], row.key, m, false, {}));
-      return [[s.label, r?.ok ? `${endOf(r)} of ${what}` : `${what}: worked out with the lot's certificate values`]];
-    }
-    if (m) return [[s.label, what!]];
-    if (typeof v === 'string') return v && s.kind !== 'text' ? [[s.label, v]] : [];
+    if (typeof v === 'string') return v && s.kind !== 'text' ? [[s.label, v]] : v && s.kind === 'text' ? [[s.label, v]] : [];
     if (!v || !('unit' in v)) return [];
     const u = v.unit ? ` ${v.unit}` : '';
     return [[s.label, v.low && v.high ? `${v.low} to ${v.high}${u}` : v.high ? `not more than ${v.high}${u}` : `at least ${v.low}${u}`]];
@@ -51,12 +34,12 @@ function settingsText(doc: BatchDetail['master']['doc'], block: Block, st: Step,
 // The step screen: the instruction, only the fields the block needs, the results worked out by the server with their
 // worked line, and the actions open to this person. A step waiting for its check shows what was recorded to the
 // checker, on their own device (LIMS-41).
-export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: BatchDetail; blocks: Block[]; row: StepRow; now: number; reload: (b?: boolean) => Promise<void> }) {
+export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: AnalysisDetail; blocks: Block[]; row: StepRow; now: number; reload: (b?: boolean) => Promise<void> }) {
   const doc = d.master.doc;
   const st = stepOf(doc, row.key);
   const block = blockOf(blocks, st)!;
   const stage = doc.stages[row.key.stage]!;
-  const base = `/api/batches/${d.batch.id}/steps/${row.id}`;
+  const base = `/api/analyses/${d.analysis.id}/steps/${row.id}`;
   const title = stepTitle(doc, blocks, st);
   const [history, setHistory] = useState<History | null>(null);
   const [dialog, setDialog] = useState<Dialog | null>(null);
@@ -66,35 +49,23 @@ export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: Bat
   const last = row.events.at(-1)?.id ?? 0;
   // The block's fields and the label questions of what was entered by hand (a link absent or down).
   const fields = [...askedFields(doc, block), ...row.handFields];
-  const line = Object.values(st.settings).find((v): v is { formula: string } => typeof v === 'object' && 'formula' in v);
-  const material = line && materialLines(doc).find((l) => l.key === line.formula)?.materialItemId;
-  const lots = useLinked<{ lotNumber: string }>(block.fields.some((f) => f.kind === 'lot') && material ? `/api/mms/lots?material=${encodeURIComponent(material)}` : null, 'lots');
-  // The material's unit in master data, as MMS and the refusals name it: a count is shown as master data names it (nos).
-  // The step's values wait for it, so a count never reads "units" first and "nos" a moment later.
-  const [mdOf, setMdUnit] = useState<{ of: string; unit: string | null } | null>(null);
-  const mdUnit = mdOf && mdOf.of === material ? mdOf.unit : null;
-  const unitKnown = !material || mdOf?.of === material;
-  useEffect(() => {
-    if (!material) return;
-    let live = true;
-    const known = (unit: string | null) => live && setMdUnit({ of: material, unit });
-    void api<{ itemId: string; unit?: string | null }[]>('GET', '/api/master/materials').then((m) => known(m.find((x) => x.itemId === material)?.unit?.trim() || null), () => known(null));
-    return () => { live = false; };
-  }, [material]);
-  const shownUnit = (f: BlockField) => unitName(unitOf(f, st), mdUnit);
-  // Line clearance: the room's or line's previous batch (TA-10, pull don't type).
+  const lots = useLinked<{ lotNumber: string }>(null, 'lots');
+  const mdUnit: string | null = null;
+  const unitKnown = true;
+  const shownUnit = (f: BlockField) => unitOf(f, st);
+  // Bench clearance: the room's or instrument's previous analysis (pull, don't type).
   const place = block.gmp === 'line-clearance' ? block.fields.find((f) => f.kind === 'room' || f.kind === 'machine') : undefined;
   const placeId = place && (row.values[place.name] as { itemId?: string } | undefined)?.itemId;
   const [prev, setPrev] = useState<{ of: string; text: string | null } | null>(null);
   useEffect(() => {
     if (!placeId || !block.fields.some((f) => f.name === 'previous')) return;
     let live = true;
-    void api<{ previous: { text: string } | null }>('GET', `/api/batches/${d.batch.id}/previous-use?item=${encodeURIComponent(placeId)}`)
+    void api<{ previous: { text: string } | null }>('GET', `/api/analyses/${d.analysis.id}/previous-use?item=${encodeURIComponent(placeId)}`)
       .then((r) => live && setPrev({ of: placeId, text: r.previous?.text ?? null }), () => {});
     return () => { live = false; };
-  }, [placeId, d.batch.id, block]);
+  }, [placeId, d.analysis.id, block]);
   const previous = prev && prev.of === placeId ? prev.text : null;
-  const deviationPicks = useLinked<{ number: string; title: string | null }>(`/api/batches/${d.batch.id}/deviations`, 'deviations');
+  const deviationPicks = useLinked<{ number: string; title: string | null }>(`/api/analyses/${d.analysis.id}/deviations`, 'deviations');
   const lotField = block.fields.find((f) => f.kind === 'lot');
   const lotPulled = lotField && row.source[lotField.name] && row.source[lotField.name]!.from !== 'hand';
   // Only trained people sign (owner, 17 Nov 2026): the signer's training in the step's skill, read when the sign dialog opens.
@@ -126,14 +97,14 @@ export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: Bat
   // is linked only what the Logbook has; an empty picker says what is left out and why.
   const logbook = useLogbookItems(block.fields.some((f) => f.kind === 'machine' || f.kind === 'room'));
   const fits = (f: BlockField) => (f.kind === 'room' ? md.room.filter((r) => r.active && !roomRefusal(stage, r))
-    : f.kind === 'machine' ? md.machine.filter((m) => m.active && !machineRefusal(stage, f, m, md.room, dispensingRooms(doc, md.room))) : []);
+    : f.kind === 'machine' ? md.machine.filter((m) => m.active && !machineRefusal(stage, f, m, md.room)) : []);
   const pickOf = (f: BlockField) => inLogbook(fits(f), logbook);
   const picksFor = (f: BlockField) => pickOf(f).offered;
   // An empty picker says why (once master data is read) and what the Logbook leaves out; one with choices says nothing.
   const mdRead = md.room.length > 0 && (md.machine.length > 0 || !block.fields.some((x) => x.kind === 'machine'));
-  const noteFor = (f: BlockField) => [mdRead && !fits(f).length ? emptyNote(stage, f, md.machine, md.room, dispensingRooms(doc, md.room)) : null, pickOf(f).note];
+  const noteFor = (f: BlockField) => [mdRead && !fits(f).length ? emptyNote(stage, f, md.machine, md.room) : null, pickOf(f).note];
 
-  const post = (action: string, body: object = {}, key = row.id) => api('POST', `/api/batches/${d.batch.id}/steps/${key}/${action}`, body);
+  const post = (action: string, body: object = {}, key = row.id) => api('POST', `/api/analyses/${d.analysis.id}/steps/${key}/${action}`, body);
   const run = async (fn: () => Promise<unknown>) => {
     setBusy(true);
     setNotice(null);
@@ -186,20 +157,20 @@ export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: Bat
   // After "done" in a repeat-until step that is not periodic: the next round starts at once.
   const repeat = async () => {
     if (st.everyMinutes) return;
-    const fresh = await api<BatchDetail>('GET', `/api/batches/${d.batch.id}`);
+    const fresh = await api<AnalysisDetail>('GET', `/api/analyses/${d.analysis.id}`);
     const n = fresh.steps.find((s) => same(s.key, row.key) && s.key.round === row.key.round + 1);
-    if (n?.actions.includes('start')) { await post('start', {}, n.id); go(stepLink(d.batch.id, n.id)); }
+    if (n?.actions.includes('start')) { await post('start', {}, n.id); go(stepLink(d.analysis.id, n.id)); }
   };
 
   const fieldView = (f: BlockField) => {
     const v = row.values[f.name];
-    // Line clearance: the previous product and batch of the room or line, pulled from the batches that used it.
+    // Line clearance: the previous product and analysis of the room or line, pulled from the analyses that used it.
     if (f.name === 'previous' && block.gmp === 'line-clearance' && v === undefined && can('record') && previous) {
       return (
         <div key={f.name} className="fl-field">
           <div className="lbl"><span>{f.label}</span></div>
           <div className="recorded"><span>{previous}</span><button className="big" onClick={() => void record(f.name, previous)}>Use this</button></div>
-          <p className="muted small">The last batch that used it, from the batch records. If another product used it since, type it below.</p>
+          <p className="muted small">The last analysis that used it, from the analysis records. If another product used it since, type it below.</p>
           <FieldInput f={f} unit="" disabled={!can('record')} onSave={(raw) => record(f.name, raw)} />
         </div>
       );
@@ -242,22 +213,22 @@ export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: Bat
   return (
     <>
       <div className="step-title">
-        <span className="where">{block.gmp === 'yield' ? `${stage.name} · stage yield` : stage.name}{stage.kind === 'sub-batch' ? ` · sub-batch ${row.key.sub}` : ''}{repeatUntil ? ` · round ${row.key.round}` : ''}</span>
+        <span className="where">{stage.name}{stage.kind === 'replicate' ? ` · replicate ${row.key.sub}` : ''}{repeatUntil ? ` · round ${row.key.round}` : ''}</span>
         <h1>{title}</h1>
-        <span className={`chip ${row.needsResign ? 'chip-warn' : stateLabel(row.state, d.batch.terminated)[1]}`}>{row.needsResign ? 'Sign again' : stateLabel(row.state, d.batch.terminated)[0]}</span>
+        <span className={`chip ${row.needsResign ? 'chip-warn' : stateLabel(row.state, d.analysis.stopped)[1]}`}>{row.needsResign ? 'Sign again' : stateLabel(row.state, d.analysis.stopped)[0]}</span>
         {st.critical && <span className="chip chip-bad">Critical step</span>}
         {st.checker && <span className="chip">Second-person check</span>}
       </div>
       {notice && <p className={`notice ${notice.tone}`} role="alert">{notice.text}</p>}
       <div className="alerts">
         <Alerts d={d} blocks={blocks} now={now} only={row.id} />
-        {row.blocked && !d.batch.terminated && <div className="fl-alert info"><span className="tag">Not open yet</span><span>{row.blocked}</span><span /></div>}
-        {sentBack && !d.batch.terminated && row.state === 'in_progress' && lastDone && sentBack.id > lastDone.id && (
+        {row.blocked && !d.analysis.stopped && <div className="fl-alert info"><span className="tag">Not open yet</span><span>{row.blocked}</span><span /></div>}
+        {sentBack && !d.analysis.stopped && row.state === 'in_progress' && lastDone && sentBack.id > lastDone.id && (
           <div className="fl-alert bad"><span className="tag">Sent back</span><span>“{sentBack.payload.reason}”<small>by {sentBack.personName}, {plainClock(sentBack.at)}. Correct the value, then sign again.</small></span><span /></div>
         )}
         {row.inputChanged.map((e) => <InputChanged key={e.id} e={e} d={d} blocks={blocks} />)}
-        {row.needsResign && !d.batch.terminated && !row.inputChanged.length && <div className="fl-alert warn"><span className="tag">Sign again</span><span>A value of this step was corrected after it was signed: check it and sign the step again.</span><span /></div>}
-        {periodic && !d.batch.terminated && <div className={`fl-alert ${periodic.state === 'late' ? 'bad' : 'info'}`}><span className="tag">Next check</span><span>Check {periodic.key.round} (every {st.everyMinutes} min)<small>due {plainClock(periodic.at)}{periodic.skipped ? ' · DEMO: wait skipped' : ''}</small></span>
+        {row.needsResign && !d.analysis.stopped && !row.inputChanged.length && <div className="fl-alert warn"><span className="tag">Sign again</span><span>A value of this step was corrected after it was signed: check it and sign the step again.</span><span /></div>}
+        {periodic && !d.analysis.stopped && <div className={`fl-alert ${periodic.state === 'late' ? 'bad' : 'info'}`}><span className="tag">Next check</span><span>Check {periodic.key.round} (every {st.everyMinutes} min)<small>due {plainClock(periodic.at)}{periodic.skipped ? ' · DEMO: wait skipped' : ''}</small></span>
             <span className="countdown">{Date.parse(periodic.at) > now ? `in ${timeLeft(Date.parse(periodic.at) - now)}` : 'now'}</span></div>}
       </div>
       <DemoSkip me={me} d={d} row={row} reload={() => reload()} />
@@ -279,7 +250,7 @@ export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: Bat
                 ))}</tbody></table>
               {handEntered(row.source) && <p className="notice warn">Entered by hand because a link is off or down: check each value against the status label, the lot label and the QC report.</p>}
               {fields.filter((f) => row.values[f.name] !== undefined).map((f) => <Replaced key={f.name} h={history} field={f.name} names={names} label={f.label} mdUnit={mdUnit} />)}
-              {!can('check') && !d.batch.terminated && <p className="notice info">{involved ? 'You performed or recorded this step: a second person checks it on their own device.' : 'Waiting for a second person to check this step.'}</p>}
+              {!can('check') && !d.analysis.stopped && <p className="notice info">{involved ? 'You performed or recorded this step: a second person checks it on their own device.' : 'Waiting for a second person to check this step.'}</p>}
             </section>
           ) : (
             <section className="dash-panel" aria-label="Record">
@@ -289,11 +260,10 @@ export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: Bat
           )}
         </div>
         <div>
-          {block.gmp === 'yield' && <StageSummary d={d} blocks={blocks} row={row} />}
           <section className="dash-panel" aria-label="Results">
             <div className="panel-head"><h2>Results</h2><span className="muted">worked out by the server</span></div>
             {resultRows.length === 0 ? <p className="muted">The results appear here as soon as the values are saved.</p> : (
-              <div className="results">{resultRows.map((x) => <ResultCard key={x.n} label={x.label} r={x.r} mdUnit={mdUnit} big={block.gmp === 'yield'} stop={x.n === row.notYet} terminated={cutShort(d.batch.terminated, row, rounds)} />)}</div>
+              <div className="results">{resultRows.map((x) => <ResultCard key={x.n} label={x.label} r={x.r} mdUnit={mdUnit} big={false} stop={x.n === row.notYet} terminated={cutShort(d.analysis.stopped, row, rounds)} />)}</div>
             )}
           </section>
           {repeatUntil && rounds.length > 0 && (
@@ -302,21 +272,21 @@ export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: Bat
               <div className="rounds">{rounds.map((r) => {
                 const s = stop ? r.results[stop] : undefined;
                 return (
-                  <button key={r.id} className={r.id === row.id ? 'round here' : 'round'} onClick={() => go(stepLink(d.batch.id, r.id))}>
-                    <b>Round {r.key.round}</b><span>{s?.ok ? (tone(s) === 'ok' ? 'Passed' : cutShort(d.batch.terminated, r, rounds) ? 'Not reached' : 'Not yet') : ''}{s?.ok && headline(s) ? ` · ${headline(s)}` : ''}</span>
-                    <span className={`chip ${stateLabel(r.state, d.batch.terminated)[1]}`}>{stateLabel(r.state, d.batch.terminated)[0]}</span>
+                  <button key={r.id} className={r.id === row.id ? 'round here' : 'round'} onClick={() => go(stepLink(d.analysis.id, r.id))}>
+                    <b>Round {r.key.round}</b><span>{s?.ok ? (tone(s) === 'ok' ? 'Passed' : cutShort(d.analysis.stopped, r, rounds) ? 'Not reached' : 'Not yet') : ''}{s?.ok && headline(s) ? ` · ${headline(s)}` : ''}</span>
+                    <span className={`chip ${stateLabel(r.state, d.analysis.stopped)[1]}`}>{stateLabel(r.state, d.analysis.stopped)[0]}</span>
                   </button>
                 );
               })}</div>
             </section>
           )}
-          <History_ h={history} block={block} deviations={d.batch.deviations} />
+          <History_ h={history} block={block} deviations={d.analysis.deviations} />
         </div>
       </div>
       )}
 
       <div className="action-bar">
-        {row.state === 'waiting' && !d.batch.terminated && <p className="why">{row.blocked ?? 'This step opens when the step before it is finished.'}</p>}
+        {row.state === 'waiting' && !d.analysis.stopped && <p className="why">{row.blocked ?? 'This step opens when the step before it is finished.'}</p>}
         {can('start') && <button className="big primary" disabled={busy} onClick={() => void run(() => post('start'))}>{row.key.round > 1 ? `Start round ${row.key.round}` : 'Start'}</button>}
         {can('done') && (<>
           <p className="why">{row.problems.length ? row.problems.map(words).join(' ') : repeatUntil && stopFailed ? `${block.calcs.find((c) => c.name === stop)?.label} has not passed: sign this round, then repeat.` : row.needsResign ? 'Check the values and results, then sign again.' : 'Sign when every value is recorded.'}</p>
@@ -325,11 +295,11 @@ export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: Bat
           </button>
         </>)}
         {checking && can('check') && (<>
-          <p className="why">Check the values against the batch, the lot and the machine. You were not involved in this step.</p>
+          <p className="why">Check the values against the analysis, the lot and the machine. You were not involved in this step.</p>
           <button className="big soft-bad" disabled={busy} onClick={() => setDialog({ kind: 'send-back' })}>Send back</button>
           <button className="big ok" disabled={busy} onClick={() => setDialog({ kind: 'check' })}>Checked</button>
         </>)}
-        {next && next.actions.includes('start') && row.id !== next.id && <button className="big primary" onClick={() => go(stepLink(d.batch.id, next.id))}>Repeat: round {next.key.round} →</button>}
+        {next && next.actions.includes('start') && row.id !== next.id && <button className="big primary" onClick={() => go(stepLink(d.analysis.id, next.id))}>Repeat: round {next.key.round} →</button>}
         {['done', 'checked', 'not_applicable'].includes(row.state) && !next && <p className="why">This step is finished.</p>}
         <span className="spacer" />
         {can('not-applicable') && <button className="big" disabled={busy} onClick={() => setDialog({ kind: 'na' })}>Not applicable</button>}
@@ -337,13 +307,13 @@ export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: Bat
       </div>
 
       {(dialog?.kind === 'done' || dialog?.kind === 'repeat') && (
-        <SignDialog meaning="performed" what={`${title} · batch ${d.batch.batchNo}: performed as recorded.`} blocked={trainingBlocked} onCancel={() => setDialog(null)} onSign={signed('done', {}, dialog.kind === 'repeat' ? repeat : undefined)}>
+        <SignDialog meaning="performed" what={`${title} · analysis ${d.analysis.analysisNo}: performed as recorded.`} blocked={trainingBlocked} onCancel={() => setDialog(null)} onSign={signed('done', {}, dialog.kind === 'repeat' ? repeat : undefined)}>
           <Summary row={row} block={block} mdUnit={mdUnit} />
           {st.training && <TrainingCheck skill={st.training} read={training} ticked={trained} onTick={setTrained} />}
         </SignDialog>
       )}
       {dialog?.kind === 'check' && (
-        <SignDialog meaning="verified" what={`${title} · batch ${d.batch.batchNo}: checked by a second person.`} blocked={trainingBlocked} onCancel={() => setDialog(null)} onSign={signed('check')}>
+        <SignDialog meaning="verified" what={`${title} · analysis ${d.analysis.analysisNo}: checked by a second person.`} blocked={trainingBlocked} onCancel={() => setDialog(null)} onSign={signed('check')}>
           <Summary row={row} block={block} mdUnit={mdUnit} />
           {st.training && <TrainingCheck skill={st.training} read={training} ticked={trained} onTick={setTrained} />}
         </SignDialog>
@@ -357,11 +327,11 @@ export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: Bat
           onCancel={() => setDialog(null)} onSubmit={async (text, reference) => { await post('note', { text, ...(reference ? { reference } : {}) }); setDialog(null); await reload(); }} />
       )}
       {dialog?.kind === 'na' && (
-        <ReasonDialog title="Not applicable" label="Why this step does not apply to this batch" submit="Next: sign" onCancel={() => setDialog(null)}
+        <ReasonDialog title="Not applicable" label="Why this step does not apply to this analysis" submit="Next: sign" onCancel={() => setDialog(null)}
           onSubmit={async (reason) => setDialog({ kind: 'na-sign', reason })} />
       )}
       {dialog?.kind === 'na-sign' && (
-        <SignDialog meaning="performed" what={`${title} · batch ${d.batch.batchNo}: not applicable. Reason: “${dialog.reason}”`} onCancel={() => setDialog(null)} onSign={signed('not-applicable', { reason: dialog.reason })} />
+        <SignDialog meaning="performed" what={`${title} · analysis ${d.analysis.analysisNo}: not applicable. Reason: “${dialog.reason}”`} onCancel={() => setDialog(null)} onSign={signed('not-applicable', { reason: dialog.reason })} />
       )}
       {dialog?.kind === 'correct' && (
         <Correct f={dialog.field} unit={shownUnit(dialog.field)} mdUnit={mdUnit} saved={row.values[dialog.field.name]} picks={picksFor(dialog.field)}
@@ -430,7 +400,7 @@ function Replaced({ h, field, names, label, mdUnit }: { h: History | null; field
 }
 
 /** A value this step used was corrected (or worked out again) in another step: which one, by whom, why. */
-function InputChanged({ e, d, blocks }: { e: FloorEvent; d: BatchDetail; blocks: Block[] }) {
+function InputChanged({ e, d, blocks }: { e: FloorEvent; d: AnalysisDetail; blocks: Block[] }) {
   const doc = d.master.doc;
   const src = stepOf(doc, e);
   const b = blockOf(blocks, src);
@@ -441,12 +411,12 @@ function InputChanged({ e, d, blocks }: { e: FloorEvent; d: BatchDetail; blocks:
       <span className="tag">Input changed</span>
       <span>{e.kind === 'corrected' ? `${fields} in ${what} was corrected by ${e.personName}, ${plainClock(e.at)}: “${e.payload.reason ?? ''}”.` : `The results of ${what} were worked out again when ${e.personName} signed it again, ${plainClock(e.at)}.`}
         <small>The results here are worked out again with the new value. Check them and sign this step again.</small></span>
-      <button className="link dark" onClick={() => go(stepLink(d.batch.id, `${e.stage}.${e.sub}.${e.step}.${e.round}`))}>Open</button>
+      <button className="link dark" onClick={() => go(stepLink(d.analysis.id, `${e.stage}.${e.sub}.${e.step}.${e.round}`))}>Open</button>
     </div>
   );
 }
 
-function StageSummary({ d, blocks, row }: { d: BatchDetail; blocks: Block[]; row: StepRow }) {
+function StageSummary({ d, blocks, row }: { d: AnalysisDetail; blocks: Block[]; row: StepRow }) {
   const doc = d.master.doc;
   const steps = d.steps.filter((s) => s.key.stage === row.key.stage && s.key.sub === row.key.sub && s.id !== row.id);
   return (
@@ -454,7 +424,7 @@ function StageSummary({ d, blocks, row }: { d: BatchDetail; blocks: Block[]; row
       <div className="panel-head"><h2>Stage end</h2><span className="muted">the steps of this stage</span></div>
       <ul className="checklist-plain">{steps.map((s) => {
         const ok = ['done', 'checked', 'not_applicable'].includes(s.state);
-        return <li key={s.id} className={ok ? 'ok' : 'no'}><i>{ok ? '✓' : '✕'}</i><span>{stepTitle(doc, blocks, stepOf(doc, s.key))}{s.key.round > 1 ? ` (round ${s.key.round})` : ''} · {stateLabel(s.state, d.batch.terminated)[0]}</span></li>;
+        return <li key={s.id} className={ok ? 'ok' : 'no'}><i>{ok ? '✓' : '✕'}</i><span>{stepTitle(doc, blocks, stepOf(doc, s.key))}{s.key.round > 1 ? ` (round ${s.key.round})` : ''} · {stateLabel(s.state, d.analysis.stopped)[0]}</span></li>;
       })}</ul>
     </section>
   );

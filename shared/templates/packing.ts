@@ -1,6 +1,6 @@
 /**
  * Packing templates (TrueBatch Tablets Packing): T27 expiry from the shelf life (TB-P8), C8 printed data against the
- * batch data (TB-P5, TB-P9) and C9 codes of the customer's serialisation system read from sample packs. Dates are
+ * analysis data (TB-P5, TB-P9) and C9 codes of the customer's serialisation system read from sample packs. Dates are
  * plain text (YYYY-MM-DD); a printed date is a month.
  */
 import { Dec } from './dec.js';
@@ -42,9 +42,9 @@ export function t27Expiry(i: T27Input): Outcome<{ readonly expiry: string; reado
 }
 
 // The labels printed before a value, in the common Indian print styles, with any dots, colons and spaces: "MFG.DT.",
-// "MFD.", "Mfg. Date", "EXP.DT.", "EXP.", "Expiry date", "Use before"; "M.R.P. Rs."; "B.No.", "Batch No.".
+// "MFD.", "Mfg. Date", "EXP.DT.", "EXP.", "Expiry date", "Use before"; "M.R.P. Rs."; "B.No.", "Analysis No.".
 const DATE_LABEL = /^(M\W*F\W*[GD]|MANUFACTURED|EXP(IRY)?|USE\W*BEFORE|USE\W*BY)(\W*(DATE|DT))?\W*/;
-const BATCH_LABEL = /^(B\W*NO|BATCH\W*NO|BATCH)\W*/;
+const ANALYSIS_LABEL = /^(B\W*NO|ANALYSIS\W*NO|ANALYSIS)\W*/;
 
 /** A printed month: "10/2028", "10-28", "OCT 2028", "EXP. OCT.2028", "EXP.DT. 10/2028", "2028-10". */
 export function printedMonth(text: string): string | null {
@@ -61,14 +61,14 @@ export function printedMonth(text: string): string | null {
 const money = (t: string) => t.toUpperCase().replace(/\(?\s*INCL.*$/, '').replace(/^\W*M\W*R\W*P\W*/, '').replace(/RS\.?|INR|₹|\/-|,|\s|:/g, '').replace(/\.$/, '');
 const plain = (t: string) => t.toUpperCase().replace(/\s+/g, '');
 
-// ---------------------------------------------------------------- C8 Printed data against the batch data
+// ---------------------------------------------------------------- C8 Printed data against the analysis data
 export type C8Input = { readonly what: string; readonly printed: string } & (
   | { readonly kind: 'text'; readonly expected: string }
   | { readonly kind: 'month'; readonly expected: string }
   | { readonly kind: 'expiry'; readonly manufactured: string; readonly months: string; readonly rule?: Rule }
   | { readonly kind: 'money'; readonly expected?: string });
 
-/** C8 Printed data (batch number, dates, MRP) as read from the pack, against the batch record (TB-P9). */
+/** C8 Printed data (analysis number, dates, MRP) as read from the pack, against the analysis record (TB-P9). */
 export function c8PrintedData(i: C8Input): Outcome {
   return run(() => {
     const printed = typeof i.printed === 'string' ? i.printed.trim() : refuse(`${i.what}: the printed text is missing`);
@@ -77,7 +77,7 @@ export function c8PrintedData(i: C8Input): Outcome {
     if (i.kind === 'text') {
       expected = i.expected.trim();
       // As printed, or after its label ("B.No. LA260001"); the number itself must be the same.
-      pass = [printed, printed.toUpperCase().replace(BATCH_LABEL, '')].some((p) => plain(p) === plain(expected));
+      pass = [printed, printed.toUpperCase().replace(ANALYSIS_LABEL, '')].some((p) => plain(p) === plain(expected));
     } else if (i.kind === 'money') {
       if (i.expected === undefined) {
         expected = 'no MRP';
@@ -92,7 +92,7 @@ export function c8PrintedData(i: C8Input): Outcome {
       expected = `${word(want)}${i.kind === 'expiry' ? ` (manufactured ${word(monthOf(i.manufactured, 'The date of manufacture'))} + ${i.months.trim()} months)` : ''}`;
       pass = printedMonth(printed) === want;
     }
-    const shown = `${i.what} printed "${printed}"; batch record ${expected}: ${pass ? 'matches' : 'DOES NOT MATCH'}`;
+    const shown = `${i.what} printed "${printed}"; analysis record ${expected}: ${pass ? 'matches' : 'DOES NOT MATCH'}`;
     return { ok: true, value: new Dec(pass ? 0 : 1), unit: 'units', check: checkOf(pass, shown), shown };
   });
 }
@@ -125,15 +125,15 @@ export interface C9Input {
   /** The codes read from the sample packs, separated by spaces or new lines. */
   readonly codes: string;
   readonly gtin: string;
-  readonly batch: string;
+  readonly analysis: string;
   readonly manufactured: string;
   readonly months: string;
   readonly rule?: Rule;
-  /** The codes read earlier in this batch (earlier rounds): a serial read twice is refused. */
+  /** The codes read earlier in this analysis (earlier rounds): a serial read twice is refused. */
   readonly earlier?: string;
 }
 
-/** C9 Serialisation sample: each code's GTIN, batch and expiry are this batch's, its serial well formed and new in the batch. */
+/** C9 Serialisation sample: each code's GTIN, analysis and expiry are this analysis's, its serial well formed and new in the analysis. */
 export function c9SerialCodes(i: C9Input): Outcome<{ readonly serials: readonly string[] }> {
   return run(() => {
     const codes = (typeof i.codes === 'string' ? i.codes : '').split(/\s+/).filter(Boolean);
@@ -149,18 +149,18 @@ export function c9SerialCodes(i: C9Input): Outcome<{ readonly serials: readonly 
       if (!e) p.push('not a GS1 code');
       else {
         if (e['01'] !== i.gtin) p.push(`GTIN ${e['01'] ?? 'missing'}, not ${i.gtin}`);
-        if ((e['10'] ?? '').toUpperCase() !== i.batch.trim().toUpperCase()) p.push(`batch ${e['10'] ?? 'missing'}, not ${i.batch}`);
+        if ((e['10'] ?? '').toUpperCase() !== i.analysis.trim().toUpperCase()) p.push(`analysis ${e['10'] ?? 'missing'}, not ${i.analysis}`);
         const exp = e['17'] && /^\d{6}$/.test(e['17']) ? `20${e['17'].slice(0, 2)}-${e['17'].slice(2, 4)}` : null;
         if (exp !== expiry) p.push(`expiry ${e['17'] ?? 'missing'}, not ${word(expiry)}`);
         const s = e['21'];
         if (!s || !SERIAL.test(s)) p.push(`serial ${s ? `"${s}" is not 1 to 20 GS1 characters` : 'missing'}`);
-        else if (seen.has(s)) p.push(`serial ${s} was already read in this batch`);
+        else if (seen.has(s)) p.push(`serial ${s} was already read in this analysis`);
         else { seen.add(s); serials.push(s); }
       }
       if (p.length) problems.push(`code ${n + 1}: ${p.join(', ')}`);
     });
     const pass = problems.length === 0;
-    const shown = `${codes.length} code${codes.length === 1 ? '' : 's'} read against GTIN ${i.gtin}, batch ${i.batch}, expiry ${word(expiry)}: ${pass ? 'all match, serials new in this batch' : `REFUSED (${problems.join('; ')})`}`;
+    const shown = `${codes.length} code${codes.length === 1 ? '' : 's'} read against GTIN ${i.gtin}, analysis ${i.analysis}, expiry ${word(expiry)}: ${pass ? 'all match, serials new in this analysis' : `REFUSED (${problems.join('; ')})`}`;
     return { ok: true, value: new Dec(codes.length), unit: 'units', serials, check: checkOf(pass, shown), shown };
   });
 }

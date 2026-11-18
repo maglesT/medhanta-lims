@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { Dec } from '../../shared/templates/dec.js';
 import { convert, findUnit, unit } from '../../shared/templates/units.js';
 import { t6Ratio } from '../../shared/templates/basic.js';
-import { t8BatchScaling, t9PotencyAdjusted, t11SaltFactor, t18ContentAdjusted } from '../../shared/templates/dispensing.js';
+import { t8AnalysisScaling, t9PotencyAdjusted, t11SaltFactor, t18ContentAdjusted } from '../../shared/templates/dispensing.js';
 import { ethanolDensity, ethanolWw, t26MixToTarget } from '../../shared/templates/mixing.js';
 import { t22MixPsd, t23CompactStrength, t25AbsoluteHumidity } from '../../shared/templates/physical.js';
 import { t14Stratified } from '../../shared/templates/uniformity.js';
@@ -11,7 +11,7 @@ import { ok, refused } from './helpers.js';
 
 // The new settings of the 1,000-formulation test, waves 1-5 (research summary and part files). Hand checks in Python
 // decimal (50 digits). Where a source gives no lot data, the lots are marked "illustrative"; the limits and the
-// design (ratios, sizes, batch) are the source's.
+// design (ratios, sizes, analysis) are the source's.
 
 describe('Units from the formulation test', () => {
   it.each([
@@ -34,7 +34,7 @@ describe('Units from the formulation test', () => {
   });
 
   it('units: F0250 chopper 10-12 Hz becomes rpm only through the equipment record factor (illustrative 30 rpm/Hz): 10 × 30 = 300 rpm', () => {
-    const r = ok(t8BatchScaling({ mode: 'product', factors: ['10 Hz', '30 rpm/Hz'] }));
+    const r = ok(t8AnalysisScaling({ mode: 'product', factors: ['10 Hz', '30 rpm/Hz'] }));
     expect([r.value.toString(), r.unit]).toEqual(['300', 'rpm']);
     expect(ok(c1WithinLimits({ value: '11 Hz', limit: { low: '10', high: '12', unit: 'Hz' } })).check?.pass).toBe(true);
     expect(findUnit('US gallon')?.symbol).toBe('US gal');
@@ -178,7 +178,7 @@ describe('T18 content-adjusted quantity: settings from the formulation test', ()
 
 describe('T6, T23, T25: settings from the formulation test', () => {
   it('T6 whole containers F0087: 75,000 SQ-U × 300,000 units = 2.25e10 U from vials of 1.2e9 U (illustrative): 18.75 → 19 vials, excess 3e8 U', () => {
-    const need = ok(t8BatchScaling({ mode: 'per unit', perUnit: '75000 U', count: '300000 units' }));
+    const need = ok(t8AnalysisScaling({ mode: 'per unit', perUnit: '75000 U', count: '300000 units' }));
     const r = ok(t6Ratio({ mode: 'whole containers', a: { value: need.value.toString(), unit: 'U' }, b: '1.2e9 U' }));
     expect([r.value.toString(), r.excess?.toString()]).toEqual(['19', '300000000']);
     expect(r.shown).toContain('rounded up to 19 containers');
@@ -236,7 +236,7 @@ describe('T14 stratified content uniformity (Bergum, F0229)', () => {
     const r = ok(t14Stratified({ results: results(['97.0', '99.0', '101.0']), locations: 20, perLocation: 3, bergum }));
     expect([r.mean.toFixed(2), r.value.toFixed(1), r.allowedRsd?.toFixed(1), r.check?.pass]).toEqual(['99.00', '1.7', '3.7', true]);
   });
-  it('T14 stratified F0229: 90/99/108 % × 20: RSD 7.5 % (drum-transfer batches failed the Bergum limit): fail', () => {
+  it('T14 stratified F0229: 90/99/108 % × 20: RSD 7.5 % (drum-transfer analyses failed the Bergum limit): fail', () => {
     expect(ok(t14Stratified({ results: results(['90.0', '99.0', '108.0']), locations: 20, perLocation: 3, bergum })).check?.pass).toBe(false);
   });
   it('T14 stratified: a mean outside the table fails; the wrong count or table is refused', () => {

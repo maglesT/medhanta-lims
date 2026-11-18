@@ -132,7 +132,7 @@ export function t7Statistics(i: T7Input): Outcome<T7Extra> {
 
 // ---------------------------------------------------------------- C1 Within limits
 /**
- * Limits centred on a value computed earlier in the same batch (e.g. the target tablet weight from the blend
+ * Limits centred on a value computed earlier in the same analysis (e.g. the target tablet weight from the blend
  * assay): ± a percentage of it, or ± an absolute amount. The deviation is rounded to the decimals of the
  * ± figure as written, half up, before comparing.
  */

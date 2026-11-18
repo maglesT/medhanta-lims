@@ -1,65 +1,49 @@
 import { masterSchema, type MasterDoc } from '../shared/master/schema.js';
 import type { EventKind, Payload, StepEvent, StepKey } from '../shared/engine/index.js';
 
-// An invented film-coated tablet, 100 mg of an invented API, batch of 100 000 tablets (core 250.0 mg, coated
-// 257.5 mg). Core: 100.0 + 120.0 + 10.0 + 17.5 + 2.5 = 250.0 mg; the granulation water is a solvent.
-export const tablet = (): MasterDoc => masterSchema.parse({
-  header: { productItemId: 'prd-1', productCode: 'PRD-001', productName: 'Examplol 100 mg film-coated tablets', batchSize: '100000', coreWeightMg: '250.0', coatedWeightMg: '257.5', dispensingRooms: ['DSP-01'] },
-  formula: [
-    { key: 'api', materialItemId: 'mat-api', code: 'MAT-001', name: 'Examplol', mgPerTablet: '100.0', role: 'api', place: 'intragranular', adjust: { potency: { basis: 'dried', standardIs: 'anhydrous' } } },
-    { key: 'lactose', materialItemId: 'mat-lac', code: 'MAT-002', name: 'Lactose monohydrate', mgPerTablet: '120.0', role: 'excipient', place: 'intragranular', adjust: { compensates: ['api'] } },
-    { key: 'pvp', materialItemId: 'mat-pvp', code: 'MAT-003', name: 'Povidone K30', mgPerTablet: '10.0', role: 'excipient', place: 'binder' },
-    { key: 'water', materialItemId: 'mat-wat', code: 'MAT-004', name: 'Purified water', mgPerTablet: '50.0', role: 'solvent', place: 'binder' },
-    { key: 'mcc', materialItemId: 'mat-mcc', code: 'MAT-005', name: 'Microcrystalline cellulose', mgPerTablet: '17.5', role: 'excipient', place: 'extragranular' },
-    { key: 'mgst', materialItemId: 'mat-mgs', code: 'MAT-006', name: 'Magnesium stearate', mgPerTablet: '2.5', role: 'excipient', place: 'extragranular' },
-    { key: 'coat', materialItemId: 'mat-cot', code: 'MAT-007', name: 'Film coating system', mgPerTablet: '7.5', role: 'excipient', place: 'coating', layer: 1 },
-  ],
+// An invented HPLC assay method (external standard): a standard solution made once and used by the run, the sample
+// solutions in duplicate, loss on drying to constant mass, and the instrument run with its system suitability and a
+// column temperature read every 30 minutes until the run is over.
+export const method = (): MasterDoc => masterSchema.parse({
+  header: { code: 'QC-M-001', name: 'Examplol assay by HPLC', technique: 'HPLC', reference: 'In-house method QC-M-001', edition: 'version 1' },
   stages: [
     {
-      key: 'binder', name: 'Binder solution', kind: 'preparation', machineTypes: ['balance', 'stirrer'], role: 'Granulation operator',
-      produces: { name: 'binder solution', holdHours: 24 },
+      key: 'standard', name: 'Standard solution', kind: 'preparation', machineTypes: ['balance', 'sonicator'], role: 'Analyst',
+      produces: { name: 'standard solution', holdHours: 24 },
       steps: [
-        { key: 'weigh-pvp', block: { id: 'weigh', version: 1 }, checker: true, settings: { target: { formula: 'pvp' }, tolerance: '0.5' } },
-        { key: 'stir', block: { id: 'mix', version: 1 }, checker: false, minMinutes: 10 },
+        { key: 'weigh-std', block: { id: 'weigh', version: 1 }, checker: true, critical: true, settings: { what: 'Reference standard', unit: 'mg', target: '50.0 mg', tolerance: '10' } },
+        { key: 'dissolve', block: { id: 'mix', version: 1 }, checker: false, minMinutes: 10 },
       ],
     },
     {
-      key: 'granulation', name: 'Granulation', kind: 'normal', machineTypes: ['balance', 'granulator', 'dryer', 'mill'], uses: ['binder'], role: 'Granulation operator',
-      produces: { name: 'dried granules', holdHours: 72 },
+      key: 'drying', name: 'Loss on drying', kind: 'normal', machineTypes: ['balance', 'oven'], role: 'Analyst',
       steps: [
-        { key: 'weigh-api', block: { id: 'weigh', version: 1 }, checker: true, critical: true, settings: { target: { formula: 'api', adjusted: true }, tolerance: '0.5' } },
-        { key: 'weigh-lactose', block: { id: 'weigh', version: 1 }, checker: true, settings: { target: { formula: 'lactose', adjusted: true }, tolerance: '0.5' } },
-        { key: 'charge-api', block: { id: 'charge', version: 1 }, checker: true, settings: { material: { formula: 'api' } } },
-        { key: 'granulate', block: { id: 'granulate', version: 1 }, checker: false, settings: { endPointLimit: { low: '8.0', high: '12.0', unit: 'kW' } } },
-        { key: 'dry', block: { id: 'dry', version: 1 }, checker: false, flow: { kind: 'repeat-until', maxRounds: 5 }, settings: { lodLimit: { high: '2.0', unit: '%' } } },
-        { key: 'mill', block: { id: 'sieve', version: 1 }, checker: true },
-        { key: 'yield', block: { id: 'stage-yield', version: 1 }, checker: true, settings: { theoretical: '23.000 kg', yieldLimit: { low: '97.0', high: '100.5', unit: '%' }, accountabilityLimit: { low: '99.0', high: '100.5', unit: '%' } } },
+        { key: 'lod', block: { id: 'dry-constant', version: 1 }, checker: false, flow: { kind: 'repeat-until', maxRounds: 5 }, settings: { maxChange: '0.0005 g' } },
       ],
     },
     {
-      key: 'compression', name: 'Compression', kind: 'normal', machineTypes: ['tablet press'], uses: ['granulation'], role: 'Compression operator',
-      produces: { name: 'core tablets', holdHours: 720 },
+      key: 'run', name: 'Instrument run', kind: 'normal', machineTypes: ['hplc'], uses: ['standard'], role: 'Analyst',
       steps: [
-        { key: 'compress', block: { id: 'compress', version: 1 }, checker: false, everyMinutes: 30, flow: { kind: 'repeat-until', maxRounds: 40 },
-          settings: { meanLimit: { low: '245.0', high: '255.0', unit: 'mg' }, weightBand: '5.0', weightOuterBand: '10.0', hardnessLimit: { low: '60', high: '120', unit: 'N' }, thicknessLimit: { low: '3.8', high: '4.2', unit: 'mm' } } },
-        { key: 'yield', block: { id: 'stage-yield', version: 1 }, checker: true, settings: { theoretical: { header: 'coreBatch' }, yieldLimit: { low: '97.0', high: '100.5', unit: '%' }, accountabilityLimit: { low: '99.0', high: '100.5', unit: '%' } } },
+        { key: 'run', block: { id: 'instrument-run', version: 1 }, checker: false, settings: { conditions: 'C18, 250 x 4.6 mm, 5 µm; 1.0 mL/min; 254 nm' } },
+        { key: 'sst', block: { id: 'system-suitability', version: 1 }, checker: true, settings: { rsdLimit: { high: '2.0', unit: '%' }, tailingLimit: { high: '2.0', unit: 'units' } } },
+        { key: 'temp', block: { id: 'periodic-check', version: 1 }, checker: false, everyMinutes: 30, flow: { kind: 'repeat-until', maxRounds: 40 },
+          settings: { what: 'Column temperature', unit: '°C', limit: { low: '28', high: '32', unit: '°C' } } },
       ],
     },
     {
-      key: 'coating', name: 'Coating', kind: 'sub-batch', count: 2, machineTypes: ['coater'], uses: ['compression'], role: 'Coating operator',
-      produces: { name: 'coated tablets', holdHours: 2160 },
+      key: 'sample', name: 'Sample solutions', kind: 'replicate', count: 2, machineTypes: ['balance'], role: 'Analyst',
       steps: [
-        { key: 'coat', block: { id: 'coat', version: 1 }, checker: false, flow: { kind: 'repeat-until', maxRounds: 10 }, settings: { coreWeight: { ref: 'compression/compress/meanWeight' }, gainLimit: { low: '2.8', high: '3.2', unit: '%' } } },
-        { key: 'qa-hold', block: { id: 'check', version: 1 }, checker: false, flow: { kind: 'qa-hold' }, settings: { what: 'Appearance score', unit: '', limit: { low: '4', unit: '' } } },
-        { key: 'yield', block: { id: 'stage-yield', version: 1 }, checker: true, settings: { theoretical: '12.875 kg', yieldLimit: { low: '97.0', high: '100.5', unit: '%' }, accountabilityLimit: { low: '99.0', high: '100.5', unit: '%' } } },
+        { key: 'weigh-sample', block: { id: 'weigh', version: 1 }, checker: true, settings: { what: 'Sample', unit: 'mg', target: '100.0 mg', tolerance: '10' } },
+        { key: 'dilute', block: { id: 'dilute', version: 1 }, checker: false, settings: { from: 'Sample stock solution', diluent: 'Mobile phase', aliquot1: '5.0 mL', volume1: '50.0 mL' } },
+        { key: 'result', block: { id: 'check', version: 1 }, checker: true, settings: { what: 'Assay', unit: '%', limit: { low: '95.0', high: '105.0', unit: '%' } } },
       ],
     },
   ],
 });
 
 /**
- * The fixture as a master names where its stages run (TA-10, LIMS-12): each stage allows the rooms of its own name as
- * an area, and starts with line clearance. Most tests leave this out: their checks are filtered by `unplaced`.
+ * The fixture as a method names where its stages run (LIMS-12): each stage allows the rooms of its own name as an
+ * area, and starts with bench clearance. Most tests leave this out: their checks are filtered by `unplaced`.
  */
 export function placed(doc: MasterDoc): MasterDoc {
   const clearance = { key: 'clearance', block: { id: 'line-clearance', version: 1 }, settings: {}, checker: true, waitForCheck: false, critical: false, flow: { kind: 'none' as const } };
@@ -69,11 +53,10 @@ export function placed(doc: MasterDoc): MasterDoc {
 /** Leaves out the problems of stages that name no rooms (LIMS-12, tested in master-checks.test.ts). */
 export const unplaced = <T extends { rule?: string; path: string }>(problems: T[]) => problems.filter((p) => !(p.rule === 'LIMS-12' && p.path.endsWith('.roomTypes')));
 
-/** A small master with the given stages; each step defaults to a "check a value" step without a checker. */
+/** A small method with the given stages; each step defaults to a "check a value" step without a checker. */
 export function small(stages: object[]): MasterDoc {
   return masterSchema.parse({
-    header: { productItemId: 'p', productCode: 'P', productName: 'P', batchSize: '1000', coreWeightMg: '100.0', dispensingRooms: ['DSP-01'] },
-    formula: [{ key: 'x', materialItemId: 'm', code: 'M', name: 'M', mgPerTablet: '100.0', role: 'excipient', place: 'intragranular' }],
+    header: { code: 'M', name: 'M', technique: 'Other', reference: 'R' },
     stages: stages.map((s, i) => ({ key: `s${i}`, name: `Stage ${i}`, kind: 'normal', ...s,
       steps: ((s as { steps?: object[] }).steps ?? [{}]).map((t, j) => ({ key: `t${j}`, block: { id: 'check', version: 1 }, checker: false,
         settings: { what: 'pH', unit: '', limit: { low: '5.0', high: '7.0', unit: '' } }, ...t })) })),

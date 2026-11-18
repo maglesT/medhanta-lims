@@ -1,5 +1,4 @@
-// The master designer: one version open, in tabs (header, formula, process, calculation preview, review), with the
-// master check always beside it. A draft saves itself as it is edited; other states are read only.
+// The method designer: one version open, in tabs (header, steps, review), with the method check always beside it. A draft saves itself as it is edited; other states are read only.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ApiError, can, type Me } from '../api.js';
 import { getVersion, listMasters, loadMasterData, saveVersion, STATE_CHIP, STATE_LABEL, type MasterData, type MasterRow, type Version } from '../api-designer.js';
@@ -7,23 +6,20 @@ import { blocking, masterChecks } from '../../../shared/master/checks.js';
 import { placeChecks } from '../../../shared/master/places.js';
 import { masterSchema, type MasterDoc } from '../../../shared/master/schema.js';
 import { CheckPanel, type OnAnswer } from './CheckPanel.js';
-import { FormulaTable } from './Formula.js';
 import { HeaderFields } from './Header.js';
 import { answerDoc, placeOf, type Place } from './model.js';
-import { Preview } from './Preview.js';
 import { Process } from './Process.js';
 import { Review } from './Review.js';
 import { product } from '../product.js';
 
-export type Tab = 'header' | 'formula' | 'process' | 'preview' | 'review';
-const TABS: [Tab, string][] = [['header', 'Header'], ['formula', 'Formula'], ['process', 'Process'], ['preview', 'Calculation preview'], ['review', 'Review and approval']];
+export type Tab = 'header' | 'process' | 'review';
+const TABS: [Tab, string][] = [['header', 'Header'], ['process', 'Steps'], ['review', 'Review and approval']];
 type Save = { kind: 'saved' | 'saving' | 'pending' } | { kind: 'invalid' | 'error'; message: string };
 
-const FIELD: Record<string, string> = { mgPerTablet: 'mg per tablet', batchSize: 'batch size', coreWeightMg: 'core weight', coatedWeightMg: 'coated weight', name: 'name', key: 'key', holdHours: 'hold time', count: 'number of sub-batches' };
+const FIELD: Record<string, string> = { code: 'code', name: 'name', key: 'key', holdHours: 'hold time', count: 'number of replicates' };
 function issueText(doc: MasterDoc, path: (string | number)[], message: string): string {
   const [a, i, b, j] = path;
-  const where = a === 'formula' && typeof i === 'number' ? `Formula line ${i + 1} (${doc.formula[i]?.name || 'no material'})`
-    : a === 'stages' && typeof i === 'number' ? `${doc.stages[i]?.name || `Stage ${i + 1}`}${b === 'steps' && typeof j === 'number' ? `, step ${j + 1}` : ''}` : 'Header';
+  const where = a === 'stages' && typeof i === 'number' ? `${doc.stages[i]?.name || `Stage ${i + 1}`}${b === 'steps' && typeof j === 'number' ? `, step ${j + 1}` : ''}` : 'Header';
   const last = String([...path].reverse().find((p) => typeof p === 'string') ?? '');
   return `${where}: ${FIELD[last] ?? last} — ${message}`;
 }
@@ -83,14 +79,14 @@ export function Designer({ me, versionId, onBack, onOpen }: { me: Me; versionId:
       <div className="d-top">
         <button className="link dark" onClick={async () => { await flush(); onBack(); }}>← {product.masters}</button>
         <div className="d-title">
-          <h1>{doc.header.productCode} · {doc.header.productName}</h1>
-          <span className="muted">Version {v.versionNo} · {Number(doc.header.batchSize || 0).toLocaleString('en-IN')} tablets</span>
+          <h1>{doc.header.code} · {doc.header.name}</h1>
+          <span className="muted">Version {v.versionNo} · {doc.header.technique}</span>
           <span className={STATE_CHIP[v.state]}>{STATE_LABEL[v.state]}</span>
           {!editable && <span className="muted small">Read only{v.state === 'draft' ? '' : `: this version is ${STATE_LABEL[v.state].toLowerCase()}`}</span>}
         </div>
         <nav className="subtabs" aria-label="Designer">
           {TABS.map(([k, label]) => <button key={k} className={tab === k ? 'on' : ''} aria-pressed={tab === k} onClick={async () => { if (k === 'review') await flush(); setTab(k); }}>{label}</button>)}
-          {/* Beside the tabs, not under a long product name. */}
+          {/* Beside the tabs, not under a long method name. */}
           {editable && <span className={`save save-${save.kind}`} role="status">
             {save.kind === 'saved' ? 'All changes saved' : save.kind === 'saving' ? 'Saving…' : save.kind === 'pending' ? 'Changes not saved yet' : `Not saved: ${'message' in save ? save.message : ''}`}
           </span>}
@@ -100,10 +96,8 @@ export function Designer({ me, versionId, onBack, onOpen }: { me: Me; versionId:
         <div className="d-main">
           <fieldset className="plain" disabled={!editable}>
             {tab === 'header' && <div className="card"><HeaderFields header={doc.header} md={md} onChange={(header) => change({ ...doc, header })} /></div>}
-            {tab === 'formula' && <FormulaTable doc={doc} onChange={change} md={md} masters={others} selected={place.line} onSelect={(line) => setPlace({ tab: 'formula', line })} problems={problems ?? []} onAnswer={onAnswer} />}
             {tab === 'process' && <Process doc={doc} onChange={change} md={md} place={place} onPlace={setPlace} editable={!!editable} />}
           </fieldset>
-          {tab === 'preview' && <Preview doc={doc} />}
           {tab === 'review' && <Review me={me} version={v} doc={doc} blocked={blocked} onChanged={load} onOpen={onOpen} onGo={go} />}
         </div>
         <CheckPanel doc={doc} state={v.state} problems={problems} invalid={parsed && !parsed.success ? issueText(doc, parsed.error.issues[0]!.path, parsed.error.issues[0]!.message) : undefined} onGo={go} onAnswer={onAnswer} />

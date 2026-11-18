@@ -4,7 +4,7 @@ import { plainError } from '../api-floor.js';
 // A reason (send back, correct, not applicable) or a deviation note, with an optional reference for a note.
 export function ReasonDialog({ title, label, hint, reference, options = [], submit, children, wide, onSubmit, onCancel }: {
   title: string; label: string; hint?: string; reference?: boolean; submit: string; children?: ReactNode; wide?: boolean;
-  // The deviations the Deviations system has for this batch, to pick from.
+  // The deviations the Deviations system has for this analysis, to pick from.
   options?: { number: string; title: string | null }[];
   onSubmit: (reason: string, reference: string) => Promise<void>; onCancel: () => void;
 }) {
@@ -27,7 +27,7 @@ export function ReasonDialog({ title, label, hint, reference, options = [], subm
         {children}
         <label>{label}<textarea value={reason} onChange={(e) => setReason(e.target.value)} maxLength={1000} autoFocus={!children} /></label>
         {reference && <label>Deviation number (if one was raised)<input value={ref} onChange={(e) => setRef(e.target.value)} maxLength={60} list="deviation-picks"
-          placeholder={options.length ? 'Pick the deviation of this batch' : 'e.g. DEV-26-014'} /></label>}
+          placeholder={options.length ? 'Pick the deviation of this analysis' : 'e.g. DEV-26-014'} /></label>}
         {reference && options.length > 0 && <datalist id="deviation-picks">{options.map((o) => <option key={o.number} value={o.number}>{o.title}</option>)}</datalist>}
         {error && <p className="error" role="alert">{error}</p>}
         <div className="actions">

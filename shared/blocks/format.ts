@@ -23,13 +23,15 @@ export const fieldSchema = z.object({
   unit: z.string().optional(),
   // number: a list of exactly this many readings (e.g. 20 tablet weights).
   count: z.number().int().min(2).max(100).optional(),
+  // number with count: at least this many of the readings (e.g. 5 or 6 replicate injections); blanks are left out.
+  minCount: z.number().int().min(1).max(100).optional(),
   // choice: the fixed list.
   options: z.array(z.string().min(1)).optional(),
   optional: z.boolean().optional(),
   // text: a calendar date, picked from a date picker and kept as YYYY-MM-DD; shown as "31 Oct 2029".
   date: z.boolean().optional(),
   // machine: words of master data's type it takes (any of them, without case), e.g. ["balance"]; none: any type. A type
-  // with one of the notTypes words is not taken (a QC lab "Analytical balance" is not a dispensing balance).
+  // with one of the notTypes words is not taken (a production "Platform balance" is not a lab balance).
   types: z.array(z.string().regex(/^[a-z][a-z ]*$/)).optional(),
   notTypes: z.array(z.string().regex(/^[a-z][a-z ]*$/)).optional(),
 }).strict();
@@ -56,8 +58,8 @@ export const blockSchema = z.object({
   version: z.number().int().min(1),
   name: z.string().min(1),
   instruction: z.string().min(1),
-  // LIMS-41: weighing, charge-in, yield and line clearance always need a second-person check.
-  gmp: z.enum(['weighing', 'charge-in', 'yield', 'line-clearance']).optional(),
+  // LIMS-41: a weighing typed by hand and a bench clearance always need a second-person check.
+  gmp: z.enum(['weighing', 'line-clearance']).optional(),
   // Default signatures: the performer always signs; a second person checks when true.
   checker: z.boolean(),
   fields: z.array(fieldSchema).min(1),
@@ -69,8 +71,6 @@ export const blockSchema = z.object({
   // alongside: the steps after it open once its first round is done, and its rounds go on beside them; the stage
   // closes only when its stop check passes.
   periodic: z.object({ maxMinutes: z.number().int().positive(), alongside: z.boolean().optional() }).strict().optional(),
-  // A new master step from this block starts as a QA hold (the master may change it).
-  qaHold: z.boolean().optional(),
   // The name of a step that names a material, "{material}" its name and code: "Issue {material}".
   title: z.string().regex(/\{material\}/).optional(),
 }).strict();
@@ -104,6 +104,7 @@ export function blockProblems(b: Block): string[] {
     if (f.kind === 'number' && !f.unit) p.push(`field ${f.name}: a number needs a unit`);
     if (f.unit?.startsWith('$') ? !settings.has(f.unit.slice(1)) : f.unit !== undefined && !findUnit(f.unit)) p.push(`field ${f.name}: unknown unit ${f.unit}`);
     if (f.kind === 'choice' && !f.options?.length) p.push(`field ${f.name}: a choice needs options`);
+    if (f.minCount !== undefined && (f.count === undefined || f.minCount > f.count)) p.push(`field ${f.name}: minCount needs a count at least as large`);
   }
   for (const s of b.settings) if (s.options && (s.kind !== 'text' || !s.options.length)) p.push(`setting ${s.name}: only a text setting has a list`);
   const known = new Set([...b.fields.map((f) => f.name), ...b.settings.map((s) => s.name)]);

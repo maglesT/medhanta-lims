@@ -6,16 +6,15 @@ import type { SignOn } from './signon.js';
 // Platform PL-01: rights are this product's permission codes from core's token, one code per action. The same list is
 // declared to the platform in ops/manifest.draft.json (test/permissions.test.ts keeps the two equal).
 export const PERMISSIONS = {
-  'lims.master.author': 'Write master batch record versions',
-  'lims.master.check': 'Check a master batch record version written by another person',
-  'lims.master.approve': 'Approve a checked master batch record version (QA)',
-  'lims.batch.issue': 'Issue a batch record from an approved master version',
-  'lims.batch.operate': 'Record and sign steps of a batch as performed',
-  'lims.batch.check': 'Check steps performed by another person (second person)',
-  'lims.batch.supervise': 'Production approval of a completed batch record',
-  'lims.qc.approve': 'QC approval of the results used for release',
-  'lims.qa.release': 'QA review and release of filled, inspected units',
-  'lims.view': 'View batch records and master versions',
+  'lims.master.author': 'Write method and specification versions',
+  'lims.master.check': 'Check a method or specification version written by another person',
+  'lims.master.approve': 'Approve a checked method or specification version (QA)',
+  'lims.sample.register': 'Register, receive, store and dispose of samples',
+  'lims.analysis.perform': 'Start an analysis and record and sign its steps',
+  'lims.analysis.check': 'Check steps performed by another person (second person)',
+  'lims.analysis.review': 'Review a complete analysis with its audit trail, or stop one',
+  'lims.qc.approve': 'QC decision on a sample (approve or reject) and its certificate of analysis',
+  'lims.view': 'View samples, analyses, methods and specifications',
   'lims.demo.skip': 'Skip a running wait (demo installations only)',
 } as const;
 export type Permission = keyof typeof PERMISSIONS;

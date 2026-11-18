@@ -26,8 +26,8 @@ const schema = z.object({
   COOKIE_SECURE: z.enum(['true', 'false']).default('true').transform((v) => v === 'true'),
   PORT: z.coerce.number().int().positive().default(3000),
   HOST: z.string().default('0.0.0.0'),
-  // The fixed start of every batch number, then the plant year and a counter: LA260001 (LIMS-01).
-  BATCH_PREFIX: z.string().regex(/^[A-Z]{1,6}$/).default('LA'),
+  // The fixed start of every analysis number, then the plant year and a counter: LA260001 (LIMS-01).
+  ANALYSIS_PREFIX: z.string().regex(/^[A-Z]{1,6}$/).default('LA'),
   // Plant-local display time zone; storage is always UTC.
   DISPLAY_TZ: z.string().default('Asia/Kolkata'),
 });
@@ -38,5 +38,5 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, product: Produc
   // On the Medhanta platform apply names the product's own database <PRODUCT>_DATABASE_URL
   // (LIMS_DATABASE_URL), its sign-on client after the product, and each link after its provider.
   const own = env[`${product.id.toUpperCase()}_DATABASE_URL`];
-  return schema.parse({ ...env, DATABASE_URL: env.DATABASE_URL ?? own, OIDC_CLIENT_ID: env.OIDC_CLIENT_ID ?? product.id, BATCH_PREFIX: env.BATCH_PREFIX ?? product.batchPrefix });
+  return schema.parse({ ...env, DATABASE_URL: env.DATABASE_URL ?? own, OIDC_CLIENT_ID: env.OIDC_CLIENT_ID ?? product.id, ANALYSIS_PREFIX: env.ANALYSIS_PREFIX ?? product.analysisPrefix });
 }

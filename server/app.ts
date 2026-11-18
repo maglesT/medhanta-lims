@@ -10,7 +10,7 @@ import { BACKGROUND_HEADER, SESSION_COOKIE, loadSession } from './auth.js';
 import { authRoutes } from './routes/auth.js';
 import { masterDataRoutes } from './routes/masterdata.js';
 import { masterRoutes } from './routes/masters.js';
-import { batchRoutes } from './routes/batches.js';
+import { analysisRoutes } from './routes/analyses.js';
 import { demoRoutes } from './demo.js';
 import type { SignOn } from './signon.js';
 import { ConnectionOff, NotUsable, type Master } from './master.js';
@@ -34,8 +34,8 @@ export interface AppOptions {
   webRoot?: string;
   // Secure flag on the session cookie; off only for plain-HTTP development.
   cookieSecure?: boolean;
-  // The fixed start of every batch number (LIMS-01).
-  batchPrefix?: string;
+  // The fixed start of every analysis number (LIMS-01).
+  analysisPrefix?: string;
   // The product (server/product.ts).
   product?: Product;
   // A demo installation (LIMS_DEMO=1, server/demo.ts): the screens say DEMO and waits may be skipped.
@@ -43,14 +43,14 @@ export interface AppOptions {
 }
 
 export async function buildApp({ sql, signOn, master, links = noLinks(), proofKey = randomBytes(32), logger = false, webRoot, cookieSecure = true, product = LIMS,
-  batchPrefix = product.batchPrefix, demo = false }: AppOptions): Promise<FastifyInstance> {
+  analysisPrefix = product.analysisPrefix, demo = false }: AppOptions): Promise<FastifyInstance> {
   const app = Fastify({ logger, trustProxy: true });
   app.decorate('product', product);
   app.decorate('cookieSecure', cookieSecure);
   app.decorate('proofKey', proofKey);
   app.decorate('master', master);
   app.decorate('links', links);
-  app.decorate('batchPrefix', batchPrefix);
+  app.decorate('analysisPrefix', analysisPrefix);
   app.decorate('demo', demo);
   // A cut master-data link stops the feature with one message (platform D-02, PL-08); an unknown or inactive item is
   // refused at write time (PL-08).
@@ -84,7 +84,7 @@ export async function buildApp({ sql, signOn, master, links = noLinks(), proofKe
   authRoutes(app, sql, signOn);
   masterDataRoutes(app);
   masterRoutes(app, sql);
-  batchRoutes(app, sql);
+  analysisRoutes(app, sql);
   demoRoutes(app, sql);
 
   // In production the built web UI is served from the same process.

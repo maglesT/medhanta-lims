@@ -9,12 +9,9 @@ E = the app enforces it (blocks or refuses); S = supported (the app records and 
 Clauses: US 21 CFR 211 and Part 11; EU EudraLex Vol 4 Part I chapters (C1-C7) and annexes (A1-A19); IN Revised
 Schedule M Part I (SCHM); API ICH Q7. "(no. to verify)" marks a clause number not yet checked against the text.
 
-The engine (master, record, steps, signatures, corrections, audit trail, timers, PDF) is a copy of TrueBatch Tablets.
-Its tests already prove LIMS-01, 03, 11, 12, 17, 20, 40, 41, 44, 45, 46, 47 and 51 for the copied engine; each such
-rule moves from "later" to its tests as its LIMS screens are built (step 3 onward). Until step 3 replaces the tablet
-batch master with the method master, some copied tests still carry TrueBatch production rule IDs (TA-10 line
-clearance, TA-12 dispensed lots, TA-13 dispensing target, TA-15 compression, TA-16 tooling, TA-18 yield, TA-19
-rework): they are not LIMS rules and go with the production blocks.
+The analysis engine (method, analysis record, steps, signatures, corrections, audit trail, timers, review, PDF) is a
+copy of TrueBatch Tablets moved to the lab (build step 3, round 1). Its tests prove LIMS-01, 03, 11, 12, 16, 17, 18,
+19, 20, 40, 41, 44, 45, 46, 47, 48 and 51 for analyses; the other rules come with their build step.
 
 | Rule | Requirement | Clauses | E/S | Tests |
 |------|-------------|---------|-----|-------|
@@ -33,10 +30,10 @@ rework): they are not LIMS rules and go with the production blocks.
 | LIMS-13 | Reagents, test solutions, volumetric solutions and media are prepared by procedure and labelled: prepared/opened date, who, expiry, storage; for VS also factor and next standardisation. Only in-date ones are used. | US 211.194(c); EU C6 6.19, 6.21, 6.22; IN SCHM 14.37, 14.38 | E | later: step 4 (instruments, lab inventory) |
 | LIMS-14 | Reference standards. Use official ones where they exist, for the monograph's purpose. In-house / working standards are tested, traced to a primary and re-standardised at intervals. Labelled, kept by a designated person. | US 211.194(c); EU C6 6.20, 6.21; IN SCHM 15.1-15.8; 17.3.1.3; 17.3.2.5; API Q7 11.1 (no. to verify) | E | later: step 4 (instruments, lab inventory) |
 | LIMS-15 | Calculations are correct and checked; rounding follows the pharmacopoeia. | US 211.194(a)(5); 211.68(b); EU C6 6.16 ("critically examined"); IN SCHM 17.3.10.13(d),(g); How: USP General Notices 7.20 rounding | E | later: step 3 |
-| LIMS-16 | System suitability must pass before sample results are used. | US 211.194(a)(2) ("verified under actual conditions of use"); 211.160(b); Compendial: USP <621>, Ph. Eur. 2.2.46 (no. to verify) | E | later: step 3 |
+| LIMS-16 | System suitability must pass before sample results are used. | US 211.194(a)(2) ("verified under actual conditions of use"); 211.160(b); Compendial: USP <621>, Ph. Eur. 2.2.46 (no. to verify) | E | analysis tests; more with: step 3 |
 | LIMS-17 | Each result is compared with the limit, and the record says pass or fail. | US 211.194(a)(6); IN SCHM 17.3.10.13(d) | E | engine tests (copied); LIMS screens: step 3 |
-| LIMS-18 | A second person reviews the original records for accuracy, completeness and compliance before the result is approved. | US 211.194(a)(8); EU C6 6.17(vii); IN SCHM 19.6.1; 17.3.10.13(g); 20.6 | E | later: step 3 |
-| LIMS-19 | The reviewer checks the audit trail (LIMS and, for imported results, the CDS) before approval. | US 211.194(a)(8) read with FDA-DI (audit-trail review Q&A); 11.10(e); EU A11 9 ("regularly reviewed"); IN SCHM 20.4 | E | later: step 3 |
+| LIMS-18 | A second person reviews the original records for accuracy, completeness and compliance before the result is approved. | US 211.194(a)(8); EU C6 6.17(vii); IN SCHM 19.6.1; 17.3.10.13(g); 20.6 | E | analysis tests; more with: step 3 |
+| LIMS-19 | The reviewer checks the audit trail (LIMS and, for imported results, the CDS) before approval. | US 211.194(a)(8) read with FDA-DI (audit-trail review Q&A); 11.10(e); EU A11 9 ("regularly reviewed"); IN SCHM 20.4 | E | analysis tests; more with: step 3 |
 | LIMS-20 | A designated person makes a clear status decision (approve, reject, other) with a dated signature. Failing material is rejected. | US 211.22(a); 211.84(e); 211.165(f); EU C6 6.17(viii); C4 4.27; IN SCHM 17.3.10.13(h), 17.3.10.14; 19.7.7; 19.8.1 | E | engine tests (copied); LIMS screens: step 3 |
 | LIMS-21 | Certificate of analysis shows only approved results, with limits, method and batch; for APIs also grade, release date, expiry/retest date, original manufacturer, and a QU signature. | EU C6 6.7(v); API Q7 11.4 (sub-clause no. to verify) | E | later: step 3 |
 | LIMS-22 | Outside (contract) lab testing is stated in the QC records. | EU C6 6.6; C7; IN SCHM 9 (contract analysis) | S | later: step 3 |
@@ -65,7 +62,7 @@ rework): they are not LIMS rules and go with the production blocks.
 | LIMS-45 | Audit trail: every create, change and void with who, when, old value, new value, reason. Cannot be switched off or edited. | US 11.10(e); EU A11 9; 12.4; IN SCHM 20.4; 17.2.8 | E | engine tests (copied); LIMS screens: step 3 |
 | LIMS-46 | Nothing is deleted. Corrections keep the original visible. | US 11.10(c),(e); 211.180(a); EU C4 4.9, 4.10; IN SCHM 20.4 | E | engine tests (copied); LIMS screens: step 3 |
 | LIMS-47 | E-signatures: password again, printed name, time, meaning; linked to what was signed. | US 11.50; 11.70; 11.200(a); EU A11 14 | E | engine tests (copied); LIMS screens: step 3 |
-| LIMS-48 | Complete data: invalid runs, failed SST, aborted tests and trial work are kept. | US 211.194(a)(4); How: FDA-DI, MHRA-DI | E | later: step 3 |
+| LIMS-48 | Complete data: invalid runs, failed SST, aborted tests and trial work are kept. | US 211.194(a)(4); How: FDA-DI, MHRA-DI | E | analysis tests; more with: step 3 |
 | LIMS-49 | Raw data / CDS boundary is defined. The CDS (or the instrument print) is the original; LIMS holds the reported result with a link back. | US 211.194(a)(4); 211.180(d); EU A11 4.8, 5; How: FDA-DI, PICS-DI | E | later: step 3 |
 | LIMS-50 | Interfaces have built-in checks; manual critical entries are double-checked. | US 211.68(b); EU A11 5, 6; IN SCHM 20.6 | E | later: step 3 |
 | LIMS-51 | Accurate copies on demand. | US 11.10(b); 211.180(c); EU A11 8.1, 8.2 | E | engine tests (copied); LIMS screens: step 3 |
@@ -80,7 +77,7 @@ rules to the table above. Each safety rule refuses with a plain-English message.
 `test/templates/` (the test names start with the template ID). The templates are described in
 `shared/templates/README.md`.
 
-- **TA-13 (dispensing):**
+- **Dispensing (TrueBatch, templates kept in the library):**
   - **Same basis (C5, built into T9).** A hydrate or solvate molecular weight in the salt factor (T11) together with
     a water, LOD or solvent correction of the assay (T9) is refused, because it counts the water twice (about 6.7 %
     too much pantoprazole).
@@ -99,6 +96,6 @@ rules to the table above. Each safety rule refuses with a plain-English message.
   - **No weight-variation method for coated tablets other than film-coated (T14).** Uniformity of dosage units by
     weight variation is refused for sugar-coated and other coated tablets. It is also refused below 25 mg or 25 %
     of the unit, and for products set to "individual results only".
-- **TA-16 (coating solutions):**
+- **Liquid make-up (T17):**
   - **No negative water or solvent (T17).** A liquid make-up whose water or solvent to add would be negative (the
     target solids are higher than the ingredients allow) is refused.

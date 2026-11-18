@@ -1,5 +1,5 @@
 /**
- * Dispensing templates: T8 Batch scaling, T9 Potency-adjusted quantity, C5 Same basis (built into T9),
+ * Dispensing templates: T8 Analysis scaling, T9 Potency-adjusted quantity, C5 Same basis (built into T9),
  * T10 Compensating excipient, T11 Salt / base factor, T12 Dry basis, T15 Re-scale to actual yield,
  * T16 Overage, T18 Content-adjusted quantity, T19 Split into portions, T20 Multi-lot quantity.
  */
@@ -15,10 +15,10 @@ function outUnit(p: Parsed, wanted: string | undefined): Unit {
   return p.unit;
 }
 
-// ---------------------------------------------------------------- T8 Batch scaling
+// ---------------------------------------------------------------- T8 Analysis scaling
 export type T8Input = (
   | { readonly mode: 'per unit'; readonly perUnit: Q; readonly count: Q }
-  | { readonly mode: 'percent'; readonly percent: Q; readonly batch: Q }
+  | { readonly mode: 'percent'; readonly percent: Q; readonly analysis: Q }
   | { readonly mode: 'rate x time'; readonly rate: Q; readonly time: Q }
   /** Coat by area: target mg/cm² × tablet surface area (from the tooling record) × number of units. */
   | { readonly mode: 'per area'; readonly perArea: Q; readonly area: Q; readonly count: Q }
@@ -32,8 +32,8 @@ const RATE: Partial<Record<Kind, { rate: string; result: string }>> = {
   'count rate': { rate: 'units/h', result: 'units' },
 };
 
-/** T8 Batch scaling: quantity per tablet × number of tablets; or % w/w × batch weight; or rate × time. */
-export function t8BatchScaling(i: T8Input): Outcome {
+/** T8 Analysis scaling: quantity per tablet × number of tablets; or % w/w × analysis weight; or rate × time. */
+export function t8AnalysisScaling(i: T8Input): Outcome {
   return run(() => {
     let value: Dec;
     let u: Unit;
@@ -49,12 +49,12 @@ export function t8BatchScaling(i: T8Input): Outcome {
       line = `${per.text} × ${n.text}`;
     } else if (i.mode === 'percent') {
       const pc = percent(i.percent, 'The % w/w');
-      const batch = parse(i.batch, 'The batch weight');
-      needKind(batch, MASS, 'The batch weight');
+      const analysis = parse(i.analysis, 'The analysis weight');
+      needKind(analysis, MASS, 'The analysis weight');
       if (pc.v.isNegative() || pc.v.gt(HUNDRED)) refuse('A % w/w must be between 0 and 100');
-      u = outUnit(batch, i.unit);
-      value = to(batch, u).times(pc.v).div(HUNDRED);
-      line = `${pc.text} × ${batch.text} ÷ 100`;
+      u = outUnit(analysis, i.unit);
+      value = to(analysis, u).times(pc.v).div(HUNDRED);
+      line = `${pc.text} × ${analysis.text} ÷ 100`;
     } else if (i.mode === 'per area') {
       const pa = parse(i.perArea, 'The quantity per area');
       const area = parse(i.area, 'The surface area per unit');
@@ -433,7 +433,7 @@ export interface T10Extra {
 }
 
 /**
- * T10 Compensating excipient: filler = standard filler − Σ (adjusted − standard), so the batch weight stays
+ * T10 Compensating excipient: filler = standard filler − Σ (adjusted − standard), so the analysis weight stays
  * the same. Excesses may be + or −. Spread over several fillers in a ratio. Refused if any filler goes negative.
  */
 export function t10Compensating(i: T10Input): Outcome<T10Extra> {
@@ -467,7 +467,7 @@ export function t10Compensating(i: T10Input): Outcome<T10Extra> {
     if (neg !== undefined) {
       refuse(
         `Not enough ${neg.name} to compensate: the adjusted materials need ${show(excess, u.symbol, dp)} more than standard (${excessLine}), ` +
-          `which would leave ${show(neg.value, u.symbol, dp)} of ${neg.name}. The batch weight cannot be kept; raise a deviation`,
+          `which would leave ${show(neg.value, u.symbol, dp)} of ${neg.name}. The analysis weight cannot be kept; raise a deviation`,
       );
     }
     const shown =
@@ -593,7 +593,7 @@ export interface T18Input {
   readonly formulaQuantityIs: 'dry' | 'wet';
   /** For 'wet': the content the formula quantity was written at. */
   readonly nominalContent?: Q;
-  /** Where the content comes from (recorded on the line): the certificate or an in-process result of this batch. */
+  /** Where the content comes from (recorded on the line): the certificate or an in-process result of this analysis. */
   readonly contentSource?: 'certificate' | 'in-process result';
   /**
    * What the result is: the content (% w/w, the default) or a relative assay in % of theoretical (F0205: an extrudate

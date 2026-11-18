@@ -1,4 +1,4 @@
--- Master versions, batches and the batch's step events.
+-- Master versions, analyses and the analysis's step events.
 
 -- A master version is one JSON document (shared/master/schema.ts). Versions of one master share master_id. Only a
 -- draft may change: once a version leaves draft its document is locked by the database, and approved, effective and
@@ -39,16 +39,16 @@ end $$;
 create trigger master_versions_locked before update or delete on master_versions
   for each row execute function refuse_change_unless_draft();
 
--- LIMS-01: batch numbers come from one counter per year and are never reused (batch_no is unique).
-create table batch_counters (
+-- LIMS-01: analysis numbers come from one counter per year and are never reused (analysis_no is unique).
+create table analysis_counters (
   year integer primary key,
   last_no integer not null check (last_no >= 1)
 );
 
--- A batch is an issued copy of one effective master version; the version itself is immutable, so it is not copied.
-create table batches (
+-- A analysis is an issued copy of one effective master version; the version itself is immutable, so it is not copied.
+create table analyses (
   id bigint generated always as identity primary key,
-  batch_no text not null unique,
+  analysis_no text not null unique,
   master_version_id bigint not null references master_versions(id),
   issued_by bigint not null references users(id),
   issued_at timestamptz not null default now()
@@ -59,32 +59,34 @@ create table batches (
 -- signature (object_type 'step_event').
 create table step_events (
   id bigint generated always as identity primary key,
-  batch_id bigint not null references batches(id),
+  analysis_id bigint not null references analyses(id),
   stage integer not null check (stage >= 0),
   sub integer not null check (sub >= 1),
   step integer not null check (step >= 0),
   round integer not null check (round >= 1),
   kind text not null check (kind in ('started', 'value', 'done', 'checked', 'sent_back', 'corrected', 'not_applicable',
-    'late', 'qa_released_hold', 'note')),
+    'late', 'note', 'demo_wait_skipped')),
   payload jsonb not null default '{}',
   person_id bigint references users(id),
   at timestamptz not null default now(),
   check ((person_id is null) = (kind = 'late'))
 );
-create index step_events_batch on step_events (batch_id, id);
+create index step_events_analysis on step_events (analysis_id, id);
 -- The timer job records each overrun once.
-create unique index step_events_late_once on step_events (batch_id, (payload->>'timer')) where kind = 'late';
+create unique index step_events_late_once on step_events (analysis_id, (payload->>'timer')) where kind = 'late';
+-- Demo installations only (LIMS_DEMO=1): a person with the demo permission ends a running wait at once; once per timer.
+create unique index step_events_skip_once on step_events (analysis_id, (payload->>'timer')) where kind = 'demo_wait_skipped';
 create trigger step_events_insert_only before update or delete or truncate on step_events
   for each statement execute function refuse_change();
 
-revoke all on master_versions, batch_counters, batches, step_events from lims_app;   -- the platform's default grants (0000)
-revoke all on sequence master_ids, master_versions_id_seq, batches_id_seq, step_events_id_seq from lims_app;
+revoke all on master_versions, analysis_counters, analyses, step_events from lims_app;   -- the platform's default grants (0000)
+revoke all on sequence master_ids, master_versions_id_seq, analyses_id_seq, step_events_id_seq from lims_app;
 grant usage on sequence master_ids to lims_app;
 grant select on master_versions to lims_app;
 grant insert (master_id, version_no, doc, created_by) on master_versions to lims_app;
 grant update (doc, state) on master_versions to lims_app;
-grant select, insert, update (last_no) on batch_counters to lims_app;
-grant select on batches to lims_app;
-grant insert (batch_no, master_version_id, issued_by) on batches to lims_app;
+grant select, insert, update (last_no) on analysis_counters to lims_app;
+grant select on analyses to lims_app;
+grant insert (analysis_no, master_version_id, issued_by) on analyses to lims_app;
 grant select on step_events to lims_app;
-grant insert (batch_id, stage, sub, step, round, kind, payload, person_id) on step_events to lims_app;
+grant insert (analysis_id, stage, sub, step, round, kind, payload, person_id) on step_events to lims_app;

@@ -1,7 +1,7 @@
 # Medhanta LIMS: calculation and check templates (version 2)
 
 Small, pure TypeScript functions. One function per template. No formula language, no parser, no
-expression engine. The master batch record picks a template and its inputs. Underneath there is
+expression engine. The master analysis record picks a template and its inputs. Underneath there is
 only GMP maths: exact decimals, unit conversion, pharmacopoeia rounding at limits, and refusals in
 plain English.
 
@@ -73,9 +73,9 @@ difference. When it is compared with a limit written in °C, the difference unit
 | T5 | % change | before, after | change ÷ base × 100; gain = after − before, loss = before − after | mode gain/loss; **base (one setting, required)**: this layer's own starting weight, the final weight, or a named earlier stage (e.g. the uncoated core) | no base chosen; base ≤ 0; temperatures |
 | T6 | Ratio and powder indices | a, b | a ÷ b; Carr = (tapped − bulk) ÷ tapped × 100; Hausner = tapped ÷ bulk; log10(a ÷ b); angle of repose = arctan(height ÷ radius), or arctan(2 × height ÷ diameter), in degrees; **whole containers** = a ÷ b rounded up, with the excess (F0087) | mode; result unit (tablets, %, MPa, kN/cm², g/mL, mg/cm², mg per unit …) | ÷ 0; tapped < bulk; kinds that do not make a ratio; log of ≤ 0; height or radius ≤ 0 |
 | T7 | Statistics of readings | series; or a per-unit value from 2 readings (first − second) or from any number of readings on the same unit (first minus rest, sum, or split loss % = (whole − Σ parts) ÷ whole × 100) | mean (value), SD (n − 1), % RSD, min, max, count | limit on the mean; limit on % RSD | no readings; mixed kinds; RSD from one reading |
-| T8 | Batch scaling | per unit × count; % w/w × batch weight; rate × time; per area: mg/cm² × surface area (from the tooling record) × count; product of 2 or 3 recorded values (L × W × H; Hz × rpm/Hz) | quantity (kg by default; IU stay IU; lengths give mm² or mm³) | mode; result unit | count not a count; % outside 0–100; rate not per time |
+| T8 | Analysis scaling | per unit × count; % w/w × analysis weight; rate × time; per area: mg/cm² × surface area (from the tooling record) × count; product of 2 or 3 recorded values (L × W × H; Hz × rpm/Hz) | quantity (kg by default; IU stay IU; lengths give mm² or mm³) | mode; result unit | count not a count; % outside 0–100; rate not per time |
 | T9 | Potency-adjusted quantity | standard quantity (or the T11 result), assay, basis, water / LOD / solvents | standard × 100 ÷ assay as is. As is = A × (100 − W) ÷ 100 (anhydrous), A × (100 − LOD) ÷ 100 (dried), A × (100 − LOI) ÷ 100 (ignited), A × (100 − W − S) ÷ 100 (anhydrous and solvent-free) | basis; `standardIs` anhydrous or hydrate/solvate; `assayExpressedAs`; `potencyAs` parent or element; assay above 100 % used or taken as 100 | **C5 rules** (below); missing water/LOD/solvents; assay ≤ 0; water/LOD outside 0 to <100 %; standard not a mass |
-| T10 | Compensating excipient | filler(s) with standard quantity (and ratio); adjusted materials (standard, adjusted) | filler = standard − Σ (adjusted − standard), shared over several fillers in a ratio (default: their standard quantities) | several adjusted materials at once (excesses + or −); several fillers | **any filler negative** (the batch weight cannot be kept); no filler; not masses |
+| T10 | Compensating excipient | filler(s) with standard quantity (and ratio); adjusted materials (standard, adjusted) | filler = standard − Σ (adjusted − standard), shared over several fillers in a ratio (default: their standard quantities) | several adjusted materials at once (excesses + or −); several fillers | **any filler negative** (the analysis weight cannot be kept); no filler; not masses |
 | T11 | Salt / base factor | quantity of form A; MW and molecules per unit of form A and form B; whether form B's MW includes crystal water/solvent | quantity × (MW B ÷ n B) ÷ (MW A ÷ n A) | any two named forms (base ↔ salt, salt ↔ salt, element ↔ compound, cocrystal); **molecules per formula unit** (default 1; hemifumarate, calcium salts = 2); **a quantity in mEq**: mmol = mEq ÷ the ion's `charge`, ÷ ions per unit × MW (F0393); **`writtenFactor`** checked against the MWs at its decimals (F0062); **`mwFromLot`** with `lotMw`: an average MW from the lot's certificate (F0018) | MW ≤ 0; molecules not a whole number ≥ 1; **a hemi-salt at 1 molecule per unit with a MW at least twice the other form's** (the whole formula unit's MW: the dose would double); not a mass; a written factor the MWs do not give; mEq without the ion charge; a lot MW not given |
 | T12 | Quantity from dry basis | quantity, LOD | dry → as is: dry × 100 ÷ (100 − LOD); reverse: as is × (100 − LOD) ÷ 100 | direction | LOD outside 0 to <100 % |
 | T13 | Duration and hold time | start, end; or timed readings of a monitored value | end − start; or time counted only while the value is inside limits | unit min/h; limit (max and/or min); target time (accumulated mode) | end before start; bad or impossible date; readings out of time order |
@@ -96,13 +96,13 @@ difference. When it is compared with a limit written in °C, the difference unit
 
 | T27 | Expiry from the shelf life (packing, TB-P8) | date of manufacture (YYYY-MM-DD), approved shelf life in months, rule ("month before": the end of the month before; or "same month") | expiry month = month of manufacture + shelf life (− 1); the worked line | — | date not YYYY-MM-DD; shelf life not 1–120 whole months |
 
-F1–F7 and the rest of F8 (step flow) belong to the batch engine and are not here.
+F1–F7 and the rest of F8 (step flow) belong to the analysis engine and are not here.
 
 ## Check templates
 
 | ID | Name | Inputs | What it checks | Refusals |
 |---|---|---|---|---|
-| C1 | Within limits | value, limit; or ± % / ± amount around a value computed earlier in the batch (e.g. the target tablet weight from the blend assay) | low–high, one side, strict bounds, alert/action tiers, pharmacopoeia rounding, unit conversion; around a centre: the deviation is rounded to the decimals of the ± figure | bad limit text (no exponents), low above high, alert outside action, unit of another kind |
+| C1 | Within limits | value, limit; or ± % / ± amount around a value computed earlier in the analysis (e.g. the target tablet weight from the blend assay) | low–high, one side, strict bounds, alert/action tiers, pharmacopoeia rounding, unit conversion; around a centre: the deviation is rounded to the decimals of the ± figure | bad limit text (no exponents), low above high, alert outside action, unit of another kind |
 | C2 | Count of readings | the readings (or the count), required number | exactly N, or at least N | count not a whole number |
 | C3 | All individual values | series (or pairs); band: absolute limits or ± % of the mean / of a target; number allowed outside; outer band where none may be outside | each unit; e.g. not more than 2 outside ± 5 %, none outside ± 10 %. A ± % deviation is rounded to the decimals of the % written | negative band; bad count allowed |
 | C4 | Observation | question; answers (per unit or one); expected answer(s); fixed list (default yes/no); failures allowed | pass/fail; `triggersF3` when it fails | answer not in the list; no answer |
@@ -110,8 +110,8 @@ F1–F7 and the rest of F8 (step flow) belong to the batch engine and are not he
 | F2 helper | No further change (`noFurtherChange`) | previous round's reading, this round's reading, the largest change (an amount, or % of the previous reading) | "constant weight": \|current − previous\| rounded to the limit's decimals ≤ limit → stop repeating. The round loop itself is the engine's (F2) | readings of different kinds; % change from zero |
 | C6 | Staged test | test type and the results of each stage | disintegration (6, then 12 more, 16 of 18); content uniformity L1/L2 (via T14); dissolution IR S1–S3; ER L1–L3 per time point; delayed release acid A1–A3 and buffer B1–B3. Says pass, "next stage" (and how many more units) or fail | wrong number of units per stage; wrong number of time points |
 | C7 | Sampling plan by lot size (AQL) | lot size, inspection level (S-1…S-4, I, II, III), AQL per defect class, defects found (optional) | code letter (Table I), sample size, accept/reject per class (Table II-A single, normal, arrows followed); 100 % inspection when the sample would reach the lot size; accept/reject when defects are given | AQL not a table column (0.010–10 only); unknown level; lot size not a whole number |
-| C8 | Printed data (packing, TB-P5, TB-P9) | what is checked; the text as printed; the batch record's value: a text (batch number), a month (date of manufacture), the expiry (worked out by T27 from the date of manufacture and shelf life) or the MRP (none when the pack has none) | the printed text against the batch record, after its printed label in any punctuation, spacing and case ("B.No.", "MFG.DT.", "MFD.", "Mfg. Date", "EXP.DT.", "EXP.", "Use before", "M.R.P. Rs. … (Incl. of all taxes)"): text without spaces and case, months in the usual printed forms ("10/2028", "OCT.2028", "10-28"), money as its amount; the values themselves exactly | no printed text; a bad date of manufacture or shelf life |
-| C9 | Serialisation codes (packing, TB-P5) | the codes read from sample packs ("(01)…(17)…(10)…(21)…" or raw with a group separator); the pack GTIN; batch number; date of manufacture and shelf life; the codes of earlier rounds | each code: GTIN, batch and expiry (AI 17, YYMMDD) are this batch's; a serial of 1 to 20 GS1 characters; no serial twice in the round or in an earlier round. Checks only: no serial numbers are made or kept | no code; a pack GTIN without its right check digit |
+| C8 | Printed data (packing, TB-P5, TB-P9) | what is checked; the text as printed; the analysis record's value: a text (analysis number), a month (date of manufacture), the expiry (worked out by T27 from the date of manufacture and shelf life) or the MRP (none when the pack has none) | the printed text against the analysis record, after its printed label in any punctuation, spacing and case ("B.No.", "MFG.DT.", "MFD.", "Mfg. Date", "EXP.DT.", "EXP.", "Use before", "M.R.P. Rs. … (Incl. of all taxes)"): text without spaces and case, months in the usual printed forms ("10/2028", "OCT.2028", "10-28"), money as its amount; the values themselves exactly | no printed text; a bad date of manufacture or shelf life |
+| C9 | Serialisation codes (packing, TB-P5) | the codes read from sample packs ("(01)…(17)…(10)…(21)…" or raw with a group separator); the pack GTIN; analysis number; date of manufacture and shelf life; the codes of earlier rounds | each code: GTIN, analysis and expiry (AI 17, YYMMDD) are this analysis's; a serial of 1 to 20 GS1 characters; no serial twice in the round or in an earlier round. Checks only: no serial numbers are made or kept | no code; a pack GTIN without its right check digit |
 
 C7 uses the MIL-STD-105E tables, which are US government work in the public domain. They give the
 same numbers as ANSI/ASQ Z1.4 and ISO 2859-1 single sampling, normal inspection. The ISO text is not
@@ -132,17 +132,17 @@ Error-proofing at master-building time (owner decision of 15 November 2026), not
 | ⛔ | Negative filler: a compensating filler that cannot take the adjustments even at the nominal certificate values (salt factor, overage) | T10, on the filler |
 | ⛔ | IU, CFU or activity units turned into a mass | T18, on the formula line |
 | ⛔ | Negative water or solvent, or target solids out of range (T17): a calculation that needs no recorded value is worked out from the step's settings | the binder solution or coating suspension step |
-| ⛔ | Weight-variation content uniformity on coated tablets other than film-coated (T14): the block's coating list has only uncoated and film-coated, and T14 refuses any other in the batch | the uniformity by weight variation step |
+| ⛔ | Weight-variation content uniformity on coated tablets other than film-coated (T14): the block's coating list has only uncoated and film-coated, and T14 refuses any other in the analysis | the uniformity by weight variation step |
 | ⚠️ | (a) Label basis: an API with a salt factor or a salt name: is the strength stated as the formula form or the other form, for this master's market? | formula line |
 | ⚠️ | (b) A herbal or extract line: raw-herb equivalent or extract weight? | formula line |
 | ⚠️ | (c) A ratio or % in a step instruction that involves the API: as weighed, as base or as anhydrous? | step |
 | ⚠️ | (d) The API potency-adjusted at dispensing (T9/T18) and a line set again from an in-process granule or blend assay (T18): confirm intended, with a reason, or remove one | the in-process line |
 | ⚠️ | (e) A salt factor written in the formula that differs from the molecular-weight ratio of the named forms by more than 0.5 %: confirm, with a reason, or correct it (the quantity uses the molecular weights) | formula line |
 
-| ⛔ | A batch quantity written on a line that the quantity per tablet × the batch size (T8) does not give, at its decimals (F0303, F0388) | formula line, `batchQuantity` |
+| ⛔ | A analysis quantity written on a line that the quantity per tablet × the analysis size (T8) does not give, at its decimals (F0303, F0388) | formula line, `analysisQuantity` |
 | ⛔ | One material twice in the same place (and layer) with two quantities (F0250) | the second line |
 | ⛔ | The coating lines do not add up to the coated − core weight (the core lines against the core weight were already checked: F0159, F0042) | formula |
-| ⛔ | The API per tablet does not give the label claim (0.5 %), on the label basis answered in (a): the formula form, or the other form by the MWs. An excess must be a declared overage (T16), which the batch quantity adds (F0122, F0123, F0229) | formula line, `labelClaim` |
+| ⛔ | The API per tablet does not give the label claim (0.5 %), on the label basis answered in (a): the formula form, or the other form by the MWs. An excess must be a declared overage (T16), which the analysis quantity adds (F0122, F0123, F0229) | formula line, `labelClaim` |
 | ⛔ | The same for each strength compressed from the same blend: API per tablet × that strength's core weight ÷ this core weight (F0225, F0366) | `header.otherStrengths` |
 | ⛔ | A label claim in mEq without the ion charge on the salt form (F0393: 3 times the potassium when read as mmol of the salt) | formula line |
 | ⛔ | An in-process result into T18 without saying whether it is the content or a % of theoretical (F0205: about a third of the dose) | the in-process line |
@@ -172,8 +172,8 @@ as when it was answered; until then the warning blocks "Send for review" and app
 
 ## Settings left to the engine (smallest data-level option)
 
-- **F4 by a rule** (F0040): a step's `onlyIf` (a limit on the batch size or the core batch weight) leaves it out as not
-  applicable, with no operator choice. A rule on a value recorded during the batch is not supported.
+- **F4 by a rule** (F0040): a step's `onlyIf` (a limit on the analysis size or the core analysis weight) leaves it out as not
+  applicable, with no operator choice. A rule on a value recorded during the analysis is not supported.
 - **F6 with a changing interval** (F0030): `everyMinutesLater` (after N minutes from the first round, a round every M
   minutes; still at most the block's interval, TA-15). A change "as the target nears" (on a value) is not supported.
 
@@ -189,7 +189,7 @@ as when it was answered; until then the warning blocks "Send for review" and app
 - **T22:** % retained is of the total weight recovered. Recovery against the sample weight is the template's value.
 - **T26 ethanol:** % v/v ↔ % w/w at 20 °C from the density polynomial of the international alcoholometric tables
   (OIML R 22, Council Directive 76/766/EEC, 12 coefficients), solved by bisection; 96 % v/v = 93.84 % w/w.
-- **Written salt factor:** in the master it stays the answered warning (e), because the batch quantity uses the
+- **Written salt factor:** in the master it stays the answered warning (e), because the analysis quantity uses the
   molecular weights, not the written factor; T11 refuses a `writtenFactor` only where a calculation is given one.
 - **T14 stratified:** the library does not compute Bergum's acceptance limits (ASTM E2709); the master supplies the
   table for its sample size, confidence and coverage, as for the large sample.

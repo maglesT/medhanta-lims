@@ -203,7 +203,7 @@ export interface T6Input {
 }
 
 /**
- * Quotients of two different kinds that make sense on a batch record. Both values are converted
+ * Quotients of two different kinds that make sense on a analysis record. Both values are converted
  * to the listed units first; the result is then in `result`.
  */
 const QUOTIENTS: readonly { num: Kind; den: Kind; numU: string; denU: string; result: string }[] = [
@@ -225,7 +225,7 @@ export function t6Ratio(i: T6Input): Outcome<{ readonly excess?: Dec }> {
       if (need.v.isNegative() || !per.v.isPositive() || per.v.isZero()) refuse('The amount required cannot be negative, and the amount per container must be more than zero');
       const value = to(need, per.unit).div(per.v).ceil();
       const excess = value.times(per.v).minus(to(need, per.unit));
-      const shown = `${need.text} ÷ ${per.text} = ${fmt(to(need, per.unit).div(per.v), 2)}, rounded up to ${value.toFixed(0)} containers; excess ${shownNumber(excess, per.unit.symbol)} ${per.unit.symbol} (weigh a part container, or scale the batch)`;
+      const shown = `${need.text} ÷ ${per.text} = ${fmt(to(need, per.unit).div(per.v), 2)}, rounded up to ${value.toFixed(0)} containers; excess ${shownNumber(excess, per.unit.symbol)} ${per.unit.symbol} (weigh a part container, or scale the analysis)`;
       return { ok: true, value, unit: 'units', excess, shown, ...checkOf(value, 'units', i.limit) };
     }
     if (i.mode === 'carr' || i.mode === 'hausner') {

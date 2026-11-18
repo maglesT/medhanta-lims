@@ -4,11 +4,11 @@ import type { Block } from './format.js';
 // for uncoated and film-coated tablets: the master can pick no other coating, and T14 refuses any other.
 export const uniformityByWeight: Block = {
   id: 'uniformity-by-weight', version: 1, name: 'Uniformity by weight variation', checker: true,
-  instruction: 'Weigh 10 tablets one by one and record each weight. Record the assay of the batch from the QC report.',
+  instruction: 'Weigh 10 tablets one by one and record each weight. Record the assay of the sample (from its reviewed assay result).',
   fields: [
-    { name: 'balance', label: 'Balance', kind: 'machine', types: ['balance'], notTypes: ['analytical', 'micro'] },
+    { name: 'balance', label: 'Balance', kind: 'machine', types: ['balance'], notTypes: ['platform'] },
     { name: 'weights', label: 'Weights of 10 tablets', kind: 'number', unit: 'mg', count: 10 },
-    { name: 'assay', label: 'Assay (% of label claim, QC report)', kind: 'number', unit: '%' },
+    { name: 'assay', label: 'Assay (% of label claim)', kind: 'number', unit: '%' },
   ],
   settings: [
     { name: 'coating', label: 'Coating', kind: 'text', options: ['uncoated', 'film-coated'] },

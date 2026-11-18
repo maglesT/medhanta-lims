@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { api, can, type Me } from '../api.js';
-import { plainClock, plainError, type BatchDetail, type StepRow } from '../api-floor.js';
-import { skipKey, skippable } from '../../../shared/engine/batch.js';
+import { plainClock, plainError, type AnalysisDetail, type StepRow } from '../api-floor.js';
+import { skipKey, skippable } from '../../../shared/engine/analysis.js';
 
-// Demo installations only (server/demo.ts): "Skip wait (demo)" for each wait running on this step, or, on the batch
-// overview, in the whole batch. Absent elsewhere, and for people without the demo permission.
-export function DemoSkip({ me, d, row, reload }: { me: Me; d: BatchDetail; row?: StepRow; reload: () => Promise<void> }) {
+// Demo installations only (server/demo.ts): "Skip wait (demo)" for each wait running on this step, or, on the analysis
+// overview, in the whole analysis. Absent elsewhere, and for people without the demo permission.
+export function DemoSkip({ me, d, row, reload }: { me: Me; d: AnalysisDetail; row?: StepRow; reload: () => Promise<void> }) {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   if (!me.demo || !can(me, 'demo.skip')) return null;
@@ -14,7 +14,7 @@ export function DemoSkip({ me, d, row, reload }: { me: Me; d: BatchDetail; row?:
   if (!waits.length) return null;
   const skip = async (timer: string) => {
     setBusy(true);
-    try { await api('POST', `/api/batches/${d.batch.id}/demo-skip`, { timer }); setError(''); } catch (e) { setError(plainError(e)); }
+    try { await api('POST', `/api/analyses/${d.analysis.id}/demo-skip`, { timer }); setError(''); } catch (e) { setError(plainError(e)); }
     await reload();
     setBusy(false);
   };

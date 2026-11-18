@@ -1,16 +1,18 @@
-// The floor screens' view of the batch API (server/routes/batches.ts): types, small helpers and plain words.
+// The floor screens' view of the analysis API (server/routes/analyses.ts): types, small helpers and plain words.
 import { useEffect, useState } from 'react';
 import { api, ApiError } from './api.js';
 import type { Block, BlockField } from '../../shared/blocks/format.js';
 import type { MasterDoc, Step } from '../../shared/master/schema.js';
 import type { Action, EventKind, Payload, State, StepKey } from '../../shared/engine/state.js';
 import type { Stored, Value } from '../../shared/engine/values.js';
-import { unitName, type Returned } from '../../shared/engine/stock.js';
 import { PROVIDER_NAME, type Source } from '../../shared/engine/links.js';
-import { stepTitle as sharedStepTitle, TERMINATED_STATE } from '../../shared/engine/batch.js';
+import { stepTitle as sharedStepTitle, TERMINATED_STATE } from '../../shared/engine/analysis.js';
 import { plantClock, plantText } from '../../shared/plant-time.js';
 import { statusWords } from '../../shared/engine/release.js';
 import { product } from './product.js';
+
+/** A unit as written (kept for the callers that named a material's unit). */
+export const unitName = (u: string, _stock?: string | null) => u;
 
 export type { Block, BlockField, MasterDoc, Step, Action, State, StepKey, Stored, Value, Source };
 
@@ -25,19 +27,17 @@ export interface StepRow {
 export interface TimerRow { id: string; kind: 'hold' | 'periodic' | 'minimum' | 'duration'; key: StepKey; label: string; from: string; at: string; state: 'running' | 'due soon' | 'due' | 'late'; skipped?: { person: number | null; at: string } }
 export interface StageRow { index: number; key: string; name: string; open: boolean; blocked?: string; closed: boolean }
 export interface Deviation { note: number; step: string; reference: string; text: string; open: boolean; status?: string; closedAt?: string | null; filed?: boolean; typed?: boolean }
-export interface BatchDetail {
+export interface AnalysisDetail {
   now: string;
-  batch: { id: number; batchNo: string; issuedAt: string; status: string; open: string[]; late: string[]; deviations: Deviation[]; yieldOut: string[]; contentHash: string; actions: string[]; deviationsLink: string;
-    terminated: { personName: string; at: string; payload: { reason?: string; returns?: Returned[] } } | null;
-    // What the batch has used of each lot (signed steps), as published to MMS: terminating asks what went back to stores.
-    issued: Returned[] };
+  analysis: { id: number; analysisNo: string; issuedAt: string; status: string; open: string[]; late: string[]; deviations: Deviation[]; people: number[]; contentHash: string; actions: string[]; deviationsLink: string;
+    stopped: { personName: string; at: string; payload: { reason?: string } } | null };
   master: { id: number; versionNo: number; doc: MasterDoc };
   stages: StageRow[]; timers: TimerRow[]; steps: StepRow[];
 }
 export interface History { events: FloorEvent[]; replaced: { field: string; was: Value; now: Value; reason: string; person: number | null; at: string }[] }
-export interface WorkBadge { kind: 'check' | 'resign' | 'due' | 'late' | 'approve'; step?: string; stage: string; title: string; at?: string; timer?: string }
+export interface WorkBadge { kind: 'check' | 'resign' | 'due' | 'late' | 'review'; step?: string; stage: string; title: string; at?: string; timer?: string }
 export interface WorkItem {
-  id: number; batchNo: string; productCode: string; productName: string; status: string; issuedAt: string; stagesClosed: number; stageCount: number;
+  id: number; analysisNo: string; methodCode: string; methodName: string; status: string; issuedAt: string; stagesClosed: number; stageCount: number;
   current: { step: string; stage: string; title: string; state: State } | null; badges: WorkBadge[];
 }
 export interface PickItem { itemId: string; code: string; name: string; active: boolean; type?: string | null; area?: string | null; room?: string | null }
@@ -74,13 +74,13 @@ export function useLogbookItems(on: boolean): string[] | null {
   return items;
 }
 
-// ---- routes: #/ (My work), #/batch/12, #/batch/12/step/0.1.0.1, #/batch/12/approve, #/release (To review), #/release/12 ----
-export interface Route { batch?: number; step?: string; approve?: boolean; release?: number | 'list' }
+// ---- routes: #/ (My work), #/analysis/12, #/analysis/12/step/0.1.0.1, #/analysis/12/approve, #/release (To review), #/release/12 ----
+export interface Route { analysis?: number; step?: string; approve?: boolean; release?: number | 'list' }
 export function parseRoute(hash: string): Route {
   const r = /^#\/release(?:\/(\d+))?$/.exec(hash);
   if (r) return { release: r[1] ? Number(r[1]) : 'list' };
-  const m = /^#\/batch\/(\d+)(?:\/(?:step\/([\d.]+)|(approve)))?$/.exec(hash);
-  return m ? { batch: Number(m[1]), ...(m[2] ? { step: m[2] } : {}), ...(m[3] ? { approve: true } : {}) } : {};
+  const m = /^#\/analysis\/(\d+)(?:\/(?:step\/([\d.]+)|(approve)))?$/.exec(hash);
+  return m ? { analysis: Number(m[1]), ...(m[2] ? { step: m[2] } : {}), ...(m[3] ? { approve: true } : {}) } : {};
 }
 export function useRoute(): Route {
   const [hash, setHash] = useState(window.location.hash);
@@ -92,10 +92,10 @@ export function useRoute(): Route {
   return parseRoute(hash);
 }
 export const go = (to: string) => { window.location.hash = to; };
-export const batchLink = (id: number) => `#/batch/${id}`;
-export const stepLink = (id: number, step: string) => `#/batch/${id}/step/${step}`;
+export const analysisLink = (id: number) => `#/analysis/${id}`;
+export const stepLink = (id: number, step: string) => `#/analysis/${id}/step/${step}`;
 export const releaseLink = (id: number) => `#/release/${id}`;
-export const pdfLink = (id: number) => `/api/batches/${id}/pdf`;
+export const pdfLink = (id: number) => `/api/analyses/${id}/pdf`;
 
 // ---- the block library, read once ----
 let blocks: Promise<Block[]> | null = null;
@@ -111,7 +111,7 @@ export const stepOf = (doc: MasterDoc, k: StepKey) => doc.stages[k.stage]!.steps
 export const blockOf = (all: Block[], st: Step) => all.find((b) => b.id === st.block.id && b.version === st.block.version);
 export const keyOf = (k: StepKey) => `${k.stage}.${k.sub}.${k.step}.${k.round}`;
 
-/** A step as people name it, as the server does (shared/engine/batch.ts). */
+/** A step as people name it, as the server does (shared/engine/analysis.ts). */
 export const stepTitle = (doc: MasterDoc, _all: Block[], st: Step) => sharedStepTitle(doc, st);
 /** The unit a number field is recorded in: written in the block, or a setting of the master step ("$unit"). */
 export function unitOf(f: BlockField, st: Step): string {
@@ -130,15 +130,15 @@ export const STATE_LABEL: Record<State, [string, string]> = {
   checked: ['Checked', 'chip-ok'],
   not_applicable: ['Not applicable', ''],
 };
-/** A step's state as a chip; a terminated batch's unfinished step says so, never "Ready to start" (as the PDF). */
+/** A step's state as a chip; a stopped analysis's unfinished step says so, never "Ready to start" (as the PDF). */
 export function stateLabel(state: State, terminated: unknown): [string, string] {
   const t = terminated ? TERMINATED_STATE[state] : undefined;
   return t ? [t[0]!.toUpperCase() + t.slice(1), ''] : STATE_LABEL[state];
 }
-/** A batch status in words; `capital` for a chip. */
+/** A analysis status in words; `capital` for a chip. */
 export const statusText = (status: string, capital = false) => statusWords(status, capital);
 export const STATUS_CHIP: Record<string, string> = {
-  'in production': 'chip-info', 'manufacturing complete': 'chip-warn', 'production approved': 'chip-ok', 'QC approved': 'chip-ok', released: 'chip-ok', rejected: 'chip-bad',
+  'in progress': 'chip-info', complete: 'chip-warn', reviewed: 'chip-ok', stopped: 'chip-bad',
 };
 
 const isItem = (v: Value): v is { itemId: string; code: string; name: string; version: number } => typeof v === 'object' && !Array.isArray(v) && 'itemId' in v;
@@ -171,7 +171,7 @@ export function timeLeft(ms: number): string {
   return h < 48 ? `${h} h ${String(m % 60).padStart(2, '0')} min` : `${Math.floor(h / 24)} days ${h % 24} h`;
 }
 
-/** The server's clock, ticking every second (the offset is taken from the last batch read). */
+/** The server's clock, ticking every second (the offset is taken from the last analysis read). */
 export function useServerNow(serverNow: string | undefined): number {
   const [offset, setOffset] = useState(0);
   const [tick, setTick] = useState(Date.now());
@@ -199,7 +199,7 @@ export function plainError(e: unknown): string {
   if (!(e instanceof ApiError)) return (e as Error).message;
   if (e.problems.length) return e.problems.map(words).join(' ');
   return {
-    batch_closed: 'The batch record is closed to changes.',
+    analysis_closed: 'The analysis record is closed to changes.',
     content_changed: 'Someone changed this record while you were looking at it. It has been reloaded: look at it again.',
     forbidden: 'You do not have the permission for this.',
     connection_off: e.message,

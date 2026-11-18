@@ -3,15 +3,15 @@
 import { useState, type FormEvent } from 'react';
 import type { MasterData } from '../api-designer.js';
 import { findBlock } from '../../../shared/blocks/index.js';
-import { stepTitle } from '../../../shared/engine/batch.js';
+import { stepTitle } from '../../../shared/engine/analysis.js';
 import type { MasterDoc, Stage, Step } from '../../../shared/master/schema.js';
 import { move, newStage, searchBlocks, stageRoomChoices, stepFrom, type Place } from './model.js';
 import { StepSettings } from './StepSettings.js';
 import { ChipSet, Order } from './ui.js';
 
 // What a step's flow means, in the step list.
-const FLOW_NOTE: Record<Step['flow']['kind'], string> = { none: '', 'repeat-until': 'repeated until its check passes', 'optional-with-reason': 'optional', 'qa-hold': 'QA hold' };
-const KIND_LABEL: Record<Stage['kind'], string> = { normal: 'Stage', preparation: 'Preparation', 'sub-batch': 'Sub-batches' };
+const FLOW_NOTE: Record<Step['flow']['kind'], string> = { none: '', 'repeat-until': 'repeated until its check passes', 'optional-with-reason': 'optional' };
+const KIND_LABEL: Record<Stage['kind'], string> = { normal: 'Stage', preparation: 'Preparation', 'replicate': 'Replicates' };
 // Rows that select an item are not buttons, so a read-only (disabled) form can still be browsed.
 const pickable = (onPick: () => void) => ({ role: 'button', tabIndex: 0, onClick: onPick, onKeyDown: (e: React.KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPick(); } } });
 
@@ -50,7 +50,7 @@ export function Process({ doc, onChange, md, place, onPlace, editable }: {
         <ol className="olist">
           {doc.stages.map((s, i) => (
             <li key={s.key} className={i === si ? 'on' : ''}>
-              <span className="ol-main" {...pickable(() => select(i))} aria-current={i === si}><b>{i + 1}. {s.name}</b><small>{KIND_LABEL[s.kind]}{s.kind === 'sub-batch' && s.count ? ` × ${s.count}` : ''} · {s.steps.length} step{s.steps.length === 1 ? '' : 's'} · {s.roomTypes.length ? s.roomTypes.join(', ') : 'no rooms chosen'}</small></span>
+              <span className="ol-main" {...pickable(() => select(i))} aria-current={i === si}><b>{i + 1}. {s.name}</b><small>{KIND_LABEL[s.kind]}{s.kind === 'replicate' && s.count ? ` × ${s.count}` : ''} · {s.steps.length} step{s.steps.length === 1 ? '' : 's'} · {s.roomTypes.length ? s.roomTypes.join(', ') : 'no rooms chosen'}</small></span>
               {editable && <Order index={i} count={doc.stages.length} what={s.name} onMove={(by) => { setStages(move(doc.stages, i, by)); select(i + by); }}
                 onRemove={() => (s.steps.length ? setRemoving(i) : removeStage(i))} />}
             </li>
@@ -126,9 +126,9 @@ function StageForm({ doc, si, stage, onChange, roles, machineTypes, md }: {
       <h2>Stage settings</h2>
       <label>Name<input value={stage.name} onChange={(e) => onChange({ ...stage, name: e.target.value })} /></label>
       <div className="form-grid">
-        <label>Kind<select value={stage.kind} onChange={(e) => { const kind = e.target.value as Stage['kind']; const { count: _, ...rest } = stage; onChange(kind === 'sub-batch' ? { ...rest, kind, count: stage.count ?? 2 } : { ...rest, kind }); }}>
-          <option value="normal">Normal stage</option><option value="preparation">Preparation (e.g. binder solution)</option><option value="sub-batch">Sub-batches (done several times)</option></select></label>
-        {stage.kind === 'sub-batch' && <label>Number of sub-batches<input type="number" min={2} max={50} value={stage.count ?? 2} onChange={(e) => onChange({ ...stage, count: Number(e.target.value) })} /></label>}
+        <label>Kind<select value={stage.kind} onChange={(e) => { const kind = e.target.value as Stage['kind']; const { count: _, ...rest } = stage; onChange(kind === 'replicate' ? { ...rest, kind, count: stage.count ?? 2 } : { ...rest, kind }); }}>
+          <option value="normal">Normal stage</option><option value="preparation">Preparation (e.g. standard solution, mobile phase)</option><option value="replicate">Replicates (done several times)</option></select></label>
+        {stage.kind === 'replicate' && <label>Number of replicates<input type="number" min={2} max={50} value={stage.count ?? 2} onChange={(e) => onChange({ ...stage, count: Number(e.target.value) })} /></label>}
         <label>Responsible role<input list="roles" value={stage.role} onChange={(e) => onChange({ ...stage, role: e.target.value })} /></label>
         <datalist id="roles">{roles.map((r) => <option key={r} value={r} />)}</datalist>
       </div>

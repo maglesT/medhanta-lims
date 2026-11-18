@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { Dec } from '../../shared/templates/dec.js';
 import { convert, unit } from '../../shared/templates/units.js';
 import { t6Ratio } from '../../shared/templates/basic.js';
-import { t8BatchScaling, t9PotencyAdjusted, t11SaltFactor } from '../../shared/templates/dispensing.js';
+import { t8AnalysisScaling, t9PotencyAdjusted, t11SaltFactor } from '../../shared/templates/dispensing.js';
 import { t26MixToTarget } from '../../shared/templates/mixing.js';
 import { c1WithinLimits, c3AllIndividual, noFurtherChange, t7Statistics } from '../../shared/templates/series.js';
 import { ok, refused } from './helpers.js';
@@ -157,11 +157,11 @@ describe('T6 angle of repose', () => {
 
 describe('Per-area dosing (T8 per area, T6 reverse)', () => {
   it('T8: 4.0 mg/cm² × 2.85 cm² × 300000 tablets = 3.420 kg', () => {
-    expect(ok(t8BatchScaling({ mode: 'per area', perArea: '4.0 mg/cm²', area: '2.85 cm²', count: '300000 tablets' })).value.toFixed(3)).toBe('3.420');
+    expect(ok(t8AnalysisScaling({ mode: 'per area', perArea: '4.0 mg/cm²', area: '2.85 cm²', count: '300000 tablets' })).value.toFixed(3)).toBe('3.420');
   });
 
   it('T8: area in mm² and target in g/m² are converted: 40 g/m² = 4.0 mg/cm²; 285 mm² = 2.85 cm²', () => {
-    expect(ok(t8BatchScaling({ mode: 'per area', perArea: '40 g/m²', area: '285 mm²', count: '300000' })).value.toFixed(3)).toBe('3.420');
+    expect(ok(t8AnalysisScaling({ mode: 'per area', perArea: '40 g/m²', area: '285 mm²', count: '300000' })).value.toFixed(3)).toBe('3.420');
   });
 
   it('T6: reverse: 4.5 kg coat ÷ 300000 tablets = 15.0 mg; 15.0 mg ÷ 3.2 cm² = 4.6875 mg/cm²', () => {
@@ -173,7 +173,7 @@ describe('Per-area dosing (T8 per area, T6 reverse)', () => {
   });
 
   it('T8: refuses an area that is not an area', () => {
-    expect(refused(t8BatchScaling({ mode: 'per area', perArea: '4.0 mg/cm²', area: '2.85 cm', count: '300000' }))).toMatch(/must be an area/);
+    expect(refused(t8AnalysisScaling({ mode: 'per area', perArea: '4.0 mg/cm²', area: '2.85 cm', count: '300000' }))).toMatch(/must be an area/);
   });
 });
 
@@ -210,7 +210,7 @@ describe('T8 product of recorded values', () => {
     [['1.0 cm', '5 mm'], 'cm²', 2, '0.50'], // 10 × 5 = 50 mm² = 0.50 cm²
     [['2', '3', '5 mg'], undefined, 1, '30.0'], // plain numbers times one quantity
   ])('T8: product of %o = %s %s', (factors, unitWanted, d, want) => {
-    expect(ok(t8BatchScaling({ mode: 'product', factors, ...(unitWanted === undefined ? {} : { unit: unitWanted }) })).value.toFixed(d as number)).toBe(want);
+    expect(ok(t8AnalysisScaling({ mode: 'product', factors, ...(unitWanted === undefined ? {} : { unit: unitWanted }) })).value.toFixed(d as number)).toBe(want);
   });
 
   it.each([
@@ -218,7 +218,7 @@ describe('T8 product of recorded values', () => {
     [['5 mm', '3 mg'], /all lengths/],
     [['5 mm', '-3 mm'], /cannot be negative/],
   ])('T8: product refuses %o', (factors, msg) => {
-    expect(refused(t8BatchScaling({ mode: 'product', factors }))).toMatch(msg);
+    expect(refused(t8AnalysisScaling({ mode: 'product', factors }))).toMatch(msg);
   });
 });
 

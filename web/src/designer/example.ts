@@ -1,11 +1,10 @@
-// Worked examples and the calculation preview. Every number comes from the batch engine and the templates library,
+// Worked examples and the calculation preview. Every number comes from the analysis engine and the templates library,
 // run on example values; nothing is saved.
 import { findBlock, type Block } from '../../../shared/blocks/index.js';
 import { refsIn } from '../../../shared/blocks/format.js';
-import { evaluate, lineQuantity, store, type Stored, type StepEvent, type Value } from '../../../shared/engine/index.js';
-import { callTemplate } from '../../../shared/engine/templates.js';
+import { evaluate, type Stored, type StepEvent, type Value } from '../../../shared/engine/index.js';
 import { Dec } from '../../../shared/templates/index.js';
-import type { FormulaLine, Limit, MasterDoc, Step } from '../../../shared/master/schema.js';
+import type { Limit, MasterDoc, Step } from '../../../shared/master/schema.js';
 
 type Num = { value: string; unit: string };
 const isNum = (v: unknown): v is Num => typeof v === 'object' && v !== null && 'value' in v && 'unit' in v;
@@ -51,7 +50,6 @@ function defaults(doc: MasterDoc, si: number, ti: number): Record<string, Value>
 }
 
 const EXAMPLE_START = '2026-11-15 08:00';
-const CERTIFICATE: Record<string, string> = { assay: '99.0', water: '0.5', lod: '0.5', content: '98.0' };
 const asNum = (v: unknown): Num | undefined => {
   if (isNum(v)) return v;
   const m = typeof v === 'string' ? /^([+-]?\d+(?:\.\d+)?)\s*(.*)$/.exec(v.trim()) : null;
@@ -70,6 +68,9 @@ function follow(b: Block, step: Step, values: Record<string, Value>, res: (n: st
       const t1 = b.calcs.find((x) => x.name === num(a.value) && x.template === 'T1');
       const centre = res(num(around.centre)); const tare = t1 && values[num((t1.args as { b: string }).b)];
       if (t1 && centre && isNum(tare)) set(num((t1.args as { a: string }).a), new Dec(centre.value).plus(tare.value), centre.unit);
+      // A value read straight against its target (a net mass on a tared balance): the example reads the target.
+      const v = num(a.value);
+      if (!t1 && centre && !fixed.has(v) && isNum(values[v])) values[v] = { value: centre.value, unit: centre.unit };
     }
     // A time from start to end: the end is the start plus the middle of the time limits.
     const minutes = c.template === 'T13' ? lim(num(a.limit)) : undefined;
@@ -93,7 +94,7 @@ const where = (doc: MasterDoc, sk: string, tk: string) => { const s = doc.stages
 export interface Example { values: Record<string, Value>; results: Record<string, Stored> }
 /**
  * A worked example of a step: example values (or the ones typed over them) run through the engine. Earlier steps it
- * refers to get their own example first (and so do the weighings a compensating filler waits for).
+ * refers to get their own example first.
  */
 export function workedExample(doc: MasterDoc, si: number, ti: number, typed: Record<string, Value> = {}, depth = 0): Example {
   const step = doc.stages[si]?.steps[ti];
@@ -111,13 +112,6 @@ export function workedExample(doc: MasterDoc, si: number, ti: number, typed: Rec
   for (const v of Object.values(step.settings)) {
     if (typeof v !== 'object') continue;
     if ('ref' in v) { const [sk, tk] = v.ref.split('/'); add(...where(doc, sk!, tk!)); }
-    if ('formula' in v && v.adjusted) {
-      const line = doc.formula.find((l) => l.key === v.formula);
-      for (const f of b.fields) if (CERTIFICATE[f.name] && line?.adjust && !line.adjust.compensates?.length) values[f.name] = { value: CERTIFICATE[f.name]!, unit: '%' };
-      for (const k of line?.adjust?.compensates ?? []) doc.stages.forEach((s, rs) => s.steps.forEach((t, rt) => {
-        if (Object.values(t.settings).some((x) => typeof x === 'object' && 'formula' in x && x.formula === k && x.adjusted)) add(rs, rt);
-      }));
-    }
   }
   Object.assign(values, typed);
   const prev = JSON.stringify(b.calcs).includes('"$prev.');
@@ -139,28 +133,3 @@ export function workedExample(doc: MasterDoc, si: number, ti: number, typed: Rec
   follow(b, step, values, res, new Set(Object.keys(typed)));
   return { values, results: evaluate(doc, events, key, values) };
 }
-
-export interface LotValues { assay?: string; water?: string; lod?: string; content?: string }
-export interface Dispensed { line: FormulaLine; standard: Stored; adjusted?: Stored }
-/**
- * The calculation preview: each formula line's batch quantity, adjusted with the example lot values (salt factor,
- * potency or content, overage), and the compensating fillers (T10) from the adjusted quantities.
- */
-export function dispensing(doc: MasterDoc, lots: Record<string, LotValues>): Dispensed[] {
-  const here = { stage: 0, sub: 1, step: 0, round: 1 };
-  const valuesOf = (k: string): Record<string, Value> => Object.fromEntries(Object.entries(lots[k] ?? {}).filter(([, v]) => v?.trim()).map(([n, v]) => [n, { value: v!.trim(), unit: '%' }]));
-  const adjustedLines = doc.formula.filter((l) => l.adjust && !l.adjust.compensates?.length);
-  const out = new Map<string, Dispensed>();
-  for (const l of doc.formula) out.set(l.key, { line: l, standard: lineQuantity(doc, [], here, l, false, {}) });
-  for (const l of adjustedLines) out.get(l.key)!.adjusted = lineQuantity(doc, [], here, l, true, valuesOf(l.key));
-  // The fillers compensate the quantities "weighed" in a preview stage made of the adjusted lines.
-  const preview: MasterDoc = { ...doc, stages: [{ key: 'preview', name: 'Preview', kind: 'normal', roomTypes: [], machineTypes: [], role: '', uses: [],
-    steps: adjustedLines.map((l, i) => ({ key: `w${i}`, block: { id: 'weigh', version: 1 }, settings: { target: { formula: l.key, adjusted: true } }, checker: true, waitForCheck: false, critical: false, flow: { kind: 'none' } })) }] };
-  const events = adjustedLines.map((l, i) => event(0, i, 1, {}, { target: out.get(l.key)!.adjusted! }, i + 1));
-  for (const l of doc.formula) if (l.adjust?.compensates?.length) out.get(l.key)!.adjusted = lineQuantity(preview, events, here, l, true, valuesOf(l.key));
-  return doc.formula.map((l) => out.get(l.key)!);
-}
-
-/** The theoretical batch weights (T8): tablet weight × batch size. */
-export const batchWeight = (doc: MasterDoc, mg: string | undefined) =>
-  (mg ? store(callTemplate('T8', { mode: 'per unit', perUnit: `${mg} mg`, count: `${doc.header.batchSize} tablets`, unit: 'kg' })) : undefined);

@@ -45,7 +45,7 @@ describe('T2 Total', () => {
   it.each([
     [['12.500 kg', '12.480 kg', '3.020 kg'], undefined, '28.000'], // 12.5 + 12.48 + 3.02 = 28.000
     [['25.000 kg', '500 g', '0.250 kg'], 'kg', '25.750'], // 25 + 0.5 + 0.25
-    [['120000 tablets', '120000 tablets'], undefined, '240000.000'], // telmisartan 2 sub-batches (formulation 6)
+    [['120000 tablets', '120000 tablets'], undefined, '240000.000'], // telmisartan 2 replicates (formulation 6)
   ] as [string[], string | undefined, string][])('T2: %o = %s', (values, unit, want) => {
     expect(ok(t2Total({ values, ...(unit === undefined ? {} : { unit }) })).value.toFixed(3)).toBe(want);
   });

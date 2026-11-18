@@ -9,8 +9,8 @@ export interface Product {
   name: string;
   // What the product declares to the platform: its permission codes and labels (ops/manifest.draft.json).
   permissions: Record<string, string>;
-  // The fixed start of its batch numbers (LIMS-01).
-  batchPrefix: string;
+  // The fixed start of its analysis numbers (LIMS-01).
+  analysisPrefix: string;
 }
 
-export const LIMS: Product = { id: 'lims', name: 'Medhanta LIMS', permissions: PERMISSIONS, batchPrefix: 'LA' };
+export const LIMS: Product = { id: 'lims', name: 'Medhanta LIMS', permissions: PERMISSIONS, analysisPrefix: 'LA' };

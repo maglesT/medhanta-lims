@@ -195,7 +195,7 @@ export function percent(q: Q, what: string): { v: Dec; text: string } {
   return { v: to(p, '%'), text: p.text };
 }
 
-/** A value computed earlier in the same batch (any template's result), used as an input. */
+/** A value computed earlier in the same analysis (any template's result), used as an input. */
 export interface ResultValue {
   readonly ok: true;
   readonly value: Dec;

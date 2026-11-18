@@ -1,7 +1,7 @@
 /**
  * Unit kinds of a block's values and settings: one place for the designer (the units it offers) and the master check
  * (LIMS-01: a limit or a typed target in a unit of another kind than the value it checks is refused; the template would
- * refuse every reading at batch time). A quantity is of the kind of the values it is used with; a limit of what it limits.
+ * refuse every reading at analysis time). A quantity is of the kind of the values it is used with; a limit of what it limits.
  */
 import { refsIn, type Block } from '../blocks/format.js';
 import { findUnit, type Kind } from '../templates/index.js';
@@ -74,5 +74,5 @@ export function unitKindProblem(block: Block, name: string, settings: Step['sett
   const need = neededKind(block, name, settings);
   const u = findUnit(unit);
   if (!need || !u || u.kind === need || (need === 'temperature difference' && u.kind === 'temperature')) return null;
-  return `${s.label}: ${unit || 'no unit'} is ${what(u.kind)}, but the value checked is ${what(need)}. Choose a unit of that kind (in ${unit || 'no unit'} every reading would be refused at batch time)`;
+  return `${s.label}: ${unit || 'no unit'} is ${what(u.kind)}, but the value checked is ${what(need)}. Choose a unit of that kind (in ${unit || 'no unit'} every reading would be refused at analysis time)`;
 }

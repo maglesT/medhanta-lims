@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { plantClock, plantDate, plantText } from '../shared/plant-time.js';
-import { valueText } from '../server/batch-record.js';
+import { valueText } from '../server/analysis-record.js';
 import { plant } from '../server/pdf.js';
 import { plantTime } from '../web/src/api.js';
 import { plainClock } from '../web/src/api-floor.js';
@@ -16,7 +16,7 @@ describe('plant time', () => {
     expect(plantText('2026-11-15 17:38:16.254+00', true)).toBe('15 Nov 2026, 23:08 IST');
     expect(plantText('MMS lot E26-0001: released, expiry 2029-10-31, retest 2027-04-01')).toBe('MMS lot E26-0001: released, expiry 31 Oct 2029, retest 1 Apr 2027');
     expect(valueText('2026-11-15')).toBe('15 Nov 2026');
-    // A lot or batch code that holds a date-like part is left as it is.
+    // A lot or analysis code that holds a date-like part is left as it is.
     expect(plantText('Lot A-2026-11-15, LOT2026-11-15X, expiry month 2028-10')).toBe('Lot A-2026-11-15, LOT2026-11-15X, expiry month 2028-10');
     expect(valueText('2026-11-15 17:38:16.254+00')).toBe('15 Nov 2026, 23:08 IST');
   });

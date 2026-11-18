@@ -61,8 +61,8 @@ describe('POST /backchannel-logout', () => {
   let t: TestApp;
   beforeAll(async () => {
     t = await freshApp();
-    await seedUser(t.owner, 'bclop1', ['lims.batch.operate']);
-    await seedUser(t.owner, 'bclop2', ['lims.batch.operate']);
+    await seedUser(t.owner, 'bclop1', ['lims.analysis.perform']);
+    await seedUser(t.owner, 'bclop2', ['lims.analysis.perform']);
   });
   afterAll(() => t.close());
 

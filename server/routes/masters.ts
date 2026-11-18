@@ -25,19 +25,9 @@ export async function masterVersion(q: Sql | Tx, id: number, lock = false): Prom
   return rows[0];
 }
 
-// PL-08: the product and every material must be active in master data now; their code and name are copied from it.
-async function withMasterData(master: Master, doc: MasterDoc): Promise<MasterDoc> {
-  const products = await master.products();
-  const product = usableItem(products, doc.header.productItemId, 'product');
-  const materials = await master.materials();
-  return {
-    ...doc,
-    header: { ...doc.header, productCode: product.code, productName: product.name },
-    formula: doc.formula.map((l) => {
-      const m = usableItem(materials, l.materialItemId, 'material');
-      return { ...l, code: m.code, name: m.name };
-    }),
-  };
+// A method names nothing of master data in its header (its instruments are picked on the floor), so it is kept as written.
+async function withMasterData(_master: Master, doc: MasterDoc): Promise<MasterDoc> {
+  return doc;
 }
 
 const docBody = z.object({ doc: masterSchema });
@@ -50,10 +40,9 @@ export function masterRoutes(app: FastifyInstance, sql: Sql) {
 
   app.get('/api/blocks', anyUser, async () => BLOCKS);
 
-  // The materials of each version let the designer offer a product's materials first.
   app.get('/api/masters', anyUser, async () => sql`
     select v.id::int, v.master_id::int as "masterId", v.version_no as "versionNo", v.state, v.doc->'header' as header, v.created_at as "createdAt",
-      jsonb_path_query_array(v.doc, '$.formula[*].materialItemId') as "materialIds", u.full_name as "createdByName"
+      u.full_name as "createdByName"
     from master_versions v join users u on u.id = v.created_by order by v.master_id, v.version_no`);
 
   // A new master: version 1, a draft.
@@ -204,7 +193,10 @@ export function reviewRefusal(action: ReviewAction, l: Loaded, user: SessionUser
  * LIMS-01: while QMS answers, the change control must be one of its change controls, approved by QA (CHANGE_STEPS);
  * its title and approval are kept with the approval (PL-07). Otherwise the number is typed by hand.
  */
-async function changeControlSource(app: FastifyInstance, number: string, product?: MasterDoc['header']): Promise<Source> {
+/** The product a change control must name: none for a method (a method serves many products). */
+const productOf = (_doc: MasterDoc | undefined): { productCode: string; productName: string } | undefined => undefined;
+
+async function changeControlSource(app: FastifyInstance, number: string, product?: { productCode: string; productName: string }): Promise<Source> {
   const r = await app.links.qms.change(number);
   if (r.state !== 'ok') return { from: 'hand', link: 'qms', state: r.state };
   const c = r.value;
@@ -253,7 +245,7 @@ function reviewRoutes(app: FastifyInstance, sql: Sql) {
     const id = parseId(String(req.query.version ?? ''));
     const v = id === null ? undefined : await masterVersion(sql, id);
     const r = await app.links.qms.approved();
-    const changes = r.state === 'ok' ? r.value.map((c) => ({ ...c, names: v ? namesProduct(c, v.doc.header) : 'yes' })).filter((c) => c.names !== 'no') : [];
+    const changes = r.state === 'ok' ? r.value.map((c) => ({ ...c, names: productOf(v?.doc) ? namesProduct(c, productOf(v?.doc)!) : 'yes' })).filter((c) => c.names !== 'no') : [];
     return { link: r.state, changes };
   });
 
@@ -282,7 +274,7 @@ function reviewRoutes(app: FastifyInstance, sql: Sql) {
       const user = req.user!;
       try {
         const signer = rule.meaning ? await authenticateSigner(sql, app.proofKey, user, { proof: b.proof! }, { objectType: 'master_version', objectId: id, meaning: rule.meaning }) : null;
-        const source = b.changeControl ? await changeControlSource(app, b.changeControl, (await masterVersion(sql, id))?.doc.header) : null;
+        const source = b.changeControl ? await changeControlSource(app, b.changeControl, productOf((await masterVersion(sql, id))?.doc)) : null;
         return await sql.begin(async (tx) => {
           await tx`select pg_advisory_xact_lock(${-id}::bigint)`;
           // 1. read

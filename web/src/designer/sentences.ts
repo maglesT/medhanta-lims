@@ -1,12 +1,12 @@
 // The calculations and checks of a block written as sentences, never as formulas. A sentence is a list of parts:
-// plain words, a field the operator records, a calculation worked out earlier, or a setting the master fills (a slot).
+// plain words, a field the analyst records, a calculation worked out earlier, or a setting the method fills (a slot).
 import type { Block } from '../../../shared/blocks/index.js';
 import { findBlock } from '../../../shared/blocks/index.js';
 import { refsIn } from '../../../shared/blocks/format.js';
-import { materialLines, type Limit, type MasterDoc, type SettingValue } from '../../../shared/master/schema.js';
-import { stepTitle } from '../../../shared/engine/batch.js';
+import type { Limit, MasterDoc, SettingValue } from '../../../shared/master/schema.js';
+import { stepTitle } from '../../../shared/engine/analysis.js';
 import { findUnit } from '../../../shared/templates/index.js';
-import { HEADER_LABEL, unitLabel } from './model.js';
+import { unitLabel } from './model.js';
 
 export type Part = string | { setting: string } | { field: string } | { calc: string } | { prev: string };
 type Calc = Block['calcs'][number];
@@ -16,12 +16,12 @@ export const lower = (label: string) => label.split(' ').map((w) => (/^.+[A-Z]/u
 /** "is" or "are" after a label: "the good tablets are", "the yield is". */
 const isAre = (label: string) => (/[^su]s$/.test(label.split(' ').at(-1) ?? '') ? 'are' : 'is');
 
-// Packing: the master's pack facts and the batch facts recorded at issue, in words.
+// Packing: the master's pack facts and the analysis facts recorded at issue, in words.
 const FACTS: Record<string, string> = {
   'pack.unitsPerPack': 'the tablets per pack', 'pack.packsPerCarton': 'the packs per carton', 'pack.shelfLifeMonths': 'the approved shelf life',
   'pack.expiryRule': 'the expiry rule', 'pack.type': 'the pack type', 'pack.destination': 'the destination', 'pack.gtin': 'the pack GTIN', 'pack.mrp': 'the MRP of the master',
-  'batch.bulk': 'the bulk batch number', 'batch.mfgDate': 'the date of manufacture of the bulk', 'batch.tablets': 'the bulk tablets issued',
-  'batch.packs': 'the theoretical packs', 'batch.line': 'the packing line',
+  'analysis.bulk': 'the bulk analysis number', 'analysis.mfgDate': 'the date of manufacture of the bulk', 'analysis.tablets': 'the bulk tablets issued',
+  'analysis.packs': 'the theoretical packs', 'analysis.line': 'the packing line',
 };
 
 /** One input of a calculation as a part: "$gross" is a field, "$target" a setting, "$net" an earlier calculation. */
@@ -90,7 +90,7 @@ export function sentence(block: Block, c: Calc): Part[] {
     }
     case 'C4': return [`${String(a.question)}: the answer must be "${(a.expected as string[]).join('" or "')}".`];
     case 'C8': return [p(a.printed), ' must match ', a.kind === 'expiry' ? 'the expiry worked out from the date of manufacture of the bulk and the approved shelf life' : p(a.expected), '.'];
-    case 'C9': return ['Each of ', p(a.codes), ' must carry the pack GTIN, the bulk batch number and the expiry, with a serial not read before in this batch.'];
+    case 'C9': return ['Each of ', p(a.codes), ' must carry the pack GTIN, the bulk analysis number and the expiry, with a serial not read before in this analysis.'];
     case 'C6': {
       if (a.test !== 'disintegration') break;
       const [first, more] = a.stages as unknown[];
@@ -124,13 +124,7 @@ export function settingText(doc: MasterDoc, v: SettingValue | undefined): string
   if (v === undefined) return '(not set)';
   if (typeof v === 'string') return v.trim() === '' ? '(none)' : v;
   if ('unit' in v) return limitText(v);
-  if ('formula' in v) {
-    const l = materialLines(doc).find((x) => x.key === v.formula);
-    // A packing material by its name and code, as in the master's packing materials.
-    if (l && 'perPack' in l) return `${l.name} (${l.code})`;
-    return `the batch quantity of ${l?.name || v.formula}${v.adjusted ? ', adjusted for the lot' : ''}`;
-  }
-  if ('header' in v) return HEADER_LABEL[v.header].label;
+  if ('spec' in v) return `the specification's ${lower(v.spec.replace(/([A-Z])/g, ' $1'))}`;
   const [sk, tk, name] = v.ref.split('/');
   const s = doc.stages.find((x) => x.key === sk);
   const t = s?.steps.find((x) => x.key === tk);
@@ -152,7 +146,8 @@ export function sentenceText(doc: MasterDoc, block: Block, settings: Record<stri
     const x = out[i]!;
     if (typeof x !== 'object' || !('setting' in x) || settings[x.setting] !== undefined || !block.settings.find((s) => s.name === x.setting)?.optional) continue;
     const before = out[i - 1];
-    if (typeof before === 'string' && /^ must /.test(before)) return '';
+    // A check on it, or a check around it ("must be within ± 10 % of the target"): the engine skips the whole check.
+    if (out.slice(0, i).some((y) => typeof y === 'string' && /^ must /.test(y))) return '';
     out.splice(typeof before === 'string' ? i - 1 : i, typeof before === 'string' ? 2 : 1);
   }
   const value = (n: string) => {

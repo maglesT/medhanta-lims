@@ -65,7 +65,7 @@ export function fakeMaster(): FakeMaster {
   return m;
 }
 
-// Stand-in for Medhanta core: the people core knows, by login, with their TrueBatch permissions. Tests change an entry
+// Stand-in for Medhanta core: the people core knows, by login, with their Medhanta LIMS permissions. Tests change an entry
 // to revoke a permission or deactivate someone (`active: false`); renewals then see it, as core's would.
 export const directory = new Map<string, Omit<Identity, 'login' | 'refreshToken' | 'idToken'> & { active: boolean }>();
 
@@ -114,7 +114,7 @@ export async function freshApp(withLinks?: (db: TestDb) => Promise<Links>, demo 
   };
 }
 
-// Seeds a person as core knows them (directory), with their TrueBatch permissions, and their id-map row.
+// Seeds a person as core knows them (directory), with their Medhanta LIMS permissions, and their id-map row.
 export async function seedUser(owner: Sql, username: string, permissions: readonly Permission[]): Promise<number> {
   const sub = randomUUID();
   directory.set(username, { sub, name: username.toUpperCase(), permissions: [...permissions], active: true });

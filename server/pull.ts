@@ -1,7 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import type { MasterEquipment, MasterRoom } from './master.js';
 import type { Block, BlockField } from '../shared/blocks/index.js';
-import { materialLines, type FormulaLine, type MasterDoc, type Step } from '../shared/master/schema.js';
 import { CERTIFICATE, PROVIDER_NAME, clauses, type Provider, type Source, type Value } from '../shared/engine/index.js';
 import { LOT_USABLE } from './links.js';
 import { plantDate } from '../shared/plant-time.js';
@@ -16,30 +15,24 @@ const hand = (link: Provider, state: 'absent' | 'down'): Pulled => ({ source: { 
 // A refusal: nothing is stored, so its source is never used.
 const refused = (...problems: string[]): Pulled => ({ source: { from: 'hand', link: 'mms', state: 'absent' }, values: {}, sources: {}, problems });
 
-/** The formula line (or packing material) a step works on (its setting that names one). */
-export function lineOf(doc: MasterDoc, st: Step): FormulaLine | undefined {
-  const s = Object.values(st.settings).find((v): v is { formula: string } => typeof v === 'object' && 'formula' in v);
-  return s && materialLines(doc).find((l) => l.key === s.formula);
-}
-
 /**
  * LIMS-12: a machine or room the Logbook says is fit for use, not kept for another product (after an antibiotic) and not
- * in use by another batch. Line clearance: its facts. `productCode` is the code the batch publishes as its product
- * (batch_fact_v1 / packing_batch_v1 product_code: the master's header), the one the Logbook compares.
+ * in use by another analysis. Bench clearance: its facts. `productCode`: what the Logbook compares for an item kept for
+ * one product (here the method code).
  */
-export async function pullItem(app: FastifyInstance, block: Block, f: BlockField, item: MasterEquipment | MasterRoom, batchNo: string, productCode: string): Promise<Pulled> {
+export async function pullItem(app: FastifyInstance, block: Block, f: BlockField, item: MasterEquipment | MasterRoom, analysisNo: string, productCode?: string): Promise<Pulled> {
   const r = await app.links.logbook.status(item.itemId);
   if (r.state !== 'ok' || r.value === 'stale') return hand('logbook', r.state === 'absent' ? 'absent' : 'down');
   const s = r.value;
   if (!s) return refused(`${item.code} is not in the Logbook, so it cannot be used.`);
-  // The line clearance after packing clears the line this batch has just used (it may already be dirty: a stage that
-  // names no rooms does not keep the line in use, equipment_use_v1).
-  if (!s.fitForUse && block.id !== 'pack-clearance-after') return refused(`${item.code} is not fit for use (Logbook): ${clauses(s.blockers) || stateWords(s.state)}.`);
+  if (!s.fitForUse) return refused(`${item.code} is not fit for use (Logbook): ${clauses(s.blockers) || stateWords(s.state)}.`);
   // Owner 17 Nov 2026: after an antibiotic, only that product may follow until a product-changeover cleaning is verified in the Logbook.
-  if (s.onlyProduct && s.onlyProduct !== productCode) {
+  // A lab instrument kept for one product (after an antibiotic): checked against the sample's product once analyses
+  // are made for samples; without a product the check is not made.
+  if (s.onlyProduct && productCode && s.onlyProduct !== productCode) {
     return refused(`${item.code} was last used for an antibiotic (${s.onlyProduct}): a product-changeover cleaning is needed in the Logbook before ${productCode}.`);
   }
-  if (s.inUseBatch && s.inUseBatch !== batchNo) return refused(`${item.code} is in use by batch ${s.inUseBatch} (Logbook).`);
+  if (s.inUseAnalysis && s.inUseAnalysis !== analysisNo) return refused(`${item.code} is in use by analysis ${s.inUseAnalysis} (Logbook).`);
   const source: Source = { from: 'logbook', asOf: s.checkedAt, shown: clauses([`${item.code}: ${stateWords(s.state)}`, ...s.warnings]) };
   const out: Pulled = { source, values: {}, sources: {}, problems: [] };
   // The line clearance facts the Logbook has (the room, or a packing line): clean (it is fit for use), when and by whom it was cleaned.
@@ -57,16 +50,14 @@ export const stateWords = (state: string) => state.replace(/_/g, ' ').replace(/\
 const LOT_WORDS: Record<string, string> = { quarantine: 'in quarantine', quarantined: 'in quarantine', under_test: 'under test', on_hold: 'on hold' };
 const plantDay = (now: Date, tz: string) => now.toLocaleDateString('en-CA', { timeZone: tz });
 
-/** TA-12: a lot MMS has, of this step's material, released and in date; its certificate numbers come with it (TA-13). */
-export async function pullLot(app: FastifyInstance, doc: MasterDoc, st: Step, block: Block, lot: string, was: Record<string, Value>, now: Date, tz: string): Promise<Pulled> {
+/** A lot MMS has, released and in date; its certificate numbers come with it. */
+export async function pullLot(app: FastifyInstance, block: Block, lot: string, was: Record<string, Value>, now: Date, tz: string): Promise<Pulled> {
   const r = await app.links.mms.lot(lot);
   if (r.state !== 'ok') return hand('mms', r.state);
   const l = r.value;
   if (!l) return refused(`Lot ${lot} is not in MMS.`);
-  const line = lineOf(doc, st);
   const today = plantDay(now, tz);
   const problems: string[] = [];
-  if (line && l.materialMasterId !== line.materialItemId) problems.push(`Lot ${lot} is ${l.materialCode ?? 'another material'} in MMS, not ${line.code} ${line.name}.`);
   if (!LOT_USABLE.includes(l.status)) problems.push(`Lot ${lot} is ${LOT_WORDS[l.status] ?? l.status.replaceAll('_', ' ')} in MMS: only a released lot may be used.`);
   if (l.expiryDate && l.expiryDate < today) problems.push(`Lot ${lot} expired on ${plantDate(l.expiryDate)}.`);
   if (l.retestDate && l.retestDate < today) problems.push(`Lot ${lot} is past its retest date ${plantDate(l.retestDate)}.`);
@@ -82,8 +73,6 @@ export async function pullLot(app: FastifyInstance, doc: MasterDoc, st: Step, bl
       continue;
     }
     if (t.unit !== '%') { problems.push(`MMS gives the ${test} of lot ${lot} in ${t.unit ?? 'no unit'}, not in %.`); continue; }
-    const basis = line && 'adjust' in line ? line.adjust?.potency?.basis : undefined;
-    if (name === 'assay' && basis && t.basis?.toLowerCase() !== basis) problems.push(`MMS gives the assay of lot ${lot} ${t.basis ? `on the ${t.basis} basis` : 'without its basis'}; the master's line is on the ${basis} basis.`);
     out.values[name] = { value: t.value, unit: '%' };
     out.sources[name] = { from: 'mms', asOf: l.dataAsOf, shown: `${test} ${t.value} %${t.basis ? ` (${t.basis})` : ''}, report ${t.reportRef ?? l.qcReportRef ?? '—'}` };
   }

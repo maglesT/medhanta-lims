@@ -4,7 +4,7 @@ import type { Block } from './format.js';
 // the first 10 do not pass.
 export const contentUniformity: Block = {
   id: 'content-uniformity', version: 1, name: 'Content uniformity sampling', checker: true,
-  instruction: 'Take the tablets for content uniformity as the sampling plan says, label them and send them to QC. Record the content of each tablet from the QC report; if QC tested 20 more, record those too.',
+  instruction: 'Take the tablets for content uniformity as the sampling plan says, and assay each unit by the method. Record the content of each tablet; if 20 more are tested, record those too.',
   fields: [
     { name: 'results', label: 'Content of 10 tablets (% of label claim)', kind: 'number', unit: '%', count: 10 },
     { name: 'moreResults', label: 'Content of 20 more tablets (% of label claim)', kind: 'number', unit: '%', count: 20, optional: true },

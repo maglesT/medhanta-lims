@@ -4,10 +4,10 @@ import { shownNumber } from '../../shared/templates/core.js';
 import { checkLimit } from '../../shared/templates/rounding.js';
 import { t10Compensating, t16Overage } from '../../shared/templates/dispensing.js';
 import { workedExample } from '../../web/src/designer/example.js';
-import { tablet } from '../engine-fixture.js';
+import { method } from '../engine-fixture.js';
 import { ok } from './helpers.js';
 
-// The display rule of worked lines: full precision inside, readable figures on the screen and in the batch record.
+// The display rule of worked lines: full precision inside, readable figures on the screen and in the analysis record.
 const LONG = '10.255358424776900000000000000000000000000000000001';
 
 describe('worked-line numbers (shownNumber)', () => {
@@ -55,11 +55,13 @@ describe('worked-line numbers (shownNumber)', () => {
     expect(checkLimit(new Dec('500'), 'g', { low: '0.4', high: '0.6', unit: 'kg' }).shown).toBe('0.5 kg; limit 0.4 to 0.6 kg: within limits');
   });
 
-  it('no worked line of the fixture master shows a number with more than 4 decimals (all blocks, example values)', () => {
-    const d = tablet();
+  // A number below 1 counts its decimals from the first figure that is not 0: a standard deviation of 0.00413 (3
+  // significant figures, T7) is not a long number.
+  it('no worked line of the fixture method shows a number with more than 4 decimals (all blocks, example values)', () => {
+    const d = method();
     const long: string[] = [];
     d.stages.forEach((s, si) => s.steps.forEach((_, ti) => {
-      for (const r of Object.values(workedExample(d, si, ti).results)) if (r.ok && /\d\.\d{5,}/.test(r.shown)) long.push(r.shown);
+      for (const r of Object.values(workedExample(d, si, ti).results)) if (r.ok && /(?<![\d.])(?:[1-9]\d*\.\d{5,}|0\.0*[1-9]\d{4,})/.test(r.shown)) long.push(r.shown);
     }));
     expect(long).toEqual([]);
   });

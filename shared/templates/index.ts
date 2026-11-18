@@ -6,7 +6,7 @@ export { t1Difference, t2Total, t3PercentOfTarget, t4Accountability, t5PercentCh
 export { t7Statistics, c1WithinLimits, c2Count, c3AllIndividual, c4Observation, noFurtherChange } from './series.js';
 export { t26MixToTarget, ethanolWw, ethanolDensity } from './mixing.js';
 export {
-  t8BatchScaling, t9PotencyAdjusted, c5SameBasis, t10Compensating, t11SaltFactor, t12DryBasis,
+  t8AnalysisScaling, t9PotencyAdjusted, c5SameBasis, t10Compensating, t11SaltFactor, t12DryBasis,
   t15Rescale, t16Overage, t18ContentAdjusted, t19Split, t20MultiLot,
 } from './dispensing.js';
 export { t13Duration, f8DiversionWindow, f8LotsInWindow } from './time.js';
@@ -21,3 +21,4 @@ export {
   l5Dissolution, l6Titration, l7WaterKf, l8MassLoss, l10Reading, l14Statistics, l17Standardisation, l19SamplingPlan,
   tQuantile, fQuantile, chi2Quantile,
 } from './lab-physchem.js';
+export { l21DilutionFactor, type L21Input } from './lab-dilution.js';

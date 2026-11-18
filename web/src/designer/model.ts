@@ -1,8 +1,7 @@
-// Pure helpers of the designer over the master document: keys, units and their kinds, what an input may be picked
-// from, scaling to a new batch size. No GMP maths here: numbers go through the templates library.
+// Pure helpers of the designer over the method document: keys, units and their kinds, what an input may be picked
+// from. No GMP maths here: numbers go through the templates library.
 import { BLOCKS, findBlock, type Block } from '../../../shared/blocks/index.js';
-import { product } from '../product.js';
-import { stepTitle as title } from '../../../shared/engine/batch.js';
+import { stepTitle as title } from '../../../shared/engine/analysis.js';
 import { Dec, UNIT_LIST, type Kind } from '../../../shared/templates/index.js';
 import type { Stored } from '../../../shared/engine/index.js';
 import { kindOf, kindOfUnit } from '../../../shared/master/kinds.js';
@@ -10,7 +9,7 @@ import type { Problem } from '../../../shared/master/checks.js';
 import { isBalance, machineRefusal } from '../../../shared/engine/picks.js';
 import type { BlockField } from '../../../shared/blocks/format.js';
 import type { MasterData } from '../api-designer.js';
-import type { HEADER_VALUES, MasterDoc, SettingValue, Stage, Step } from '../../../shared/master/schema.js';
+import type { MasterDoc, Stage, Step } from '../../../shared/master/schema.js';
 
 // The unit list as offered in pick lists: every unit of the templates' unit table (shared/templates/units.ts).
 export const UNITS = UNIT_LIST;
@@ -53,7 +52,7 @@ export interface RefOption { ref: string; label: string; kind: Kind | undefined 
 export function earlierRefs(doc: MasterDoc, si: number, ti: number): RefOption[] {
   const out: RefOption[] = [];
   doc.stages.forEach((s, i) => {
-    if (i > si || (i !== si && s.kind === 'sub-batch')) return;
+    if (i > si || (i !== si && s.kind === 'replicate')) return;
     s.steps.forEach((t, j) => {
       if (i === si && j >= ti) return;
       const b = findBlock(t.block);
@@ -66,22 +65,14 @@ export function earlierRefs(doc: MasterDoc, si: number, ti: number): RefOption[]
   return out;
 }
 
-export const HEADER_LABEL: Record<(typeof HEADER_VALUES)[number], { label: string; kind: Kind }> = {
-  batchSize: { label: 'the batch size (tablets)', kind: 'count' },
-  coreWeight: { label: 'the theoretical core tablet weight', kind: 'mass' },
-  coatedWeight: { label: 'the theoretical coated tablet weight', kind: 'mass' },
-  coreBatch: { label: 'the theoretical core batch weight', kind: 'mass' },
-  coatedBatch: { label: 'the theoretical coated batch weight', kind: 'mass' },
-};
-
 export const stepTitle = (doc: MasterDoc, t: Step, j?: number) => `${j === undefined ? '' : `${j + 1}. `}${title(doc, t)}`;
 
-// Settings a new step starts with (the author may change them): the usual dispensing tolerance.
-const DEFAULT_SETTINGS: Record<string, Step['settings']> = { weigh: { tolerance: '0.5' }, lubricate: { tolerance: '0.5' } };
+// Settings a new step starts with (the author may change them): "about … mg, accurately weighed" is ± 10 %.
+const DEFAULT_SETTINGS: Record<string, Step['settings']> = { weigh: { tolerance: '10' } };
 /** A new step from a block, with its default instruction, signatures and settings. */
 export function stepFrom(block: Block, taken: string[]): Step {
   return { key: newKey(block.id, taken), block: { id: block.id, version: block.version }, settings: { ...DEFAULT_SETTINGS[block.id] }, checker: block.checker,
-    waitForCheck: false, critical: false, flow: block.stop ? { kind: 'repeat-until', maxRounds: 10 } : block.qaHold ? { kind: 'qa-hold' } : { kind: 'none' },
+    waitForCheck: false, critical: false, flow: block.stop ? { kind: 'repeat-until', maxRounds: 10 } : { kind: 'none' },
     ...(block.periodic ? { everyMinutes: block.periodic.maxMinutes } : {}) };
 }
 
@@ -99,33 +90,11 @@ export function searchBlocks(q: string): Block[] {
   });
 }
 
-const QUANTITY = /^(\d+(?:\.(\d+))?)\s*(\S.*)$/;
-/** "Copy to a new batch size": typed quantities of mass or count in step settings scale with the batch size. */
-export function scaleDoc(doc: MasterDoc, batchSize: string): MasterDoc {
-  if (doc.header.batchSize === batchSize || !/^[1-9]\d*$/.test(batchSize)) return { ...doc, header: { ...doc.header, batchSize } };
-  const factor = new Dec(batchSize).div(doc.header.batchSize);
-  const scale = (v: SettingValue, kind: string | undefined): SettingValue => {
-    const m = typeof v === 'string' && kind === 'quantity' ? QUANTITY.exec(v.trim()) : null;
-    const k = m ? kindOfUnit(m[3]) : undefined;
-    if (!m || (k !== 'mass' && k !== 'count')) return v;
-    return `${new Dec(m[1]!).times(factor).toFixed(m[2]?.length ?? 0, Dec.ROUND_HALF_UP)} ${m[3]}`;
-  };
-  return {
-    ...doc,
-    header: { ...doc.header, batchSize },
-    stages: doc.stages.map((s) => ({ ...s, steps: s.steps.map((t) => {
-      const b = findBlock(t.block);
-      return { ...t, settings: Object.fromEntries(Object.entries(t.settings).map(([n, v]) => [n, scale(v, b?.settings.find((x) => x.name === n)?.kind)])) };
-    }) })),
-  };
-}
-
 /** Where a master-check path points: the tab and the item to select. */
-export interface Place { tab: 'header' | 'formula' | 'process'; line?: number; stage?: number; step?: number }
+export interface Place { tab: 'header' | 'process'; stage?: number; step?: number }
 export function placeOf(path: string): Place {
   const n = (re: RegExp) => { const m = re.exec(path); return m ? Number(m[1]) : undefined; };
   if (path.startsWith('header')) return { tab: 'header' };
-  if (path.startsWith('formula')) return { tab: 'formula', line: n(/^formula\[(\d+)\]/) };
   return { tab: 'process', stage: n(/^stages\[(\d+)\]/), step: n(/\.steps\[(\d+)\]/) };
 }
 
@@ -133,7 +102,6 @@ export function placeOf(path: string): Place {
 export function placeLabel(doc: MasterDoc, path: string): string {
   const p = placeOf(path);
   if (p.tab === 'header') return 'Header';
-  if (p.tab === 'formula') return p.line === undefined ? 'Formula' : `Formula › ${doc.formula[p.line]?.name || `line ${p.line + 1}`}`;
   const s = p.stage === undefined ? undefined : doc.stages[p.stage];
   if (!s) return 'Process';
   const t = p.step === undefined ? undefined : s.steps[p.step];
@@ -175,18 +143,3 @@ export function stageRoomChoices(stage: Stage, md: Pick<MasterData, 'rooms' | 'e
     groups: [{ label: "Where this stage's machines stand", options: [...nearAreas, ...near] },
       { label: 'Other areas', options: areas.filter((a) => !nearAreas.includes(a)) }, { label: 'Other rooms', options: codes.filter((c) => !near.includes(c)) }] };
 }
-
-/** The dispensing rooms of a master: first the rooms where a weighing balance stands (as the floor offers balances),
- *  then the other rooms. */
-export function dispensingRoomChoices(md: Pick<MasterData, 'rooms' | 'equipment'>): Choices {
-  const codes = sortBy(md.rooms.filter((r) => r.active).map((r) => r.code));
-  const balance = findBlock({ id: 'weigh', version: 1 })?.fields.filter((f) => f.kind === 'machine' && isBalance(f)) ?? [];
-  const near = roomsOfMachines(md, balance);
-  return { options: codes, text: roomText(md),
-    groups: [{ label: 'Rooms with a weighing balance', options: near }, { label: 'Other rooms', options: codes.filter((c) => !near.includes(c)) }] };
-}
-
-/** The products of master data this product makes: those whose dosage form names it (tablets), and none without one;
- *  of those, the bulk products (TrueBatch Tablets) or the packs (Packing), plus those master data gives no kind yet. */
-export const ownProducts = <P extends { dosageForm: string | null; kind?: 'bulk' | 'pack' | null }>(products: readonly P[], kind: 'bulk' | 'pack'): P[] =>
-  products.filter((p) => p.dosageForm?.toLowerCase().includes(product.dosageForm) && (p.kind ?? kind) === kind);

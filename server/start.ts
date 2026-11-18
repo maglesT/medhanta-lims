@@ -24,7 +24,7 @@ export async function start(product: Product, webRoot?: string) {
     logbook: linked(config.LOGBOOK_DATABASE_URL), mms: linked(config.MMS_DATABASE_URL),
     recruitment: linked(config.RECRUITMENT_DATABASE_URL) };
   const app = await buildApp({ sql, signOn, proofKey, master: sqlMaster(md), links: links(providers), logger: true, cookieSecure: config.COOKIE_SECURE,
-    batchPrefix: config.BATCH_PREFIX, product, webRoot, demo: isDemo() });
+    analysisPrefix: config.ANALYSIS_PREFIX, product, webRoot, demo: isDemo() });
 
   await app.listen({ port: config.PORT, host: config.HOST });
   // A hold time or periodic check that ran over is recorded once (server/late.ts).

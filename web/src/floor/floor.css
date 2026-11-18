@@ -1,4 +1,4 @@
-/* Floor screens (My work, batch, step, checker, approval). Logbook tokens from styles.css; panels, pending rows and
+/* Floor screens (My work, analysis, step, checker, approval). Logbook tokens from styles.css; panels, pending rows and
    loading placeholders as in the Logbook. Touch first: every action is at least 56 px high. */
 
 /* Logbook patterns */
@@ -51,7 +51,7 @@
 .back { background: none; border: 0; color: var(--brand); font-weight: 600; padding: 8px 0; min-height: 44px; }
 .back:hover { background: none; text-decoration: underline; }
 
-/* Batch header and stage bar */
+/* Analysis header and stage bar */
 .bh { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 18px; align-items: start; }
 .bh h1 { margin: 0; font-size: 1.5rem; }
 .bh .meta { display: flex; flex-wrap: wrap; gap: 6px 18px; color: var(--muted); font-size: .92rem; }

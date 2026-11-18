@@ -1,23 +1,15 @@
 /**
- * The machines and rooms a step field offers and accepts (owner, 15 Nov 2026), from master data's type, room and area:
- * a machine of the stage's allowed types and of the type the field asks for (a balance field: balances only, never a
- * QC lab analytical or micro balance), standing in a room the stage allows; a room the stage allows by its area or by
- * its own code. A balance is not one of the stage's process machines: it is offered where the weighing is done, in one
- * of the master's dispensing rooms (owner, 16 Nov 2026: named in the header, not every area called dispensing) or in a
- * room the stage allows, never in a QC or laboratory area.
+ * The machines and rooms a step field offers and accepts, from master data's type, room and area: a machine of the
+ * stage's allowed types and of the type the field asks for (a balance field: balances only), standing in a room the
+ * stage allows; a room the stage allows by its area or by its own code.
  */
 import type { BlockField } from '../blocks/format.js';
-import type { MasterDoc, Stage } from '../master/schema.js';
+import type { Stage } from '../master/schema.js';
 
 export interface PickMachine { code: string; type?: string | null; room?: string | null }
 export interface PickRoom { code: string; area?: string | null }
 const among = (list: readonly string[], x: string | null | undefined) => list.some((a) => a.toLowerCase() === (x ?? '').toLowerCase());
-// Master data's laboratory room areas (the demo has QC, Microbiology, Wet chemistry, Stability).
-const LAB_AREA = /\bqc\b|quality control|laborator|\blab\b|microbiolog|chemistry|stability/i;
 export const isBalance = (f: BlockField) => !!f.types?.includes('balance');
-/** The master's dispensing rooms; a version from before the setting: the rooms whose area is exactly "Dispensing". */
-export const dispensingRooms = (doc: Pick<MasterDoc, 'header'>, rooms: readonly PickRoom[]): string[] =>
-  doc.header.dispensingRooms ?? rooms.filter((r) => r.area === 'Dispensing').map((r) => r.code);
 
 /** Why a room is not one the stage allows; null when it is. */
 export function roomRefusal(stage: Stage, r: PickRoom): string | null {
@@ -25,18 +17,17 @@ export function roomRefusal(stage: Stage, r: PickRoom): string | null {
     : `${r.code} is not one of the rooms this stage allows (${stage.roomTypes.join(', ')})`;
 }
 
-/** Why a machine does not fit the field in this stage; null when it does. `dispensing`: the master's dispensing rooms. */
-export function machineRefusal(stage: Stage, f: BlockField, m: PickMachine, rooms: readonly PickRoom[], dispensing: readonly string[] = []): string | null {
+/** Why a machine does not fit the field in this stage; null when it does. */
+export function machineRefusal(stage: Stage, f: BlockField, m: PickMachine, rooms: readonly PickRoom[]): string | null {
   const balance = isBalance(f);
   if (!balance && stage.machineTypes.length && !among(stage.machineTypes, m.type)) return `${m.code} is not one of the machine types this stage allows (${stage.machineTypes.join(', ')})`;
   const type = (m.type ?? '').toLowerCase();
   if (!type && f.types?.length) return `${m.code} has no type in master data, so it is not offered as a ${f.label.toLowerCase()}`;
   if (!fitsType(f, m)) return `${m.code} is not a ${f.label.toLowerCase()} (master data: ${m.type ?? 'no type'})`;
   const room = m.room ? rooms.find((r) => r.code === m.room) : undefined;
-  if (balance && room && LAB_AREA.test(room.area ?? '')) return `${m.code} stands in ${room.code} (${room.area}), a laboratory area: weigh with a balance of a dispensing room of the master or of a room this stage allows`;
-  if (!stage.roomTypes.length || (balance && among(dispensing, m.room))) return null;
+  if (!stage.roomTypes.length) return null;
   if (!room) return `${m.code} stands in no room in master data, so it is not in a room this stage allows (${stage.roomTypes.join(', ')})`;
-  if (roomRefusal(stage, room)) return `${m.code} stands in ${room.code}, ${balance ? 'neither in a dispensing room of the master nor' : 'not'} in a room this stage allows (${stage.roomTypes.join(', ')})`;
+  if (roomRefusal(stage, room)) return `${m.code} stands in ${room.code}, not in a room this stage allows (${stage.roomTypes.join(', ')})`;
   return null;
 }
 
@@ -60,13 +51,12 @@ export function untypedNote(f: BlockField, machines: readonly (PickMachine & { a
  * Why a machine or room picker offers nothing (owner, 17 Nov 2026: an empty picker says why): the machines of the
  * field's type and where they stand (or that master data has none of that type), and the untyped ones in a few words.
  */
-export function emptyNote(stage: Stage, f: BlockField, machines: readonly (PickMachine & { active?: boolean })[], rooms: readonly (PickRoom & { active?: boolean })[],
-  dispensing: readonly string[] = []): string {
+export function emptyNote(stage: Stage, f: BlockField, machines: readonly (PickMachine & { active?: boolean })[], rooms: readonly (PickRoom & { active?: boolean })[]): string {
   const allowed = stage.roomTypes.length ? ` (${stage.roomTypes.join(', ')})` : '';
   if (f.kind === 'room') return `No room this stage allows${allowed} is active in master data. Engineering adds or activates it in master data.`;
   const what = f.label.toLowerCase();
   const ofType = machines.filter((m) => m.active !== false && (!f.types?.length || m.type?.trim()) && fitsType(f, m));
-  const why = ofType.map((m) => machineRefusal(stage, f, m, rooms, dispensing)).filter((x): x is string => !!x);
+  const why = ofType.map((m) => machineRefusal(stage, f, m, rooms)).filter((x): x is string => !!x);
   const untyped = untypedNote(f, machines);
   const shown = why.length > 3 ? `${why.slice(0, 3).join('; ')}; and ${why.length - 3} more` : why.join('; ');
   return [

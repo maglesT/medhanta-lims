@@ -63,9 +63,9 @@ export const MEANING_LABEL: Record<string, string> = {
   issued: 'Issued',
   performed: 'Performed',
   verified: 'Verified (second person)',
-  production_approved: 'Production approved',
+  reviewed: 'Reviewed (second person)',
+  stopped: 'Stopped',
   qc_approved: 'QC approved',
-  released: 'Released',
   rejected: 'Rejected',
 };
 

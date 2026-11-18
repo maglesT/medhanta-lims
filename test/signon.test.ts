@@ -3,7 +3,7 @@ import { POLICY, requirePermission, sessionKey } from '../server/auth.js';
 import { buildApp } from '../server/app.js';
 import { call, directory, fakeMaster, fakeSignOn, freshApp, login, seedUser, TEST_PROOF_KEY, type TestApp } from './helpers.js';
 
-// People, passwords, lockout and the permission register are Medhanta core's; TrueBatch signs people on through core
+// People, passwords, lockout and the permission register are Medhanta core's; Medhanta LIMS signs people on through core
 // (stand-in: helpers.fakeSignOn) and keeps sessions, per-action authority checks and its audit trail.
 
 let t: TestApp;
@@ -26,28 +26,28 @@ describe('sign-on through core', () => {
   });
 
   it('PL-01: /login sends the browser to core with PKCE; sign-on opens a session with the permissions from core and is audited', async () => {
-    const id = await seedUser(t.owner, uniq('op'), ['lims.batch.operate']);
+    const id = await seedUser(t.owner, uniq('op'), ['lims.analysis.perform']);
     const username = `op${n}`;
     const start = await t.app.inject({ method: 'GET', url: `/login?login_hint=${username}` });
     expect(start.statusCode).toBe(302);
     const { res, cookie } = await login(t.app, username);
     expect(res.statusCode).toBe(302);
     expect(res.headers.location).toBe('/');
-    expect((await call(t.app, cookie, 'GET', '/api/me')).json()).toEqual({ id, username, fullName: username.toUpperCase(), permissions: ['lims.batch.operate'] });
+    expect((await call(t.app, cookie, 'GET', '/api/me')).json()).toEqual({ id, username, fullName: username.toUpperCase(), permissions: ['lims.analysis.perform'] });
     expect(await auditRows('login', id)).toHaveLength(1);
   });
 
   it('PL-01: the oidc client asks core for a code with PKCE, this product\'s permissions and, for a signature, a fresh password', async () => {
     const { oidcSignOn } = await import('../server/signon.js');
-    const s = oidcSignOn({ issuer: 'https://site.test/oidc', clientId: 'truebatch', clientSecret: 'x', redirectUri: 'https://truebatch.site.test/cb' });
+    const s = oidcSignOn({ issuer: 'https://site.test/oidc', clientId: 'lims', clientSecret: 'x', redirectUri: 'https://lims.site.test/cb' });
     const url = new URL(s.authUrl({ state: 'st', challenge: 'ch' }));
     expect(url.origin + url.pathname).toBe('https://site.test/oidc/auth');
-    expect(Object.fromEntries(url.searchParams)).toMatchObject({ client_id: 'truebatch', response_type: 'code', code_challenge: 'ch',
-      code_challenge_method: 'S256', state: 'st', redirect_uri: 'https://truebatch.site.test/cb', scope: 'openid profile permissions' });
+    expect(Object.fromEntries(url.searchParams)).toMatchObject({ client_id: 'lims', response_type: 'code', code_challenge: 'ch',
+      code_challenge_method: 'S256', state: 'st', redirect_uri: 'https://lims.site.test/cb', scope: 'openid profile permissions' });
     expect(new URL(s.authUrl({ state: 'st', challenge: 'ch', prompt: 'login' })).searchParams.get('max_age')).toBe('0');
   });
 
-  it('PL-01: a person without a TrueBatch permission is refused and the refusal is audited', async () => {
+  it('PL-01: a person without a Medhanta LIMS permission is refused and the refusal is audited', async () => {
     const id = await seedUser(t.owner, uniq('nobody'), []);
     const { res, cookie } = await login(t.app, `nobody${n}`);
     expect(res.statusCode).toBe(403);
@@ -64,12 +64,12 @@ describe('sign-on through core', () => {
   });
 
   it('PL-01: each action checks its own permission code, whatever else the person holds', async () => {
-    // A guarded action of the shape every TrueBatch route uses (no domain routes exist yet).
+    // A guarded action of the shape every route uses (no domain routes exist yet).
     const app = await buildApp({ sql: t.sql, signOn: fakeSignOn(), proofKey: TEST_PROOF_KEY, master: fakeMaster(), webRoot: '/nonexistent' });
-    app.post('/api/test/release', { preHandler: requirePermission('lims.qa.release') }, async () => ({ ok: true }));
-    await seedUser(t.owner, uniq('op'), ['lims.batch.operate', 'lims.batch.check', 'lims.batch.supervise', 'lims.qc.approve']);
+    app.post('/api/test/release', { preHandler: requirePermission('lims.qc.approve') }, async () => ({ ok: true }));
+    await seedUser(t.owner, uniq('op'), ['lims.analysis.perform', 'lims.analysis.check', 'lims.analysis.review']);
     const op = (await login(app, `op${n}`)).cookie;
-    await seedUser(t.owner, uniq('qa'), ['lims.qa.release']);
+    await seedUser(t.owner, uniq('qa'), ['lims.qc.approve']);
     const qa = (await login(app, `qa${n}`)).cookie;
     expect((await call(app, op, 'POST', '/api/test/release')).statusCode).toBe(403);
     expect((await call(app, qa, 'POST', '/api/test/release')).statusCode).toBe(200);
@@ -78,7 +78,7 @@ describe('sign-on through core', () => {
   });
 
   it('PL-01: a sign-in this browser did not start is refused (no login CSRF)', async () => {
-    await seedUser(t.owner, uniq('qa'), ['lims.qa.release']);
+    await seedUser(t.owner, uniq('qa'), ['lims.qc.approve']);
     const made = await t.app.inject({ method: 'GET', url: `/cb?code=qa${n}&state=made-up` });
     expect(made.statusCode).toBe(400);
     // Someone else's started sign-in, sent to this browser (which holds no matching sign-in cookie).
@@ -89,11 +89,11 @@ describe('sign-on through core', () => {
   });
 
   it(`PL-01: a revoked permission or a deactivated person is out within ${POLICY.roleCheckMinutes} minutes (renewal through core)`, async () => {
-    await seedUser(t.owner, uniq('sup'), ['lims.batch.supervise', 'lims.view']);
+    await seedUser(t.owner, uniq('sup'), ['lims.analysis.review', 'lims.view']);
     const username = `sup${n}`;
     const { cookie } = await login(t.app, username);
     directory.get(username)!.permissions = ['lims.view'];
-    expect((await call(t.app, cookie, 'GET', '/api/me')).json().permissions).toContain('lims.batch.supervise');
+    expect((await call(t.app, cookie, 'GET', '/api/me')).json().permissions).toContain('lims.analysis.review');
     await t.owner`update sessions set checked_at = now() - interval '6 minutes' where id = ${sid(cookie)}`;
     expect((await call(t.app, cookie, 'GET', '/api/me')).json().permissions).toEqual(['lims.view']);
 
@@ -104,7 +104,7 @@ describe('sign-on through core', () => {
   });
 
   it('PL-05: /sign asks core for the signed-in person\'s password again and hands the sign window a signing proof', async () => {
-    await seedUser(t.owner, uniq('op'), ['lims.batch.operate']);
+    await seedUser(t.owner, uniq('op'), ['lims.analysis.perform']);
     const { cookie } = await login(t.app, `op${n}`);
     expect((await t.app.inject({ method: 'GET', url: '/sign?meanings=performed' })).statusCode).toBe(401);
     expect((await t.app.inject({ method: 'GET', url: '/sign?meanings=anything', headers: { cookie } })).statusCode).toBe(400);
@@ -115,13 +115,13 @@ describe('sign-on through core', () => {
     expect(pending.value).toMatch(/\.sign\.\d+\.performed$/);
     const page = await t.app.inject({ method: 'GET', url: String(start.headers.location), headers: { cookie: `signon=${pending.value}` } });
     expect(page.body).toMatch(/"signProof":"[^"]+"/);
-    expect(page.body).toContain('location.origin');   // posted only to TrueBatch's own window
+    expect(page.body).toContain('location.origin');   // posted only to this product's own window
     expect(page.cookies.find((c) => c.name === 'sid')).toBeUndefined();   // a signature never opens a session
     expect(page.headers['cache-control']).toBe('no-store');
   });
 
   it('PL-05: a signature is refused when core did not ask for the password again after it started (auth_time)', async () => {
-    await seedUser(t.owner, uniq('op'), ['lims.batch.operate']);
+    await seedUser(t.owner, uniq('op'), ['lims.analysis.perform']);
     const { cookie } = await login(t.app, `op${n}`);
     const start = await t.app.inject({ method: 'GET', url: '/sign?meanings=performed', headers: { cookie } });
     const pending = start.cookies.find((c) => c.name === 'signon')!;
@@ -169,7 +169,7 @@ describe('sign-on through core', () => {
   });
 
   it('PL-01: background polling does not keep an idle session alive', async () => {
-    await seedUser(t.owner, uniq('qa'), ['lims.qa.release']);
+    await seedUser(t.owner, uniq('qa'), ['lims.qc.approve']);
     const { cookie } = await login(t.app, `qa${n}`);
     await t.owner`update sessions set last_seen_at = now() - interval '14 minutes' where id = ${sid(cookie)}`;
     const bg = await t.app.inject({ method: 'GET', url: '/api/me', headers: { cookie, 'x-background-poll': '1' } });

@@ -9,7 +9,7 @@ create table signatures (
   user_id bigint not null references users(id),
   printed_name text not null check (length(trim(printed_name)) > 0),
   meaning text not null check (meaning in ('prepared', 'checked', 'approved', 'issued', 'performed', 'verified',
-    'production_approved', 'qc_approved', 'released')),
+    'reviewed', 'stopped', 'qc_approved', 'rejected')),
   signed_at timestamptz not null default now(),
   content_hash text not null check (content_hash ~ '^[0-9a-f]{64}$'),
   unique (object_type, object_id, meaning)

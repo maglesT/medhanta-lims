@@ -5,19 +5,19 @@ import { audit } from './audit.js';
 import type { Permission, SessionUser } from './auth.js';
 import type { Identity } from './signon.js';
 
-// The meanings a TrueBatch signature can carry, and the permission code each one needs at core. The database checks
+// The meanings a LIMS signature can carry, and the permission code each one needs at core. The database checks
 // the same list (migration 0002).
 export const MEANING_NEEDS = {
   prepared: 'lims.master.author',
   checked: 'lims.master.check',
   approved: 'lims.master.approve',
-  issued: 'lims.batch.issue',
-  performed: 'lims.batch.operate',
-  verified: 'lims.batch.check',
-  production_approved: 'lims.batch.supervise',
+  issued: 'lims.analysis.perform',
+  performed: 'lims.analysis.perform',
+  verified: 'lims.analysis.check',
+  reviewed: 'lims.analysis.review',
+  stopped: 'lims.analysis.review',
   qc_approved: 'lims.qc.approve',
-  released: 'lims.qa.release',
-  rejected: 'lims.qa.release',
+  rejected: 'lims.qc.approve',
 } as const satisfies Record<string, Permission>;
 export type Meaning = keyof typeof MEANING_NEEDS;
 export const MEANINGS = Object.keys(MEANING_NEEDS) as Meaning[];

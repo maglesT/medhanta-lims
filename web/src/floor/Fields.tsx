@@ -45,6 +45,7 @@ export function FieldInput({ f, unit, saved, picks = [], note, options = [], dis
     const list = raw as string[];
     const filled = list.filter((x) => x.trim()).length;
     const submit = (e: FormEvent) => { e.preventDefault(); void save(list.map((x) => x.trim())); };
+    const needed = f.minCount ?? list.length;
     input = (
       <form className="readings-wrap" onSubmit={submit}>
         <div className="readings">
@@ -57,7 +58,7 @@ export function FieldInput({ f, unit, saved, picks = [], note, options = [], dis
         </div>
         {onSave && (
           <div className="readings-foot">
-            <button className="big" type="submit" disabled={disabled || filled < list.length || JSON.stringify(list) === savedKey}>Save the {list.length} readings</button>
+            <button className="big" type="submit" disabled={disabled || filled < needed || JSON.stringify(list) === savedKey}>Save the {f.minCount ? 'readings' : `${list.length} readings`}</button>
             <span className="muted">{filled} of {list.length} typed{unit ? ` (${unit})` : ''}</span>
           </div>
         )}

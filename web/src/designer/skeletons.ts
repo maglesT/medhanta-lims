@@ -1,94 +1,59 @@
-// Process skeletons a new master may start from: the usual stages and steps of a process, as data. Settings that
-// depend on the product (which material a step weighs, its limits) are left for the author; the master check lists
-// them. Tablet-weight limits start at ± 5 % of the header's core weight. Every stage is worked in a room, so each
-// starts with line clearance (TA-10). A later stage's yield is on the actual input of the stage (the previous stage's
-// output), unless the stage adds materials (blending: on the core batch weight); the coating gain is on the batch's
-// actual core mean weight, and the granulation end point is checked by a second person. A new master names no
-// dispensing rooms: the author picks them (Header.tsx). A stage starts with the rooms it usually runs in, by the usual
-// area names; a stage whose rooms differ from plant to plant (a binder or coating suspension, blending) is left for
-// the author: the master check asks for its rooms (LIMS-12).
+// Method skeletons a new method may start from: the usual stages and steps of an analysis, as data. Settings that
+// depend on the method (what is weighed, volumes, conditions, limits) are left for the author; the method check lists
+// them. The result steps are added from the block library once the method's calculation is chosen.
 import { findBlock } from '../../../shared/blocks/index.js';
-import { Dec } from '../../../shared/templates/index.js';
-import type { MasterDoc, SettingValue, Stage, Step } from '../../../shared/master/schema.js';
+import type { SettingValue, Stage, Step } from '../../../shared/master/schema.js';
 import { stepFrom } from './model.js';
 
-type Header = MasterDoc['header'];
-interface StepPlan { block: string; key?: string; name?: string; checker?: boolean; settings?: (h: Header) => Record<string, SettingValue>; minMinutes?: number }
-interface StagePlan { key: string; name: string; kind?: Stage['kind']; role: string; rooms?: string[]; produces?: [string, number]; uses?: string[]; steps: StepPlan[] }
-
-const pct = (h: Header, mg: string, by: string) => new Dec(mg).times(new Dec(100).plus(by)).div(100).toFixed(1);
-const yieldStep = (theoretical: SettingValue): StepPlan => ({ block: 'stage-yield', key: 'yield', settings: () => ({
-  theoretical, yieldLimit: { low: '97.0', high: '100.5', unit: '%' }, accountabilityLimit: { low: '99.0', high: '100.5', unit: '%' } }) });
-const weighStep = (key: string): StepPlan => ({ block: 'weigh', key });
-const compressStep: StepPlan = { block: 'compress', settings: (h) => ({
-  meanLimit: { low: pct(h, h.coreWeightMg, '-5'), high: pct(h, h.coreWeightMg, '5'), unit: 'mg' }, weightBand: '5.0', weightOuterBand: '10.0' }) };
-// TA-16: the tooling is checked before and after compression; friability and disintegration are tested on the cores;
-// the tablets are reconciled at the end.
-const tooling = (key: string, name: string): StepPlan => ({ block: 'punch-die-check', key, name });
-const reconcile: StepPlan = { block: 'tablet-reconciliation', key: 'yield', settings: () => ({ theoretical: { header: 'batchSize' },
-  meanWeight: { ref: 'compression/compress/meanWeight' }, yieldLimit: { low: '97.0', high: '100.5', unit: '%' }, accountabilityLimit: { low: '99.0', high: '100.5', unit: '%' } }) };
-const compression = [tooling('tooling-before', 'Punch and die check — before compression'), compressStep,
-  { block: 'friability', settings: () => ({ lossLimit: { high: '1.0', unit: '%' } }) }, { block: 'disintegration', settings: () => ({ maxTime: '15' }) },
-  tooling('tooling-after', 'Punch and die check — after compression'), reconcile];
-
-// Wet granulation: binder solution, granulation and drying, blending with the extragranular materials and the
-// lubricant, compression. Blending adds materials to the granules, so its yield is on the theoretical core batch weight
-// (the granules' output alone would leave out what the stage adds and read above 100 %; the master check refuses it).
-const WET: StagePlan[] = [
-  { key: 'binder', name: 'Binder solution', kind: 'preparation', role: 'Granulation operator', produces: ['binder solution', 24],
-    steps: [weighStep('weigh-binder'), { block: 'binder-solution' }] },
-  { key: 'granulation', name: 'Granulation', role: 'Granulation operator', rooms: ['Granulation'], produces: ['dried granules', 72], uses: ['binder'],
-    steps: [weighStep('weigh-api'), { block: 'sift' }, { block: 'charge', key: 'charge-api' }, { block: 'dry-mix' }, { block: 'granulate', checker: true }, { block: 'dry' },
-      { block: 'sieve', key: 'mill' }, yieldStep('')] },
-  { key: 'blending', name: 'Blending', role: 'Granulation operator', produces: ['lubricated blend', 72], uses: ['granulation'],
-    steps: [{ block: 'lubricate', settings: () => ({ granuleWeight: { ref: 'granulation/yield/output' }, tolerance: '0.5' }) }, { block: 'blend-uniformity' }, yieldStep({ header: 'coreBatch' })] },
-];
-const wetCompression = (produces: string): StagePlan => ({ key: 'compression', name: 'Compression', role: 'Compression operator', rooms: ['Compression'], produces: [produces, 720], uses: ['blending'], steps: compression });
+interface StepPlan { block: string; key?: string; name?: string; settings?: Record<string, SettingValue> }
+interface StagePlan { key: string; name: string; kind?: Stage['kind']; count?: number; role: string; machineTypes?: string[]; produces?: [string, number]; uses?: string[]; steps: StepPlan[] }
 
 const SKELETONS: { id: string; name: string; text: string; stages: StagePlan[] }[] = [
   {
-    id: 'wet-granulation-film-coated', name: 'Wet granulation, film-coated',
-    text: 'Binder solution, granulation and drying, lubrication, compression, coating suspension and film coating.',
-    stages: [...WET, wetCompression('core tablets'),
-      { key: 'suspension', name: 'Coating suspension', kind: 'preparation', role: 'Coating operator', produces: ['coating suspension', 24],
-        steps: [weighStep('weigh-coating'), { block: 'coating-suspension' }] },
-      { key: 'coating', name: 'Film coating', role: 'Coating operator', rooms: ['Coating'], produces: ['coated tablets', 2160], uses: ['compression', 'suspension'],
-        steps: [{ block: 'spray-coat', key: 'coat', settings: () => ({ coreWeight: { ref: 'compression/compress/meanWeight' }, base: 'start' }) },
-          { block: 'tablet-reconciliation', key: 'yield', settings: () => ({ theoretical: { ref: 'compression/yield/goodTablets' }, meanWeight: { ref: 'coating/coat/meanWeight' },
-            yieldLimit: { low: '97.0', high: '100.5', unit: '%' }, accountabilityLimit: { low: '99.0', high: '100.5', unit: '%' } }) }] },
+    id: 'hplc-external-standard', name: 'Chromatography (HPLC/GC) with an external standard',
+    text: 'Standard solution, sample solutions in replicate, the instrument run and its system suitability.',
+    stages: [
+      { key: 'standard', name: 'Standard solution', kind: 'preparation', role: 'Analyst', produces: ['standard solution', 24],
+        steps: [{ block: 'weigh', key: 'weigh-standard', name: 'Weigh the reference standard', settings: { what: 'Reference standard', unit: 'mg' } },
+          { block: 'mix', key: 'dissolve-standard', name: 'Dissolve the standard' }, { block: 'dilute', key: 'dilute-standard', name: 'Dilute the standard' }] },
+      { key: 'sample', name: 'Sample solutions', kind: 'replicate', count: 2, role: 'Analyst',
+        steps: [{ block: 'weigh', key: 'weigh-sample', name: 'Weigh the sample', settings: { what: 'Sample', unit: 'mg' } },
+          { block: 'mix', key: 'dissolve-sample', name: 'Dissolve the sample' }, { block: 'dilute', key: 'dilute-sample', name: 'Dilute the sample' }] },
+      { key: 'run', name: 'Instrument run', role: 'Analyst', uses: ['standard'], machineTypes: ['HPLC', 'GC'],
+        steps: [{ block: 'instrument-run', key: 'run' }, { block: 'system-suitability', key: 'sst' }] },
     ],
   },
   {
-    id: 'wet-granulation-uncoated', name: 'Wet granulation, uncoated',
-    text: 'Binder solution, granulation and drying, lubrication, then compression.',
-    stages: [...WET, wetCompression('bulk tablets')],
+    id: 'titration', name: 'Titration',
+    text: 'Weigh the sample in replicate, dissolve and titrate.',
+    stages: [
+      { key: 'sample', name: 'Sample', kind: 'replicate', count: 2, role: 'Analyst',
+        steps: [{ block: 'weigh', key: 'weigh-sample', name: 'Weigh the sample', settings: { what: 'Sample', unit: 'mg' } },
+          { block: 'mix', key: 'dissolve-sample', name: 'Dissolve the sample' }] },
+    ],
   },
   {
-    id: 'direct-compression-uncoated', name: 'Direct compression, uncoated',
-    text: 'Sifting and blending of the dispensed materials, then compression.',
+    id: 'physical-tests', name: 'Physical tests of tablets',
+    text: 'Uniformity of mass, friability and disintegration.',
     stages: [
-      { key: 'blending', name: 'Blending', role: 'Production operator', produces: ['blend', 72],
-        steps: [weighStep('weigh'), { block: 'sift' }, { block: 'dry-mix', key: 'blend' }, yieldStep({ header: 'coreBatch' })] },
-      { key: 'compression', name: 'Compression', role: 'Compression operator', rooms: ['Compression'], produces: ['bulk tablets', 720], uses: ['blending'], steps: compression },
+      { key: 'physical', name: 'Physical tests', role: 'Analyst',
+        steps: [{ block: 'uniformity-by-weight' }, { block: 'friability' }, { block: 'disintegration' }] },
     ],
   },
 ];
 export const SKELETON_LIST = SKELETONS.map(({ id, name, text }) => ({ id, name, text }));
 
-/** The stages of a skeleton for this header. */
-export function skeletonStages(id: string, h: Header): Stage[] {
+/** The stages of a skeleton. */
+export function skeletonStages(id: string): Stage[] {
   const sk = SKELETONS.find((s) => s.id === id);
   if (!sk) return [];
   return sk.stages.map((p) => ({
-    key: p.key, name: p.name, kind: p.kind ?? 'normal', roomTypes: p.rooms ?? [], machineTypes: [], role: p.role, uses: p.uses ?? [],
+    key: p.key, name: p.name, kind: p.kind ?? 'normal', ...(p.count ? { count: p.count } : {}), roomTypes: [], machineTypes: p.machineTypes ?? [], role: p.role, uses: p.uses ?? [],
     ...(p.produces ? { produces: { name: p.produces[0], holdHours: p.produces[1] } } : {}),
-    steps: [{ block: 'line-clearance' }, ...p.steps].reduce<Step[]>((steps, sp) => {
+    steps: p.steps.reduce<Step[]>((steps, sp) => {
       const block = findBlock({ id: sp.block, version: 1 })!;
       const base = stepFrom(block, steps.map((t) => t.key));
-      const settings = Object.fromEntries(Object.entries({ ...base.settings, ...sp.settings?.(h) }).filter(([, v]) => v !== ''));
-      return [...steps, { ...base, ...(sp.key ? { key: sp.key } : {}), ...(sp.name ? { name: sp.name } : {}), settings,
-        ...(sp.checker ? { checker: true } : {}), ...(sp.minMinutes ? { minMinutes: sp.minMinutes } : {}) }];
+      return [...steps, { ...base, ...(sp.key ? { key: sp.key } : {}), ...(sp.name ? { name: sp.name } : {}), settings: { ...base.settings, ...sp.settings } }];
     }, []),
   }));
 }
-

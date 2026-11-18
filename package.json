@@ -4,7 +4,7 @@
   "private": true,
   "license": "SEE LICENSE IN LICENSE",
   "type": "module",
-  "description": "Electronic batch records for active pharmaceutical ingredients made by chemical synthesis (Medhanta LIMS), on the Medhanta platform",
+  "description": "Electronic analysis records for active pharmaceutical ingredients made by chemical synthesis (Medhanta LIMS), on the Medhanta platform",
   "engines": {
     "node": ">=22"
   },

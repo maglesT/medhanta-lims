@@ -4,43 +4,39 @@
   "permissions": [
     {
       "code": "lims.master.author",
-      "label": "Write master batch record versions"
+      "label": "Write method and specification versions"
     },
     {
       "code": "lims.master.check",
-      "label": "Check a master batch record version written by another person"
+      "label": "Check a method or specification version written by another person"
     },
     {
       "code": "lims.master.approve",
-      "label": "Approve a checked master batch record version (QA)"
+      "label": "Approve a checked method or specification version (QA)"
     },
     {
-      "code": "lims.batch.issue",
-      "label": "Issue a batch record from an approved master version"
+      "code": "lims.sample.register",
+      "label": "Register, receive, store and dispose of samples"
     },
     {
-      "code": "lims.batch.operate",
-      "label": "Record and sign steps of a batch as performed"
+      "code": "lims.analysis.perform",
+      "label": "Start an analysis and record and sign its steps"
     },
     {
-      "code": "lims.batch.check",
+      "code": "lims.analysis.check",
       "label": "Check steps performed by another person (second person)"
     },
     {
-      "code": "lims.batch.supervise",
-      "label": "Production approval of a completed batch record"
+      "code": "lims.analysis.review",
+      "label": "Review a complete analysis with its audit trail, or stop one"
     },
     {
       "code": "lims.qc.approve",
-      "label": "QC approval of the results used for release"
-    },
-    {
-      "code": "lims.qa.release",
-      "label": "QA review and release of filled, inspected units"
+      "label": "QC decision on a sample (approve or reject) and its certificate of analysis"
     },
     {
       "code": "lims.view",
-      "label": "View batch records and master versions"
+      "label": "View samples, analyses, methods and specifications"
     },
     {
       "code": "lims.demo.skip",

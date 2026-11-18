@@ -197,3 +197,25 @@ and QA. An unanswered warning blocks "Send for review" like a refusal. The list,
 - Tests per rule and per template, and a few browser journeys.
 - No Batchwright machinery: no control register, mutation testing, golden batches, API contract package, CLI, sandbox,
   continuity or markets.
+
+## Step 3: specifications, methods, samples, worksheets, review, CoA (design, 18 Nov 2026)
+Owner rule: full pharma depth, simplest software design. Every record below is a copy of something TrueBatch or the
+Logbook already does; there is no new engine mechanism.
+
+| LIMS record | Copied from | How |
+|---|---|---|
+| **Method** (version: draft, in review, approved, effective, retired) | TrueBatch master version | Same table, lifecycle, master check, second-person check, QA approval and change-control number. The document is a header (code, name, technique, reference and edition) and the stages and steps; there is no formula. A setting the product decides (label claim, average weight, dilution volume …) is written `{ spec: name }`: the spec gives it. |
+| **Specification** (same lifecycle) | TrueBatch master version, second kind | Same table (`kind = 'spec'`), same review and approval. The document is a header (material or product from master data, type, stage, market, pharmacopoeia and edition) and a list of tests: name, method, the method's result step, limit type picked from a list (range, NMT, NLT, conforms, report only, alert/action, two-band release/shelf life, staged), limit, and the values the method asks the spec for. |
+| **Sample** (`LS26xxxxx`) | Logbook item + entries | A row (what, lot or batch, spec version, quantity) and insert-only events: registered, received, stored, handed over, disposed, approved, rejected. Its status is computed from the events. Registered from an MMS lot (`lot_v1`) or a TrueBatch batch (`batch_fact_v1`); by hand only when the link is down, marked and checked by a second person. |
+| **Analysis** (`LA26xxxxx`) | TrueBatch batch | Issued from the effective method version for one sample; covers the sample's spec tests that name this method. Steps, signatures, second-person checks, corrections, timers, deviation notes and PDF exactly as a batch. Before every engine call the spec's limits and values are put into the method's result steps (`applySpec`, a pure function): the engine sees an ordinary master. |
+| **Review** | TrueBatch production approval | A different person reviews the complete analysis with its audit trail and signs "reviewed" (LIMS-18, LIMS-19). |
+| **Decision and CoA** (`COA26xxxxx`) | TrueBatch QC approval and batch record PDF | When every spec test has a reviewed result, QC approves or rejects the sample with an e-signature; the CoA (PDF) shows only reviewed results with limits, method and lot/batch. |
+| **Views** | TrueBatch `batch_fact_v1` | `result_v1` (approved results per lot/batch) and `coa_v1` (CoA number, decision, date), ids `md5('lims:...' || id)`. |
+
+Worksheet blocks kept from TrueBatch: weigh, check, mix (as "prepare"), disintegration, content uniformity,
+uniformity by weight, friability, density and flow, sieve analysis, line clearance (as bench clearance, optional).
+New blocks (library v1): dilute, instrument run, system suitability, result. All production blocks and the tablet
+formula, dispensing, stock and yield parts are removed.
+
+Permissions (`lims.*`): master.author, master.check, master.approve (methods and specs), sample.register,
+analysis.perform, analysis.check, analysis.review, qc.approve, view, demo.skip.

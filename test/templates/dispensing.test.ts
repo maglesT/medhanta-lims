@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  c5SameBasis, t8BatchScaling, t9PotencyAdjusted, t10Compensating, t11SaltFactor, t12DryBasis,
+  c5SameBasis, t8AnalysisScaling, t9PotencyAdjusted, t10Compensating, t11SaltFactor, t12DryBasis,
   t15Rescale, t16Overage, t18ContentAdjusted, t19Split, t20MultiLot, type C5Input,
 } from '../../shared/templates/dispensing.js';
 import { ok, refused } from './helpers.js';
@@ -8,34 +8,34 @@ import { ok, refused } from './helpers.js';
 // Molecular weights used below are from standard atomic weights (C 12.011, H 1.008, N 14.007, O 15.999,
 // S 32.06, Na 22.990, Ca 40.078) or as quoted in the formulation reports; each hand result is in the comment.
 
-describe('T8 Batch scaling', () => {
+describe('T8 Analysis scaling', () => {
   it.each([
     [{ mode: 'per unit' as const, perUnit: '478.000 mg', count: '350000 tablets' }, 'kg', '167.300'], // imatinib: 478 mg × 350000 = 167.3 kg
     [{ mode: 'per unit' as const, perUnit: '0.025 mg', count: '500000', unit: 'g' }, 'g', '12.500'], // levothyroxine 25 µg × 500000 = 12.5 g
     [{ mode: 'per unit' as const, perUnit: '3.4531 mg', count: '2000000 tablets' }, 'kg', '6.906'], // aliskiren mini-tablets: 6.9062 kg
     [{ mode: 'per unit' as const, perUnit: '400 IU', count: '200000 tablets' }, 'IU', '80000000.000'], // vitamin D3: 400 IU × 200000 (stays in IU)
-    [{ mode: 'percent' as const, percent: '73.65 %', batch: '210.0 kg' }, 'kg', '154.665'], // rucaparib camsylate 73.65 % × 210 kg
-    [{ mode: 'percent' as const, percent: '0.25 %w/w', batch: '210.0 kg' }, 'kg', '0.525'], // Mg stearate 0.25 % × 210 kg
+    [{ mode: 'percent' as const, percent: '73.65 %', analysis: '210.0 kg' }, 'kg', '154.665'], // rucaparib camsylate 73.65 % × 210 kg
+    [{ mode: 'percent' as const, percent: '0.25 %w/w', analysis: '210.0 kg' }, 'kg', '0.525'], // Mg stearate 0.25 % × 210 kg
     [{ mode: 'rate x time' as const, rate: '10 kg/h', time: '24 h' }, 'kg', '240.000'], // continuous line (formulation 50): 10 kg/h × 24 h
     [{ mode: 'rate x time' as const, rate: '135000 tablets/h', time: '90 min' }, 'units', '202500.000'], // 135000/h × 1.5 h
     [{ mode: 'rate x time' as const, rate: '500 g/min', time: '2 h' }, 'kg', '60.000'], // 0.5 kg/min × 120 min
   ])('T8: %o = %s %s', (i, unit, want) => {
-    const r = ok(t8BatchScaling(i));
+    const r = ok(t8AnalysisScaling(i));
     expect(r.unit).toBe(unit);
     expect(r.value.toFixed(3)).toBe(want);
   });
 
   it('T8: shows the worked line', () => {
-    expect(ok(t8BatchScaling({ mode: 'per unit', perUnit: '478.000 mg', count: '350000 tablets' })).shown).toBe('478.000 mg × 350000 tablets = 167.300 kg');
+    expect(ok(t8AnalysisScaling({ mode: 'per unit', perUnit: '478.000 mg', count: '350000 tablets' })).shown).toBe('478.000 mg × 350000 tablets = 167.300 kg');
   });
 
   it.each([
     [{ mode: 'per unit' as const, perUnit: '478 mg', count: '350 kg' }, /number of units must be a count/],
-    [{ mode: 'percent' as const, percent: '120 %', batch: '210 kg' }, /between 0 and 100/],
+    [{ mode: 'percent' as const, percent: '120 %', analysis: '210 kg' }, /between 0 and 100/],
     [{ mode: 'rate x time' as const, rate: '10 kg', time: '24 h' }, /mass, volume or count per time/],
     [{ mode: 'rate x time' as const, rate: '10 kg/h', time: '24 kg' }, /must be a time/],
   ])('T8: refuses %o', (i, msg) => {
-    expect(refused(t8BatchScaling(i))).toMatch(msg);
+    expect(refused(t8AnalysisScaling(i))).toMatch(msg);
   });
 });
 
@@ -302,7 +302,7 @@ describe('T16 Overage', () => {
 describe('T18 Content-adjusted quantity (any material)', () => {
   it.each([
     ['Eudragit L 30 D at 30 % solids (formulation 5): 13.64 mg dry polymer × 100 ÷ 30.0 = 45.467 mg dispersion', { target: '13.64 mg', content: '30.0 %', formulaQuantityIs: 'dry' as const }, 3, '45.467'],
-    ['the same per batch: 4.092 kg × 100 ÷ 30.0 = 13.640 kg', { target: '4.092 kg', content: '30.0 %w/w', formulaQuantityIs: 'dry' as const }, 3, '13.640'],
+    ['the same per analysis: 4.092 kg × 100 ÷ 30.0 = 13.640 kg', { target: '4.092 kg', content: '30.0 %w/w', formulaQuantityIs: 'dry' as const }, 3, '13.640'],
     ['lanthanum by lot (part 2, formulation 9): 75.0 kg La × 100 ÷ 52.4 = 143.130 kg', { target: '75.0 kg', content: '52.4 %', formulaQuantityIs: 'dry' as const }, 3, '143.130'],
     ['vitamin D3 400 IU at 100,000 IU/g (formulation 8): 400 ÷ 100000 g = 4.000 mg', { target: '400 IU', content: '100000 IU/g', formulaQuantityIs: 'dry' as const }, 3, '4.000'],
     ['vitamin A 2700 IU (2000 + 35 %) at 500,000 IU/g (formulation 9): 5.400 mg', { target: '2700 IU', content: '500000 IU/g', formulaQuantityIs: 'dry' as const }, 3, '5.400'],

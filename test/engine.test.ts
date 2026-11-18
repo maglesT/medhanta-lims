@@ -3,7 +3,7 @@ import {
   currentValues, doneProblems, evaluate, openSteps, parseKey, refusal, stepLabel, stepState, stepTitle, timers,
   type Action, type State, type StepEvent,
 } from '../shared/engine/index.js';
-import { at, ev, fail, pass, reading, small, tablet } from './engine-fixture.js';
+import { at, ev, fail, pass, reading, small, method } from './engine-fixture.js';
 
 const kinds = (s: string) => s.split(' ').filter(Boolean).map((k) => ev(k as StepEvent['kind'], '0.1.0.1'));
 const stateOf = (doc: ReturnType<typeof small>, events: StepEvent[], id: string, now = at(1000)) => {
@@ -31,10 +31,11 @@ describe('stepState', () => {
 });
 
 describe('the action table', () => {
-  const op = { id: 1, permissions: ['lims.batch.operate'] };
-  const checker = { id: 2, permissions: ['lims.batch.check'] };
-  const qa = { id: 3, permissions: ['lims.qa.release'] };
-  const ctx = (state: State, events: StepEvent[], user = op, flow: 'none' | 'optional-with-reason' | 'qa-hold' = 'none') => ({ state, events, flow, user });
+  const op = { id: 1, permissions: ['lims.analysis.perform'] };
+  const checker = { id: 2, permissions: ['lims.analysis.check'] };
+  const qc = { id: 3, permissions: ['lims.qc.approve'] };
+  const reviewer = { id: 4, permissions: ['lims.analysis.review'] };
+  const ctx = (state: State, events: StepEvent[], user = op, flow: 'none' | 'repeat-until' | 'optional-with-reason' = 'none') => ({ state, events, flow, user });
   const ok = (a: Action, c: ReturnType<typeof ctx>) => refusal(a, c)?.error ?? 'allowed';
 
   it.each<[Action, State, string, typeof op, string]>([
@@ -53,13 +54,16 @@ describe('the action table', () => {
     ['check', 'done_awaiting_check', 'started value done', op, 'forbidden'],
     ['send-back', 'done_awaiting_check', 'started value done', checker, 'allowed'],
     ['note', 'waiting', '', checker, 'allowed'],
-    ['note', 'checked', '', qa, 'allowed'],
+    ['note', 'checked', '', qc, 'allowed'],
+    ['note', 'done', '', reviewer, 'allowed'],
+    ['start', 'open', '', reviewer, 'forbidden'],
+    ['check', 'done_awaiting_check', 'started value done', qc, 'forbidden'],
   ])('%s while %s (events "%s") → %s', (action, state, events, user, want) => {
     expect(ok(action, ctx(state, kinds(events), user))).toBe(want);
   });
 
   it('LIMS-41 the checker cannot be the performer, nor anyone who started, recorded or corrected the step', () => {
-    const both = { id: 1, permissions: ['lims.batch.operate', 'lims.batch.check'] };
+    const both = { id: 1, permissions: ['lims.analysis.perform', 'lims.analysis.check'] };
     const done = [ev('started', '0.1.0.1', { person: 7 }), ev('value', '0.1.0.1', { person: 1 }), ev('done', '0.1.0.1', { person: 7 })];
     expect(refusal('check', ctx('done_awaiting_check', done, both))?.error).toBe('own_work');
     expect(refusal('send-back', ctx('done_awaiting_check', done, both))?.error).toBe('own_work');
@@ -68,17 +72,20 @@ describe('the action table', () => {
     expect(refusal('check', ctx('done_awaiting_check', corrected, { ...both, id: 2 }))?.error).toBe('own_work');
   });
 
-  it('only an optional step can be not applicable; only a QA-hold step can be released, once', () => {
+  it('only an optional step can be not applicable, and only before it is done', () => {
     expect(refusal('not-applicable', ctx('open', [], op, 'none'))?.error).toBe('wrong_state');
+    expect(refusal('not-applicable', ctx('open', [], op, 'repeat-until'))?.error).toBe('wrong_state');
     expect(refusal('not-applicable', ctx('open', [], op, 'optional-with-reason'))).toBeNull();
-    const done = kinds('started value done');
-    expect(refusal('release-hold', ctx('done', done, qa, 'none'))?.error).toBe('wrong_state');
-    expect(refusal('release-hold', ctx('done', done, qa, 'qa-hold'))).toBeNull();
-    expect(refusal('release-hold', ctx('done', [...done, ev('qa_released_hold', '0.1.0.1')], qa, 'qa-hold'))?.error).toBe('wrong_state');
-    expect(refusal('release-hold', ctx('done', done, op, 'qa-hold'))?.error).toBe('forbidden');
+    expect(refusal('not-applicable', ctx('done', kinds('started value done'), op, 'optional-with-reason'))?.error).toBe('wrong_state');
+    expect(refusal('not-applicable', ctx('open', [], { id: 2, permissions: ['lims.analysis.check'] }, 'optional-with-reason'))?.error).toBe('forbidden');
   });
 
-  it('step keys are stage.sub-batch.step.round', () => {
+  it('a value is recorded before the step is signed; afterwards it changes only by correction, with a reason', () => {
+    expect(refusal('record', ctx('in_progress', kinds('started value done sent_back')))?.message).toBe('The step was signed: change a value by correction, with a reason.');
+    expect(refusal('correct', ctx('in_progress', kinds('started value')))?.message).toBe('Nothing signed to correct yet: record the value.');
+  });
+
+  it('step keys are stage.replicate.step.round', () => {
     expect(parseKey('2.1.3.4')).toEqual({ stage: 2, sub: 1, step: 3, round: 4 });
     expect(parseKey('2.0.3.1')).toBeNull();
     expect(parseKey('2.1.3')).toBeNull();
@@ -112,7 +119,7 @@ describe('openSteps', () => {
   });
 
   it('preparation: opens any time, and must be closed before the stage that uses it', () => {
-    const doc = small([{}, { kind: 'preparation', produces: { name: 'binder', holdHours: 24 } }, { uses: ['s1'] }]);
+    const doc = small([{}, { kind: 'preparation', produces: { name: 'standard solution', holdHours: 24 } }, { uses: ['s1'] }]);
     expect(stateOf(doc, [], '1.1.0.1')).toBe('open');
     const first = [ev('started', '0.1.0.1'), ev('done', '0.1.0.1')];
     expect(stateOf(doc, first, '2.1.0.1')).toBe('waiting');
@@ -141,21 +148,13 @@ describe('openSteps', () => {
     expect(stateOf(doc, [...both, ev('note', '0.1.0.2', { payload: { text: 'Deviation raised' } })], '0.1.1.1')).toBe('open');
   });
 
-  it('sub-batch: N numbered copies run side by side; the stage closes when all are done', () => {
-    const doc = small([{ kind: 'sub-batch', count: 3 }, {}]);
+  it('replicate: N numbered copies run side by side; the stage closes when all are done', () => {
+    const doc = small([{ kind: 'replicate', count: 3 }, {}]);
     const ids = openSteps(doc, [], at(0)).steps.map((s) => `${s.id} ${s.state}`);
     expect(ids).toEqual(['0.1.0.1 open', '0.2.0.1 open', '0.3.0.1 open', '1.1.0.1 waiting']);
     const two = ['0.1.0.1', '0.2.0.1'].flatMap((k) => [ev('started', k), ev('done', k)]);
     expect(stateOf(doc, two, '1.1.0.1')).toBe('waiting');
     expect(stateOf(doc, [...two, ev('started', '0.3.0.1'), ev('done', '0.3.0.1')], '1.1.0.1')).toBe('open');
-  });
-
-  it('QA hold: the next step waits for QA to release the hold', () => {
-    const doc = small([{ steps: [{ flow: { kind: 'qa-hold' } }, {}] }]);
-    const done = [ev('started', '0.1.0.1'), ev('done', '0.1.0.1')];
-    const v = openSteps(doc, done, at(100)).steps[1]!;
-    expect([v.state, v.blocked]).toEqual(['waiting', 'Waits for QA to release the hold on “Check a value against limits: pH”']);
-    expect(stateOf(doc, [...done, ev('qa_released_hold', '0.1.0.1', { person: 3 })], '0.1.1.1')).toBe('open');
   });
 
   it('a step not applicable lets the next step open', () => {
@@ -203,34 +202,24 @@ describe('done needs', () => {
     expect(view([ev('started', '0.1.0.1', { min: 0 }), out, ev('note', '0.1.0.1', { min: 3 })], at(20))).toEqual([]);
   });
 
-  it('TA-16 a screen not intact after use fails the integrity check: the step needs a deviation note', () => {
-    const sieve = small([{ steps: [{ block: { id: 'sieve', version: 1 }, settings: {} }] }]);
-    const values = { machine: 'MIL-01', screen: '1.0 mm', intactBefore: 'yes', intactAfter: 'no' };
-    const results = evaluate(sieve, [], { stage: 0, sub: 1, step: 0, round: 1 }, values);
-    expect(results.integrity).toMatchObject({ ok: true, check: { pass: false } });
-    const events = [ev('started', '0.1.0.1', { min: 0 }), ev('value', '0.1.0.1', { min: 1, payload: { values, results } })];
-    const v = (e: StepEvent[]) => doneProblems(sieve, openSteps(sieve, e, at(5)).steps[0]!, at(5));
-    expect(v(events)).toEqual(['Out of limits: Screen integrity. Add a deviation note first.']);
-    expect(v([...events, ev('note', '0.1.0.1', { min: 2, payload: { text: 'Screen torn; material re-sieved' } })])).toEqual([]);
-  });
-
-  it('TA-10 line clearance: every answer yes is clear; a "no" needs a deviation note; the cleaning label is recorded', () => {
+  it('bench clearance: every answer yes is clear; a "no" needs a deviation note; the cleaning label is recorded', () => {
     const lc = small([{ steps: [{ block: { id: 'line-clearance', version: 1 }, checker: true, settings: {} }] }]);
     const key = { stage: 0, sub: 1, step: 0, round: 1 };
-    const label = { cleanedOn: '15 Nov 2026 06:40', cleanedBy: 'R. Operator' };
+    const label = { cleanedOn: '15 Nov 2026 06:40', cleanedBy: 'A. Analyst' };
     expect(evaluate(lc, [], key, { previousRemoved: 'yes', clean: 'yes', noOther: 'yes', ...label }).clearance)
-      .toMatchObject({ ok: true, check: { pass: true }, shown: 'Line clear: 3 of 3 as expected (yes): pass' });
-    const values = { room: 'BLN-01', previousRemoved: 'yes', clean: 'no', noOther: 'yes', ...label };
+      .toMatchObject({ ok: true, check: { pass: true }, shown: 'Bench clear: 3 of 3 as expected (yes): pass' });
+    const values = { room: 'RM-110', previousRemoved: 'yes', clean: 'no', noOther: 'yes', ...label };
     const results = evaluate(lc, [], key, values);
     const events = [ev('started', '0.1.0.1', { min: 0 }), ev('value', '0.1.0.1', { min: 1, payload: { values, results } })];
     const v = (e: StepEvent[]) => doneProblems(lc, openSteps(lc, e, at(5)).steps[0]!, at(5));
-    expect(v(events)).toEqual(['Out of limits: Line clear. Add a deviation note first.']);
+    expect(v(events)).toEqual(['Out of limits: Bench clear. Add a deviation note first.']);
+    expect(v([...events, ev('note', '0.1.0.1', { min: 2, payload: { text: 'Bench re-cleaned; label renewed' } })])).toEqual([]);
     const partial = [events[0]!, ev('value', '0.1.0.1', { min: 1, payload: { values: { previousRemoved: 'yes' }, results: {} } })];
     expect(v(partial)).toEqual(['Room is not recorded', 'Area and equipment clean (status label) is not recorded', 'Cleaned on (date and time on the label) is not recorded',
-      'Cleaned by (name on the label) is not recorded', 'No materials or documents of other products is not recorded']);
+      'Cleaned by (name on the label) is not recorded', 'No solutions or documents of other analyses is not recorded']);
   });
 
-  it('a minimum time: a 10-minute mix cannot be done earlier', () => {
+  it('a minimum time: a 10-minute dissolving cannot be done earlier', () => {
     const events = [ev('started', '0.1.0.1', { min: 0 }), ev('value', '0.1.0.1', { min: 1, payload: { values: { reading: { value: '6', unit: '' } }, results: { readingCheck: pass as never } } })];
     expect(view(events, at(9))).toEqual([`The minimum time is 10 min: the step can be finished from ${at(10).toISOString()}`]);
     expect(view(events, at(10))).toEqual([]);
@@ -239,27 +228,27 @@ describe('done needs', () => {
 
 describe('timers', () => {
   it('LIMS-44 an exceeded hold time blocks the using stage until a deviation note', () => {
-    const doc = small([{ produces: { name: 'granules', holdHours: 2 } }, { uses: ['s0'] }]);
+    const doc = small([{ produces: { name: 'test solution', holdHours: 2 } }, { uses: ['s0'] }]);
     const done = [ev('started', '0.1.0.1', { min: 0 }), ev('done', '0.1.0.1', { min: 10 })];
     expect(timers(doc, done, at(60))).toMatchObject([{ id: 'hold:0:1', kind: 'hold', state: 'running', from: at(10), at: at(130), key: { stage: 1, step: 0 } }]);
     expect(timers(doc, done, at(115))[0]!.state).toBe('due soon');
     expect(timers(doc, done, at(131))[0]!.state).toBe('late');
     expect(stateOf(doc, done, '1.1.0.1', at(100))).toBe('open');
     expect(stateOf(doc, done, '1.1.0.1', at(131))).toBe('waiting');
-    expect(openSteps(doc, done, at(131)).stages[1]!.blocked).toBe('Hold time of granules (2 h) before Stage 1 ran out: a deviation note is needed');
+    expect(openSteps(doc, done, at(131)).stages[1]!.blocked).toBe('Hold time of test solution (2 h) before Stage 1 ran out: a deviation note is needed');
     // A note made before the hold ran out does not count.
     expect(stateOf(doc, [...done, ev('note', '1.1.0.1', { min: 120 })], '1.1.0.1', at(131))).toBe('waiting');
     expect(stateOf(doc, [...done, ev('note', '1.1.0.1', { min: 131 })], '1.1.0.1', at(132))).toBe('open');
   });
 
   it('a hold time stops when the using stage starts; started too late, it stays late', () => {
-    const doc = small([{ produces: { name: 'granules', holdHours: 2 } }, { uses: ['s0'] }]);
+    const doc = small([{ produces: { name: 'test solution', holdHours: 2 } }, { uses: ['s0'] }]);
     const done = [ev('started', '0.1.0.1', { min: 0 }), ev('done', '0.1.0.1', { min: 10 })];
     expect(timers(doc, [...done, ev('started', '1.1.0.1', { min: 100 })], at(500))).toEqual([]);
     expect(timers(doc, [...done, ev('note', '1.1.0.1', { min: 140 }), ev('started', '1.1.0.1', { min: 141 })], at(500))[0]!.state).toBe('late');
   });
 
-  it('TA-15 a periodic check is due every 30 minutes from the start of the previous round', () => {
+  it('a periodic check is due every 30 minutes from the start of the previous round', () => {
     const doc = small([{ steps: [{ everyMinutes: 30, flow: { kind: 'repeat-until', maxRounds: 10, stop: 'readingCheck' } }] }]);
     const r1 = [ev('started', '0.1.0.1', { min: 0 }), reading('0.1.0.1', { readingCheck: fail }, { min: 2 }), ev('done', '0.1.0.1', { min: 3 })];
     expect(timers(doc, r1, at(20))).toMatchObject([{ id: 'every:0.1.0.2', kind: 'periodic', state: 'running', at: at(30) }]);
@@ -283,92 +272,91 @@ describe('timers', () => {
 });
 
 describe('calculations come from the templates library', () => {
-  const doc = tablet();
-  const certificate = { assay: { value: '99.0', unit: '%' }, lod: { value: '0.5', unit: '%' } };
+  const doc = method();
 
-  it('the API target is the potency-adjusted formula quantity (T8 then T9); net (T1) against it (C1)', () => {
-    const r = evaluate(doc, [], { stage: 1, sub: 1, step: 0, round: 1 }, { ...certificate, gross: { value: '12.000', unit: 'kg' }, tare: { value: '1.850', unit: 'kg' } });
-    // 100.0 mg × 100 000 = 10.000 kg; assay as is 99.0 × 99.5 ÷ 100 = 98.505 %; 10.000 × 100 ÷ 98.505 = 10.1518 kg
-    expect(r.target).toMatchObject({ ok: true, unit: 'kg', shown: '100.0 mg × 100000 tablets = 10.000 kg; then assay as is = 99.0 % × (100 − 0.5 %) ÷ 100 = 98.505 %; 10.000 kg × 100 ÷ 98.505 % = 10.152 kg' });
-    expect(r.net).toMatchObject({ ok: true, value: '10.15', shown: '12.000 kg − 1.850 kg = 10.150 kg' });
-    expect(r.netCheck).toMatchObject({ ok: true, check: { pass: true } });
+  it('the weighing of the standard is checked against the target of the method (C1), the dilution factor is worked out (L21)', () => {
+    const r = evaluate(doc, [], { stage: 0, sub: 1, step: 0, round: 1 }, { balance: 'INQ-BAL-01', mass: { value: '50.12', unit: 'mg' } });
+    expect(r.massCheck).toMatchObject({ ok: true, check: { pass: true } });
+    expect(evaluate(doc, [], { stage: 0, sub: 1, step: 0, round: 1 }, { mass: { value: '56.0', unit: 'mg' } }).massCheck).toMatchObject({ ok: true, check: { pass: false } });
+    expect(evaluate(doc, [], { stage: 3, sub: 2, step: 1, round: 1 }, { classA: 'yes', done: 'yes' }).factor).toMatchObject({ ok: true, value: '10' });
   });
 
-  it('TA-13 without the LOD the T9 refusal is the result, so the step cannot be signed', () => {
-    const r = evaluate(doc, [], { stage: 1, sub: 1, step: 0, round: 1 }, { assay: { value: '99.0', unit: '%' } });
-    expect(r.target).toEqual({ ok: false, message: "The dried assay needs the lot's loss on drying" });
-    expect(r.netCheck).toBeUndefined();
+  it('LIMS-17 a result is compared with the limit of the method: 95.0 to 105.0 %', () => {
+    const at3 = (v: string) => evaluate(doc, [], { stage: 3, sub: 1, step: 2, round: 1 }, { reading: { value: v, unit: '%' } }).readingCheck;
+    expect(at3('99.6')).toMatchObject({ ok: true, check: { pass: true } });
+    expect(at3('94.94')).toMatchObject({ ok: true, check: { pass: false } });
+    expect(at3('94.95')).toMatchObject({ ok: true, check: { pass: true } });
   });
 
-  it('the filler compensates the adjusted API (T10), from the target the API weighing recorded', () => {
-    const lactose = { stage: 1, sub: 1, step: 1, round: 1 };
-    expect(evaluate(doc, [], lactose, {}).target).toEqual({ ok: false, message: 'Weigh Examplol first: Lactose monohydrate compensates its adjusted quantity' });
-    const api = evaluate(doc, [], { stage: 1, sub: 1, step: 0, round: 1 }, certificate);
-    const events = [ev('value', '1.1.0.1', { payload: { values: certificate, results: api } })];
-    // 12.000 kg − (10.1518 − 10.000) = 11.848 kg
-    expect(evaluate(doc, events, lactose, {}).target).toMatchObject({ ok: true, unit: 'kg' });
-    expect(Number((evaluate(doc, events, lactose, {}).target as { value: string }).value).toFixed(3)).toBe('11.848');
-  });
-
-  it('a setting can refer to an earlier step: the coating gain is on the mean core weight of compression (T5)', () => {
-    const compress = { weights: Array.from({ length: 20 }, () => ({ value: '250.0', unit: 'mg' })) };
-    const r1 = evaluate(doc, [], { stage: 2, sub: 1, step: 0, round: 1 }, compress);
-    const events = [ev('value', '2.1.0.1', { payload: { values: compress, results: r1 } })];
-    const gain = evaluate(doc, events, { stage: 3, sub: 2, step: 0, round: 1 }, { meanWeight: { value: '257.5', unit: 'mg' } }).gain;
-    expect(gain).toMatchObject({ ok: true, value: '3', check: { pass: true } });
+  it('a setting can refer to an earlier step: the sample is weighed to within 2.0 % of the mass of the standard', () => {
+    const d = refDoc();
+    const std = { mass: { value: '50.10', unit: 'mg' } };
+    const events = [ev('value', '0.1.0.1', { payload: { values: std, results: evaluate(d, [], { stage: 0, sub: 1, step: 0, round: 1 }, std) } })];
+    // Before the standard is weighed the check waits (the sample stage opens only after the standard stage closes).
+    expect(evaluate(d, [], sampleKey, { mass: { value: '50.60', unit: 'mg' } }).massCheck).toBeUndefined();
+    expect(evaluate(d, events, sampleKey, { mass: { value: '50.60', unit: 'mg' } }).massCheck).toMatchObject({ ok: true, check: { pass: true } });
+    expect(evaluate(d, events, sampleKey, { mass: { value: '51.20', unit: 'mg' } }).massCheck).toMatchObject({ ok: true, check: { pass: false } });
   });
 });
 
+// A small method whose sample weighing takes the mass of the standard as its target (a setting { ref }), weighed
+// again until it is within 2.0 %.
+const refDoc = () => small([
+  { key: 'standard', steps: [{ key: 'weigh-std', block: { id: 'weigh', version: 1 }, settings: { what: 'Reference standard', unit: 'mg' } }] },
+  { key: 'sample', steps: [{ key: 'weigh-sample', block: { id: 'weigh', version: 1 }, flow: { kind: 'repeat-until', maxRounds: 3, stop: 'massCheck' },
+    settings: { what: 'Sample', unit: 'mg', target: { ref: 'standard/weigh-std/mass' }, tolerance: '2.0' } }] },
+]);
+const sampleKey = { stage: 1, sub: 1, step: 0, round: 1 };
+
 describe('corrections reach the steps that used the value', () => {
-  const doc = tablet();
-  const weights = (mg: string) => ({ weights: Array.from({ length: 20 }, () => ({ value: mg, unit: 'mg' })) });
-  const compress = { stage: 2, sub: 1, step: 0, round: 1 };
-  const coat = { stage: 3, sub: 1, step: 0, round: 1 };
-  const mean = { meanWeight: { value: '257.5', unit: 'mg' } };
-  const recorded = ev('value', '2.1.0.1', { payload: { values: weights('250.0'), results: evaluate(doc, [], compress, weights('250.0')) } });
-  const compressed = [ev('started', '2.1.0.1'), recorded, ev('done', '2.1.0.1')];
+  const doc = refDoc();
+  const mass = (mg: string) => ({ mass: { value: mg, unit: 'mg' } });
+  const standard = { stage: 0, sub: 1, step: 0, round: 1 };
+  const sample = mass('50.60');
+  const recorded = ev('value', '0.1.0.1', { payload: { values: mass('50.10'), results: evaluate(doc, [], standard, mass('50.10')) } });
+  const weighed = [ev('started', '0.1.0.1'), recorded, ev('done', '0.1.0.1')];
   const uses: number[] = [];
-  const coatResults = evaluate(doc, compressed, coat, mean, uses);
-  const coated = [...compressed, ev('started', '3.1.0.1'), ev('value', '3.1.0.1', { payload: { values: mean, results: coatResults, uses } }), ev('done', '3.1.0.1')];
+  const sampleResults = evaluate(doc, weighed, sampleKey, sample, uses);
+  const both = [...weighed, ev('started', '1.1.0.1'), ev('value', '1.1.0.1', { payload: { values: sample, results: sampleResults, uses } }), ev('done', '1.1.0.1')];
   const fix = (events: StepEvent[], kind: 'corrected' | 'value') =>
-    ev(kind, '2.1.0.1', { person: 4, payload: { values: weights('251.0'), results: evaluate(doc, events, compress, weights('251.0')), reason: 'Weights typed from the wrong sheet' } });
-  const corrected = [...coated, fix(coated, 'corrected')];
-  const coatView = (events: StepEvent[]) => openSteps(doc, events, at(1000)).steps.find((s) => s.id === '3.1.0.1')!;
+    ev(kind, '0.1.0.1', { person: 4, payload: { values: mass('49.50'), results: evaluate(doc, events, standard, mass('49.50')), reason: 'Mass typed from the wrong balance print' } });
+  const corrected = [...both, fix(both, 'corrected')];
+  const sampleView = (events: StepEvent[]) => openSteps(doc, events, at(1000)).steps.find((s) => s.id === '1.1.0.1')!;
 
   it('each result keeps the events it was worked out from', () => {
     expect(uses).toEqual([recorded.id]);
-    expect(coatView(coated)).toMatchObject({ state: 'done', needsResign: false, inputChanged: [] });
+    expect(sampleView(both)).toMatchObject({ state: 'done', needsResign: false, inputChanged: [] });
   });
 
   it.each<[string, StepEvent[], string, boolean, number]>([
-    ['nothing changed since', coated, 'done', false, 0],
-    ['the mean core weight was corrected after the coating used it', corrected, 'in_progress', true, 1],
-    ['a correction before the coating used it', [...compressed, fix(compressed, 'corrected')], 'waiting', false, 0],
-  ])('LIMS-46 %s → coating %s, sign again %s, %d input change(s)', (_what, events, state, resign, changes) => {
-    const v = coatView(events);
+    ['nothing changed since', both, 'done', false, 0],
+    ['the mass of the standard was corrected after the sample weighing used it', corrected, 'in_progress', true, 1],
+    ['a correction before the sample weighing used it', [...weighed, fix(weighed, 'corrected')], 'waiting', false, 0],
+  ])('LIMS-46 %s → sample weighing %s, sign again %s, %d input change(s)', (_what, events, state, resign, changes) => {
+    const v = sampleView(events);
     expect([v.state, v.needsResign, v.inputChanged.length]).toEqual([state, resign, changes]);
   });
 
   it('LIMS-46 the stale step shows the result worked out again (not stored), which input changed and by whom; signing again stores it', () => {
-    const v = coatView(corrected);
-    expect(v.inputChanged).toMatchObject([{ kind: 'corrected', person: 4, stage: 2, step: 0, payload: { reason: 'Weights typed from the wrong sheet' } }]);
-    // (257.5 − 251.0) ÷ 251.0 × 100 = 2.59 %: now below the 2.8 % limit.
-    expect(v.results.gain).toMatchObject({ ok: true, check: { pass: false } });
-    expect(currentValues(v.events).results.gain).toMatchObject({ value: '3', check: { pass: true } });
+    const v = sampleView(corrected);
+    expect(v.inputChanged).toMatchObject([{ kind: 'corrected', person: 4, stage: 0, step: 0, payload: { reason: 'Mass typed from the wrong balance print' } }]);
+    // (50.60 − 49.50) ÷ 49.50 × 100 = 2.2 %: now outside ± 2.0 %.
+    expect(v.results.massCheck).toMatchObject({ ok: true, check: { pass: false } });
+    expect(currentValues(v.events).results.massCheck).toMatchObject({ check: { pass: true } });
     const again: number[] = [];
-    const resigned = [...corrected, ev('done', '3.1.0.1', { payload: { results: evaluate(doc, corrected, coat, mean, again), uses: again } })];
-    expect(coatView(resigned)).toMatchObject({ state: 'done', needsResign: false, inputChanged: [], results: { gain: { check: { pass: false } } } });
-    // The stop check now fails: the next coating round opens.
-    expect(openSteps(doc, resigned, at(1000)).steps.find((s) => s.id === '3.1.0.2')!.state).toBe('open');
+    const resigned = [...corrected, ev('done', '1.1.0.1', { payload: { results: evaluate(doc, corrected, sampleKey, sample, again), uses: again } })];
+    expect(sampleView(resigned)).toMatchObject({ state: 'done', needsResign: false, inputChanged: [], results: { massCheck: { check: { pass: false } } } });
+    // The stop check now fails: the next weighing round opens.
+    expect(openSteps(doc, resigned, at(1000)).steps.find((s) => s.id === '1.1.0.2')!.state).toBe('open');
   });
 
   it('LIMS-46 a checked step goes back for signing and checking again; a correction of the step that used it does not count', () => {
-    const checked = [...coated.slice(0, -1), ev('done', '3.1.0.1'), ev('checked', '3.1.0.1', { person: 2 })];
+    const checked = [...both.slice(0, -1), ev('done', '1.1.0.1'), ev('checked', '1.1.0.1', { person: 2 })];
     const changed = [...checked, fix(checked, 'corrected')];
-    expect(stepState(changed.filter((e) => e.stage === 3), true).state).toBe('checked');
-    expect(coatView(changed)).toMatchObject({ state: 'in_progress', needsResign: true });
-    const ownFix = ev('corrected', '3.1.0.1', { payload: { values: mean, results: evaluate(doc, changed, coat, mean, []), uses: [changed.at(-1)!.id], reason: 'Re-weighed' } });
-    expect(coatView([...changed, ownFix]).inputChanged).toEqual([]);
+    expect(stepState(changed.filter((e) => e.stage === 1), true).state).toBe('checked');
+    expect(sampleView(changed)).toMatchObject({ state: 'in_progress', needsResign: true });
+    const ownFix = ev('corrected', '1.1.0.1', { payload: { values: sample, results: evaluate(doc, changed, sampleKey, sample, []), uses: [changed.at(-1)!.id], reason: 'Re-weighed' } });
+    expect(sampleView([...changed, ownFix]).inputChanged).toEqual([]);
   });
 });
 
@@ -418,33 +406,17 @@ describe('repeat-until: no further change from the previous round (F2)', () => {
   });
 });
 
-describe('yield accountability (T4)', () => {
-  const values = { output: { value: '24.500', unit: 'kg' }, samples: { value: '0.200', unit: 'kg' }, rejects: { value: '0.100', unit: 'kg' } };
-  const key = { stage: 2, sub: 1, step: 1, round: 1 };
-  it.each([
-    ['with accountability limits', true],
-    ['without accountability limits', false],
-  ])('TA-18 yield and accountability are worked out %s; the limits only add the check', (_what, limits) => {
-    const doc = tablet();
-    if (!limits) delete doc.stages[2]!.steps[1]!.settings.accountabilityLimit;
-    const r = evaluate(doc, [], key, values);
-    // (24.500 + 0.200 + 0.100) ÷ 25.000 × 100 = 99.20 %; yield 24.500 ÷ 25.000 × 100 = 98.00 %
-    expect(r.accountability).toMatchObject({ ok: true, value: '99.2' });
-    expect((r.accountability as { check?: unknown }).check !== undefined).toBe(limits);
-    expect(r.yield).toMatchObject({ ok: true, value: '98', check: { pass: true } });
-  });
-});
-
 describe('steps as people name them', () => {
-  it('a step is named by the master, or by its block and material; a waiting step names the step it waits for, never its key', () => {
-    const doc = tablet();
-    expect(stepTitle(doc, doc.stages[1]!.steps[0]!)).toBe('Weigh a material: Examplol');
-    expect(stepLabel(doc, { stage: 1, sub: 1, step: 4, round: 2 })).toBe('Granulation › Dry to an LOD limit (round 2)');
-    const named = small([{ steps: [{ name: 'Punch and die check — before compression', checker: true }, {}] }]);
-    expect(stepTitle(named, named.stages[0]!.steps[0]!)).toBe('Punch and die check — before compression');
+  it('a step is named by the method, or by its block and what it is about; a waiting step names the step it waits for, never its key', () => {
+    const doc = method();
+    expect(stepTitle(doc, doc.stages[0]!.steps[0]!)).toBe('Weigh: Reference standard');
+    expect(stepLabel(doc, { stage: 1, sub: 1, step: 0, round: 2 })).toBe('Loss on drying › Dry to constant mass (round 2)');
+    expect(stepLabel(doc, { stage: 3, sub: 2, step: 2, round: 1 })).toBe('Sample solutions › Check a value against limits: Assay (replicate 2)');
+    const named = small([{ steps: [{ name: 'Weigh the reference standard', checker: true }, {}] }]);
+    expect(stepTitle(named, named.stages[0]!.steps[0]!)).toBe('Weigh the reference standard');
     const v = openSteps(named, [ev('started', '0.1.0.1'), ev('done', '0.1.0.1')], at(10)).steps.find((x) => x.id === '0.1.1.1')!;
     expect(v.blocked).toBeUndefined();
-    const wait = small([{ steps: [{ name: 'Granulate to the end point', checker: true, waitForCheck: true }, {}] }]);
-    expect(openSteps(wait, [ev('started', '0.1.0.1'), ev('done', '0.1.0.1')], at(10)).steps[1]!.blocked).toBe('Waits for “Granulate to the end point” to be checked');
+    const wait = small([{ steps: [{ name: 'System suitability', checker: true, waitForCheck: true }, {}] }]);
+    expect(openSteps(wait, [ev('started', '0.1.0.1'), ev('done', '0.1.0.1')], at(10)).steps[1]!.blocked).toBe('Waits for “System suitability” to be checked');
   });
 });

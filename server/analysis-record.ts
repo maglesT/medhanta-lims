@@ -1,28 +1,28 @@
-// LIMS-51: the batch record as a PDF, the way the Logbook makes its copies. Everything comes from the master version and
+// LIMS-51: the analysis record as a PDF, the way the Logbook makes its copies. Everything comes from the master version and
 // the events, worked out by the engine as on screen; nothing is typed again. Changed values are marked: the original
 // is struck through and kept with the reason, the person and the time.
 import type { Content, TDocumentDefinitions } from 'pdfmake/interfaces.js';
 import { findBlock, type Block } from '../shared/blocks/index.js';
-import { materialLines, type Step } from '../shared/master/schema.js';
-import { batchView, deviations, deviationNumber, deviationText, fieldLabel, handFields, lateItems, lineQuantity, notYetText, cutShort, terminatedText, TERMINATED_STATE, openSteps, PROVIDER_NAME, deviationStatusWords, stepTitle, unitName, headline, limitOf, withoutVerdict, statusWords, CERTIFICATE, trainingOf, trainingText, trainingTyped, skillText, type DeviationStatus, type EventKind, type Source, type Stored, type StepView, type Value } from '../shared/engine/index.js';
-import type { LoadedBatch } from './routes/batches.js';
+import type { Step } from '../shared/master/schema.js';
+import { analysisView, deviations, deviationNumber, deviationText, fieldLabel, handFields, lateItems, notYetText, cutShort, stoppedText, TERMINATED_STATE, openSteps, PROVIDER_NAME, deviationStatusWords, stepTitle, headline, limitOf, withoutVerdict, statusWords, CERTIFICATE, trainingOf, trainingText, trainingTyped, skillText, type DeviationStatus, type EventKind, type Source, type Stored, type StepView, type Value } from '../shared/engine/index.js';
+import type { LoadedAnalysis } from './routes/analyses.js';
 import { pageFrame, plant, runs } from './pdf.js';
 import { plantText } from '../shared/plant-time.js';
 
-// A signature of the batch; `step` is the step instance of a step signature.
+// A signature of the analysis; `step` is the step instance of a step signature.
 export interface Signature { objectType: string; objectId: number; printedName: string; meaning: string; signedAt: Date; step: string | null }
-// deviationsRead: the deviations as the Deviations system has them now (null without the link). units: master data's
-// units of the materials by item id, a quantity named as master data names the same unit (nos for units), as on screen.
-export interface RecordInput extends LoadedBatch { versionNo: number; issuedByName: string; signatures: Signature[]; deviationsRead?: ReadonlyMap<string, DeviationStatus> | null;
-  units?: ReadonlyMap<string, string> }
+// deviationsRead: the deviations as the Deviations system has them now (null without the link).
+export interface RecordInput extends LoadedAnalysis { versionNo: number; issuedByName: string; signatures: Signature[]; deviationsRead?: ReadonlyMap<string, DeviationStatus> | null }
+// A unit as written (a count stays "units").
+const unitName = (u: string, _stock?: string) => u;
 
 const MEANING: Record<string, string> = {
-  issued: 'Issued', performed: 'Performed', verified: 'Verified (second person)', released: 'Released', rejected: 'Rejected',
-  production_approved: 'Production approved', qc_approved: 'QC approved',
+  issued: 'Issued', performed: 'Performed', verified: 'Verified (second person)', reviewed: 'Reviewed (second person)', stopped: 'Stopped',
+  qc_approved: 'QC approved', rejected: 'Rejected',
 };
 const EVENT: Record<EventKind, string> = {
   started: 'Started', value: 'Recorded', done: 'Signed as done', checked: 'Checked', sent_back: 'Sent back', corrected: 'Corrected',
-  not_applicable: 'Not applicable', late: 'Ran over (server timer)', qa_released_hold: 'QA released the hold', note: 'Deviation note',
+  not_applicable: 'Not applicable', late: 'Ran over (server timer)', note: 'Deviation note',
   demo_wait_skipped: 'DEMO: wait skipped',
 };
 const STATE: Record<string, string> = {
@@ -41,9 +41,6 @@ export function valueText(v: Value | undefined, stockUnit?: string): string {
 }
 /** The value at the end of a worked line ("… = 10.152 kg"). */
 const endOf = (r: Stored) => (r.ok ? (/=\s*([^=;]+)$/.exec(r.shown)?.[1]?.trim() ?? `${r.value} ${r.unit}`) : '');
-// A formula line's role and place in words, never their keys (owner, 17 Nov 2026).
-const ROLE: Record<string, string> = { api: 'API', excipient: 'Excipient', solvent: 'Solvent' };
-const PLACE: Record<string, string> = { intragranular: 'intragranular', extragranular: 'extragranular', binder: 'binder solution', coating: 'coating' };
 const checksOf = (r: Stored) => (r.ok ? Object.entries(r).filter(([k, v]) => /check$/i.test(k) && v && typeof v === 'object') as [string, { pass: boolean; shown: string }][] : []);
 
 const small = (text: string, extra: Record<string, unknown> = {}): Content => ({ text: runs(text), fontSize: 7.5, ...extra }) as Content;
@@ -52,72 +49,49 @@ const th = (text: string): Content => ({ text, fontSize: 8, bold: true, fillColo
 const table = (widths: (number | string)[], head: string[], rows: Content[][], empty = 'None.'): Content =>
   rows.length ? { table: { headerRows: 1, dontBreakRows: true, widths, body: [head.map(th), ...rows] }, layout: 'lightHorizontalLines' } : { text: empty, italics: true, fontSize: 8 };
 
-export function batchRecordDoc(r: RecordInput, by: string, printedAt = new Date(), demo = false): TDocumentDefinitions {
-  const { doc, events, batchEvents, now } = r;
+export function analysisRecordDoc(r: RecordInput, by: string, printedAt = new Date(), demo = false): TDocumentDefinitions {
+  const { doc, events, analysisEvents, now } = r;
   const h = doc.header;
-  const view = batchView(doc, events, batchEvents, now, r.deviationsRead);
+  const view = analysisView(doc, events, analysisEvents, now, r.deviationsRead);
   const { steps } = openSteps(doc, events, now);
   const names = new Map(events.map((e) => [e.person, e.personName]));
   const who = (id: number | null) => (id === null ? 'server' : names.get(id) ?? `person ${id}`);
   const sigOf = new Map(r.signatures.filter((s) => s.objectType === 'step_event').map((s) => [s.objectId, s]));
   const stepOf = (v: StepView) => doc.stages[v.key.stage]!.steps[v.key.step]!;
-  // Master data's unit of a step's material.
-  const unitOf = (v: StepView) => {
-    const m = Object.values(stepOf(v).settings).find((x): x is { formula: string } => typeof x === 'object' && 'formula' in x);
-    return m && r.units?.get(materialLines(doc).find((l) => l.key === m.formula)?.materialItemId ?? '');
-  };
+  const unitOf = (_v: StepView): string | undefined => undefined;
   const stepName = (v: StepView) => {
     const s = doc.stages[v.key.stage]!;
     const st = stepOf(v);
-    return `${v.key.stage + 1}.${v.key.step + 1} ${stepTitle(doc, st)}${s.kind === 'sub-batch' ? ` · sub-batch ${v.key.sub}` : ''}${st.flow.kind === 'repeat-until' ? ` · round ${v.key.round}` : ''}`;
+    return `${v.key.stage + 1}.${v.key.step + 1} ${stepTitle(doc, st)}${s.kind === 'replicate' ? ` · replicate ${v.key.sub}` : ''}${st.flow.kind === 'repeat-until' ? ` · round ${v.key.round}` : ''}`;
   };
   const byId = new Map(steps.map((v) => [v.id, v]));
   const stepLabel = (id: string) => { const v = byId.get(id); return v ? `${doc.stages[v.key.stage]!.name} · ${stepName(v)}` : id; };
 
-  const record = 'Batch record';
-  // A batch QA terminated: said at the top and in the decisions.
-  const ended = batchEvents.find((b) => b.payload.terminated);
-  const endedText = ended && terminatedText(ended, plant);
-  // What a terminated batch never did is not "yet" to come (owner 16 Nov 2026).
-  const notYet = (what: string) => (ended ? `not ${what} (terminated)` : `not ${what} yet`);
+  const record = 'Analysis record';
+  // A stopped analysis: said at the top and in the decisions.
+  const ended = analysisEvents.find((b) => b.kind === 'stopped');
+  const endedText = ended && stoppedText(ended, plant);
   const content: Content[] = [
-    { text: runs(`${record} ${r.batch.batchNo}`), fontSize: 16, bold: true },
-    { text: runs(`${h.productCode} · ${h.productName}`), fontSize: 11, margin: [0, 2, 0, 8] },
+    { text: runs(`${record} ${r.analysis.analysisNo}`), fontSize: 16, bold: true },
+    { text: runs(`${h.code} · ${h.name}`), fontSize: 11, margin: [0, 2, 0, 8] },
     { table: { widths: [90, '*', 90, '*', 90, '*'], body: [
-      [th('Product'), small(`${h.productCode} · ${h.productName}`), th('Batch no.'), small(r.batch.batchNo, { bold: true }), th('Status'), small(statusWords(view.status, true), { bold: true })],
-      [th('Batch size'), small(`${Number(h.batchSize).toLocaleString('en-IN')} tablets`), th('Core tablet weight'), small(`${h.coreWeightMg} mg${h.coatedWeightMg ? ` (coated ${h.coatedWeightMg} mg)` : ''}`), th('Master version'), small(`version ${r.versionNo}`)],
-      [th('Issued'), small(`${r.issuedByName}, ${plant(r.batch.issuedAt)}`), th('Times'), small('plant time (IST)'), th('Changed values'), small('marked CHANGED; the original is struck through, with the reason', { color: RED })],
+      [th('Method'), small(`${h.code} · ${h.name}`), th('Analysis no.'), small(r.analysis.analysisNo, { bold: true }), th('Status'), small(statusWords(view.status, true), { bold: true })],
+      [th('Technique'), small(h.technique), th('Reference'), small([h.reference, h.edition].filter(Boolean).join(', ') || '—'), th('Method version'), small(String(r.versionNo))],
+      [th('Issued'), small(`${r.issuedByName}, ${plant(r.analysis.issuedAt)}`), th('Times'), small('plant time (IST)'), th('Changed values'), small('marked CHANGED; the original is struck through, with the reason', { color: RED })],
     ] }, layout: 'lightHorizontalLines' },
     ...(endedText ? [small(endedText, { bold: true, color: RED, margin: [0, 6, 0, 0] })] : []),
   ];
 
-  // The formula, with the lots and the quantities dispensed (the weighing steps that name the line).
-  content.push(heading('Formula'));
-  content.push(table([150, 90, 55, 80, '*'], ['Material', 'Role · place', 'mg per tablet', 'Batch quantity', 'Lots and dispensed quantities'], doc.formula.map((l) => {
-    const q = lineQuantity(doc, [], { stage: 0, sub: 1, step: 0, round: 1 }, l, false, {});
-    const weighed = steps.filter((v) => Object.values(stepOf(v).settings).some((s) => typeof s === 'object' && 'formula' in s && s.formula === l.key && findBlock(stepOf(v).block)?.gmp === 'weighing'));
-    return [small(`${l.code} · ${l.name}`), small(`${ROLE[l.role] ?? l.role} · ${PLACE[l.place] ?? l.place}`), small(l.mgPerTablet), small(endOf(q)),
-      small(weighed.map((v) => {
-        const net = v.results.net;
-        if (!net) return `${notYet('weighed')} · ${stepName(v)}`;
-        // The target: the weighing's own, or the lubricant re-scaled to the actual granules.
-        const target = v.results.target?.ok ? v.results.target : v.results.rescaled?.ok ? v.results.rescaled : undefined;
-        return `Lot ${valueText(v.values.lot)}: ${endOf(net)}${target ? ` (target ${endOf(target)})` : ''} · ${stepName(v)}`;
-      }).join('\n') || '—')];
-  })));
-
   // The deviations of the notes: the number written with the note, or the one Deviations filed from it (read live).
-  const devs = deviations(events, batchEvents, r.deviationsRead);
+  const devs = deviations(events, analysisEvents, r.deviationsRead);
   const devOf = (e: { id: number }) => devs.find((x) => x.note === e.id);
 
   // Every stage and step: values, worked calculation lines with limits and pass/fail, who did and checked what and when.
   doc.stages.forEach((s, si) => {
     const mine = steps.filter((v) => v.key.stage === si);
-    const yields = mine.filter((v) => findBlock(stepOf(v).block)?.gmp === 'yield' && v.results.yield?.ok)
-      .map((v) => `yield ${endOf(v.results.yield!)}${checksOf(v.results.yield!).some(([, c]) => !c.pass) ? ' (OUT OF LIMITS)' : ''}${s.kind === 'sub-batch' ? ` in sub-batch ${v.key.sub}` : ''}`);
     content.push(heading(`Stage ${si + 1}: ${s.name}`));
-    content.push(small([s.kind === 'preparation' ? 'Preparation' : s.kind === 'sub-batch' ? `${s.count} sub-batches` : 'Stage', s.role, s.roomTypes.length ? `rooms: ${s.roomTypes.join(', ')}` : '',
-      ...yields].filter(Boolean).join(' · '), { margin: [0, 0, 0, 4] }));
+    content.push(small([s.kind === 'preparation' ? 'Preparation' : s.kind === 'replicate' ? `${s.count} replicates` : 'Stage', s.role, s.roomTypes.length ? `rooms: ${s.roomTypes.join(', ')}` : '']
+      .filter(Boolean).join(' · '), { margin: [0, 0, 0, 4] }));
     content.push(table([120, '*', '*', 175], ['Step', 'Recorded values', 'Calculations, limits and result', 'Who and when'], mine.map((v) => {
       const st = stepOf(v);
       const block = findBlock(st.block);
@@ -153,7 +127,7 @@ export function batchRecordDoc(r: RecordInput, by: string, printedAt = new Date(
   content.push(heading('Deviation notes'));
   content.push(table([70, 170, '*', 110, 170], ['Deviation', 'Step', 'Note', 'Written', 'Status'], events.filter((e) => e.kind === 'note').map((e) => {
     const d = devOf(e);
-    const closed = d?.closed && batchEvents.find((b) => b.id === d.closed!.id);
+    const closed = d?.closed && analysisEvents.find((b) => b.id === d.closed!.id);
     return [small(d ? deviationNumber(d) : '—'), small(stepLabel(`${e.stage}.${e.sub}.${e.step}.${e.round}`)), small(e.payload.text ?? ''), small(`${who(e.person)}, ${plant(e.at)}`),
       small(!d ? 'note (no deviation number)' : d.status ? `${d.open ? 'OPEN: ' : ''}${deviationStatusWords(d.status)} in the Deviations system${d.closedAt ? `, ${plant(d.closedAt)}` : ''}` : d.open ? 'OPEN' : `closed by ${closed?.personName ?? ''}, ${plant(closed?.at)}: ${closed?.payload.reason ?? ''}`, d?.open ? { color: RED } : {})];
   })));
@@ -168,23 +142,23 @@ export function batchRecordDoc(r: RecordInput, by: string, printedAt = new Date(
     ]), 'None: every training was read from Recruitment.'));
   }
 
-  // Every signature of the batch with its meaning.
+  // Every signature of the analysis with its meaning.
   content.push(heading('Signatures'));
   content.push(table([150, 140, 130, '*'], ['Meaning', 'Signed by', 'When', 'What was signed'], r.signatures.map((s) => {
-    const what = s.objectType === 'batch' ? `Batch ${r.batch.batchNo}` : s.step ? stepLabel(s.step) : 'The batch record';
+    const what = s.objectType === 'analysis' ? `Analysis ${r.analysis.analysisNo}` : s.step ? stepLabel(s.step) : 'The analysis record';
     return [small(MEANING[s.meaning] ?? s.meaning), small(s.printedName), small(plant(s.signedAt)), small(what)];
   })));
 
-  // The decisions: production approval, QC approval (with the QC report), QA release or rejection.
-  content.push(heading('Release decision'));
-  const decisions = batchEvents.filter((b) => b.kind !== 'deviation_closed');
+  // The review or the stop.
+  content.push(heading('Review'));
+  const decisions = analysisEvents.filter((b) => b.kind !== 'deviation_closed');
   content.push(decisions.length ? { stack: decisions.map((b) => small(b === ended ? endedText! :
-    `${MEANING[b.kind] ?? b.kind}: ${b.personName}, ${plant(b.at)}${b.payload.reportNo ? ` · QC report ${b.payload.reportNo}` : ''}${b.payload.reason ? ` · reason: ${b.payload.reason}` : ''}`,
-    { fontSize: 9, bold: b.kind === 'released' || b.kind === 'rejected', color: b.kind === 'rejected' ? RED : undefined, margin: [0, 0, 0, 2] })) }
-    : { text: `No decision yet: the batch is ${statusWords(view.status)}.`, italics: true, fontSize: 9 });
-  if (view.status !== 'released' && view.status !== 'rejected') content.push(small(`This copy was made while the batch is ${statusWords(view.status)}: it is not a released record.`, { color: RED, margin: [0, 4, 0, 0] }));
+    `${MEANING[b.kind] ?? b.kind}: ${b.personName}, ${plant(b.at)}${b.payload.reason ? ` · reason: ${b.payload.reason}` : ''}`,
+    { fontSize: 9, bold: true, color: b.kind === 'stopped' ? RED : undefined, margin: [0, 0, 0, 2] })) }
+    : { text: `Not reviewed yet: the analysis is ${statusWords(view.status)}.`, italics: true, fontSize: 9 });
+  if (view.status !== 'reviewed') content.push(small(`This copy was made while the analysis is ${statusWords(view.status)}: it is not a reviewed record.`, { color: RED, margin: [0, 4, 0, 0] }));
 
-  return pageFrame(`Medhanta LIMS · ${record} ${r.batch.batchNo} · ${h.productCode} ${h.productName}`, by, content, printedAt, demo);
+  return pageFrame(`Medhanta LIMS · ${record} ${r.analysis.analysisNo} · ${h.code} ${h.name}`, by, content, printedAt, demo);
 }
 
 /** The recorded values; a corrected value shows the original struck through, the reason, the person and the time. */
@@ -235,10 +209,9 @@ function resultLines(block: Block, st: Step, v: StepView, who: (id: number | nul
       small(lead, h ? { bold: true } : {}),
       ...(h ? [small(shown, { color: '#555555', margin: [8, 0, 0, 0] })] : []),
       ...checks.filter(([, c]) => c.shown !== r.shown).map(([, c]) => small(withoutVerdict(text(c.shown)), { color: '#555555', margin: [8, 0, 0, 0] })),
-      ...checks.map(([, c]) => small(c.pass ? 'PASS' : notYet ? (terminated ? 'NOT REACHED: terminated' : 'NOT YET: the rounds go on') : 'FAIL: out of limits', { bold: true, color: c.pass ? '#1b6e3a' : notYet ? '#666666' : RED, margin: [8, 0, 0, 2] })),
+      ...checks.map(([, c]) => small(c.pass ? 'PASS' : notYet ? (terminated ? 'NOT REACHED: stopped' : 'NOT YET: the rounds go on') : 'FAIL: out of limits', { bold: true, color: c.pass ? '#1b6e3a' : notYet ? '#666666' : RED, margin: [8, 0, 0, 2] })),
     ];
   });
   if (v.inputChanged.length) out.push(small(`Worked out again: an input was corrected later (${v.inputChanged.map((e) => `${who(e.person)}, ${plant(e.at)}`).join('; ')})`, { color: RED }));
-  if (!out.length && st.flow.kind === 'qa-hold') out.push(small('QA hold'));
   return out;
 }
