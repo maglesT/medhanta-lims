@@ -4,7 +4,7 @@ import type { LinkState, Provider } from '../shared/engine/links.js';
 import type { TrainingRead } from '../shared/engine/training.js';
 
 // Links to the other Medhanta products, the Logbook way (platform PL-08, D-02). Each provider is read live through
-// its report views with TrueBatch's own login, from the URL the platform writes only while the link is on
+// its report views with this product's own login, from the URL the platform writes only while the link is on
 // (<PROVIDER>_DATABASE_URL). Nothing is copied or cached. Every read gives one of three answers:
 //   absent: no URL (the product is not licensed, or the link is off);
 //   down:   the URL is set but the read was refused or the provider did not answer;
@@ -113,6 +113,8 @@ export const logbookClient = (l: Link) => ({
 
 // ---- MMS: report.lot_v1 and report.lot_test_v1 (planned, with numbers for assay, water and LOD and their basis).
 export const LOT_USABLE = ['approved', 'released'];
+// A material lot in these MMS statuses waits for its QC sample.
+export const LOT_WAITING = ['quarantine', 'quarantined', 'under_test'];
 export interface LotTest { test: string; value: string | null; unit: string | null; basis: string | null; reportRef: string | null }
 export interface LotRead {
   lotNumber: string; materialMasterId: string | null; materialCode: string | null; status: string; expiryDate: string | null;
@@ -136,6 +138,10 @@ export const mmsClient = (l: Link) => ({
       select test, value::text, unit, basis, report_ref from ${v('lot_test_v1')} where lot_number = ${lotNumber} and value is not null`;
     return { ...lotOf(r, tests.map((t) => ({ test: t.test, value: t.value, unit: t.unit, basis: t.basis, reportRef: t.report_ref }))), stock: r.stock, unit: r.unit };
   }),
+  // The material lots waiting to be sampled: received and in quarantine (or under test) in MMS.
+  waiting: () => l.read(async (q, v) => (await q<(LotRow & { stock: string | null; unit: string | null })[]>`
+    select ${q.unsafe(LOT_COLS)}, to_jsonb(l) ->> 'stock' as stock, to_jsonb(l) ->> 'unit' as unit from ${v('lot_v1')} l
+    where kind = 'material' and status = any(${LOT_WAITING}) order by lot_number limit 500`).map((r) => ({ ...lotOf(r), stock: r.stock, unit: r.unit }))),
   // The lots of a material that may be used today, for the pick list.
   usable: (materialId: string, today: string) => l.read(async (q, v) => (await q<LotRow[]>`
     select ${q.unsafe(LOT_COLS)} from ${v('lot_v1')} where kind = 'material' and material_master_id::text = ${materialId} and status = any(${LOT_USABLE})
@@ -159,12 +165,37 @@ export const recruitmentClient = (l: Link) => ({
     order by skill_code, skill_title nulls last limit 500`).map((r) => ({ code: r.code, ...(r.title ? { title: r.title } : {}) }))),
 });
 
+// ---- TrueBatch: report.batch_fact_v1 (published), one row per batch of any edition. A batch with completed_at set and
+// not released waits for its finished-product sample.
+export interface BatchRead {
+  batchNumber: string; productCode: string | null; productName: string | null; status: string; completedAt: string | null;
+  released: boolean; dataAsOf: string | null; quantity: string | null;
+}
+type BatchRow = { batch_number: string; product_code: string | null; product_name: string | null; status: string; completed_at: string | null;
+  released: boolean | null; data_as_of: string | null; good_quantity: string | null; good_unit: string | null };
+const batchOf = (r: BatchRow): BatchRead => ({ batchNumber: r.batch_number, productCode: r.product_code, productName: r.product_name, status: r.status,
+  completedAt: r.completed_at, released: r.released === true, dataAsOf: r.data_as_of, quantity: r.good_quantity ? `${r.good_quantity} ${r.good_unit ?? ''}`.trim() : null });
+// product_name, good_quantity and good_unit through to_jsonb: null on a view from before they were appended.
+const BATCH_COLS = `batch_number, product_code, to_jsonb(b) ->> 'product_name' as product_name, status, completed_at::text, released, data_as_of::text,
+  to_jsonb(b) ->> 'good_quantity' as good_quantity, to_jsonb(b) ->> 'good_unit' as good_unit`;
+export const batchWaiting = (b: BatchRead) => b.completedAt !== null && !b.released;
+export const truebatchClient = (l: Link) => ({
+  batch: (batchNumber: string) => l.read(async (q, v) => {
+    const [r] = await q<BatchRow[]>`select ${q.unsafe(BATCH_COLS)} from ${v('batch_fact_v1')} b where batch_number = ${batchNumber} order by completed_at desc nulls last limit 1`;
+    return r ? batchOf(r) : null;
+  }),
+  waiting: () => l.read(async (q, v) => (await q<BatchRow[]>`
+    select ${q.unsafe(BATCH_COLS)} from ${v('batch_fact_v1')} b where completed_at is not null and released is not true
+    order by completed_at, batch_number limit 500`).map(batchOf)),
+});
+
 export interface Links {
   deviations: ReturnType<typeof deviationsClient>;
   qms: ReturnType<typeof qmsClient>;
   logbook: ReturnType<typeof logbookClient>;
   mms: ReturnType<typeof mmsClient>;
   recruitment: ReturnType<typeof recruitmentClient>;
+  truebatch: ReturnType<typeof truebatchClient>;
 }
 /** The links, from their connections (null: absent). `schema` lets tests point a provider at its own schema. */
 export function links(c: Partial<Record<Provider, Sql | null>> = {}, schema: Partial<Record<Provider, string>> = {}): Links {
@@ -174,5 +205,6 @@ export function links(c: Partial<Record<Provider, Sql | null>> = {}, schema: Par
     logbook: logbookClient(link('logbook', c.logbook ?? null, schema.logbook)),
     mms: mmsClient(link('mms', c.mms ?? null, schema.mms)),
     recruitment: recruitmentClient(link('recruitment', c.recruitment ?? null, schema.recruitment)),
+    truebatch: truebatchClient(link('truebatch', c.truebatch ?? null, schema.truebatch)),
   };
 }

@@ -70,6 +70,9 @@
     ],
     "recruitment": [
       "training_v1"
+    ],
+    "truebatch": [
+      "batch_fact_v1"
     ]
   },
   "source": {

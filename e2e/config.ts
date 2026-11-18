@@ -5,6 +5,10 @@ export const E2E_PORT = Number(process.env.E2E_PORT ?? 8291);
 export const E2E_SCHEMA = process.env.E2E_SCHEMA ?? 'e2e';
 // Recruitment's stand-in training_v1 (e2e/server.ts).
 export const E2E_RECRUITMENT = `${E2E_SCHEMA}_rc`;
+// MMS's stand-in lot_v1 and lot_test_v1: the lots waiting to be sampled (e2e/server.ts).
+export const E2E_MMS = `${E2E_SCHEMA}_mms`;
+// The material of the samples journey, as master data and MMS name it.
+export const E2E_MATERIAL_ID = '00000000-0000-4000-8000-000000000012';
 // Invented test people and the Medhanta LIMS permissions core gives them.
 export const USERS: Record<string, Permission[]> = {
   op1: ['lims.analysis.perform'],
@@ -21,5 +25,7 @@ export const USERS: Record<string, Permission[]> = {
   // The method designer journey: an author and a second-person checker (qa1 approves).
   author1: ['lims.master.author'],
   mcheck1: ['lims.master.check'],
+  // The samples journey: registers, receives and stores a sample.
+  smp1: ['lims.sample.register'],
   norole: [],
 };

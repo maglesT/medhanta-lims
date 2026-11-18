@@ -25,8 +25,8 @@ The sections below describe the copied TrueBatch engine; each is rewritten for t
 ## Platform
 - Runs on the Medhanta platform. Core provides people, sign-in, permissions, e-signature re-authentication and master
   data. Normal platform sign-in (OIDC through core, one person per browser).
-- Optional links: MMS (lots, status, assay, LOD), Logbook (equipment and room status), Deviations, QMS (change
-  control numbers). Every link has a hand-entry fallback with a second-person check.
+- Optional links: MMS (lots, status, assay, LOD, lots waiting to be sampled), TrueBatch (batches waiting for a
+  finished-product sample), Logbook (equipment and room status), Deviations, QMS (change control numbers). Every link has a hand-entry fallback with a second-person check.
 - Sessions as the Logbook's: 15 minutes idle (background polls never count); a tap or a key on the screen counts as
   use (at most one renewal a minute); the session ends with core's sign-on (8 hours).
 
@@ -82,6 +82,15 @@ answering) or **ok**.
   tick "I am trained in <skill>", and the signature records `training` from `hand` ("training typed by hand
   (Recruitment not reachable)"), shown on the step, listed in QA's release review and in the PDF (LIMS-40). A step
   marked not applicable, a QA hold release and the batch-level signatures do not read training.
+- **Samples** (build step 3, round 3): MMS `lot_v1` (already read) gives the material lots waiting to be sampled
+  (`kind` 'material', status quarantine or under test); **TrueBatch** `batch_fact_v1` (new read, manifest `reads`
+  `truebatch`, through `TRUEBATCH_DATABASE_URL`) gives the batches waiting for a finished-product sample
+  (`completed_at` set, not `released`; `product_name`, `good_quantity` and `good_unit` read null-safely). Each is
+  offered with the effective specification found for it (material: `header.itemId` = `material_master_id`; product:
+  `header.code` = `product_code`), or why none, and its release sample if one exists. Registering reads the lot or
+  batch again and refuses one no longer waiting; what was read is kept with the sample (`source.shown`, PL-07). By
+  hand only while that link is absent or down: the number typed, the item picked from master data, source `hand`, and
+  a second person (not the registrar) checks it before it is received (LIMS-41, LIMS-50).
 - **Published** (`db/migrations/0006_report_views.sql`): `batch_fact_v1` and `equipment_use_v1` with Batchwright's
   names and columns, so the Logbook and Deviations read TrueBatch as they read Batchwright, and `deviation_note_v1`
   for Deviations to file notes later. `batch_fact_v1` has one more column at its end (`0007`): `manufactured_on`, the
@@ -206,7 +215,7 @@ Logbook already does; there is no new engine mechanism.
 |---|---|---|
 | **Method** (version: draft, in review, approved, effective, retired) | TrueBatch master version | Same table, lifecycle, master check, second-person check, QA approval and change-control number. The document is a header (code, name, technique, reference and edition) and the stages and steps; there is no formula. A setting the product decides (label claim, average weight, dilution volume …) is written `{ spec: name }`: the spec gives it. |
 | **Specification** (same lifecycle) | TrueBatch master version, second kind | Same table (`kind = 'spec'`), same review and approval. The document is a header (material or product from master data, type, stage, market, pharmacopoeia and edition) and a list of tests: name, method, the method's result step, limit type picked from a list (range, NMT, NLT, conforms, report only, alert/action, two-band release/shelf life, staged), limit, and the values the method asks the spec for. |
-| **Sample** (`LS26xxxxx`) | Logbook item + entries | A row (what, lot or batch, spec version, quantity) and insert-only events: registered, received, stored, handed over, disposed, approved, rejected. Its status is computed from the events. Registered from an MMS lot (`lot_v1`) or a TrueBatch batch (`batch_fact_v1`); by hand only when the link is down, marked and checked by a second person. |
+| **Sample** (`LS26xxxxx`) | Logbook item + entries | A row (what, lot or batch, spec version effective at registration, purpose, quantity, containers; `0007`) and insert-only events (`sample_events`): checked (second person, for a sample typed by hand), received (condition), stored (where), handed over (to whom), disposed (reason and method, e-signature meaning `disposed`), note; approved and rejected come with QC's decision (round 5). Its status is computed from the events (`shared/engine/sample.ts`): waiting for check, registered, received, stored or handed over, disposed. Screens: the Samples tab (waiting to be sampled, the list), the register dialog and the sample screen with its chain of custody. Registered from an MMS lot (`lot_v1`) or a TrueBatch batch (`batch_fact_v1`); by hand only when the link is down, marked and checked by a second person. |
 | **Analysis** (`LA26xxxxx`) | TrueBatch batch | Issued from the effective method version for one sample; covers the sample's spec tests that name this method. Steps, signatures, second-person checks, corrections, timers, deviation notes and PDF exactly as a batch. Before every engine call the spec's limits and values are put into the method's result steps (`applySpec`, a pure function): the engine sees an ordinary master. |
 | **Review** | TrueBatch production approval | A different person reviews the complete analysis with its audit trail and signs "reviewed" (LIMS-18, LIMS-19). |
 | **Decision and CoA** (`COA26xxxxx`) | TrueBatch QC approval and batch record PDF | When every spec test has a reviewed result, QC approves or rejects the sample with an e-signature; the CoA (PDF) shows only reviewed results with limits, method and lot/batch. |

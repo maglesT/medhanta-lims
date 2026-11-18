@@ -1,5 +1,6 @@
 // Invented master data for the browser tests: what core's master_data views would list.
 import type { FakeMaster } from '../test/helpers.js';
+import { E2E_MATERIAL_ID } from './config.js';
 
 const item = (itemId: string, code: string, name: string) => ({ itemId, code, name, version: 1, active: true });
 export function seedMasterData(m: FakeMaster) {
@@ -10,6 +11,8 @@ export function seedMasterData(m: FakeMaster) {
     { ...item('eq-ovn', 'OVN-01', 'Hot air oven'), kind: 'instrument', type: 'oven', room: 'QCL-01' },
     { ...item('eq-hplc', 'HPLC-01', 'HPLC with UV detector'), kind: 'instrument', type: 'hplc', room: 'INS-01' },
   );
+  // The material of the samples journey.
+  m.materials_.push({ ...item(E2E_MATERIAL_ID, 'RM-012', 'Demolol (active substance)'), category: 'API', unit: 'kg' });
   // These rooms only, not the fixtures' rooms of the server tests.
   m.rooms_.splice(0);
   m.rooms_.push(

@@ -1,0 +1,13 @@
+/* Samples: the link states, the facts of a sample and its chain of custody. */
+.dash-panel.samples-waiting { margin-bottom: 20px; }
+.link-states { list-style: none; padding: 0; margin: 8px 0 12px; display: grid; gap: 6px; }
+.link-states li { display: flex; flex-wrap: wrap; gap: 10px; align-items: baseline; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--line); }
+.link-states li.ok { background: var(--ok-soft); }
+.link-states li.off { background: var(--warn-soft); }
+.cell-line { display: block; }
+.custody { list-style: none; padding: 0; margin: 8px 0; display: grid; gap: 8px; }
+.custody li { border-left: 3px solid var(--line); padding: 4px 0 4px 12px; }
+.custody li b { display: block; }
+.custody li .muted { font-size: .85rem; }
+.sample-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.spec-tests { margin: 6px 0; padding-left: 20px; }

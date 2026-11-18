@@ -11,6 +11,7 @@ import { authRoutes } from './routes/auth.js';
 import { masterDataRoutes } from './routes/masterdata.js';
 import { masterRoutes } from './routes/masters.js';
 import { analysisRoutes } from './routes/analyses.js';
+import { sampleRoutes } from './routes/samples.js';
 import { demoRoutes } from './demo.js';
 import type { SignOn } from './signon.js';
 import { ConnectionOff, NotUsable, type Master } from './master.js';
@@ -28,7 +29,7 @@ export interface AppOptions {
   proofKey?: Buffer;
   // Master data read live from master_data's views; tests pass a stand-in.
   master: Master;
-  // The optional links to Deviations, QMS, Logbook and MMS; absent by default.
+  // The optional links to Deviations, QMS, Logbook, MMS, Recruitment and TrueBatch; absent by default.
   links?: Links;
   logger?: boolean;
   webRoot?: string;
@@ -85,6 +86,7 @@ export async function buildApp({ sql, signOn, master, links = noLinks(), proofKe
   masterDataRoutes(app);
   masterRoutes(app, sql);
   analysisRoutes(app, sql);
+  sampleRoutes(app, sql);
   demoRoutes(app, sql);
 
   // In production the built web UI is served from the same process.
