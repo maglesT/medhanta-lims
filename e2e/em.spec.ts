@@ -163,4 +163,18 @@ test('LIMS-36 EM journey: a plan approved, a settle plate taken from "due today"
   await expect(point).toContainText('7 CFU');
   await smp2.page.screenshot({ path: test.info().outputPath('em-map.png'), fullPage: true });
   await smp2.ctx.close();
+
+  // EU Annex 1 adverse trend: the first Staphylococcus epidermidis at B101 is a new organism; QC acknowledges it on the
+  // Excursions tab with the reason.
+  const qc = await person(browser, 'qc1');
+  await emTab(qc, 'Excursions');
+  const trends = qc.page.getByRole('table', { name: 'Adverse trends' });
+  const flora = trends.getByRole('row', { name: /new organism/ });
+  await expect(flora).toContainText('B101, B101-SP1: new organism Staphylococcus epidermidis (not identified at B101 in the 12 months before)');
+  await flora.getByRole('textbox').fill('Skin flora: gowning retraining under DEV-26-301');
+  await flora.getByRole('button', { name: 'Acknowledge' }).click();
+  await expect(flora).toContainText('Skin flora: gowning retraining under DEV-26-301');
+  await expect(flora).toContainText('QC1');
+  await qc.page.screenshot({ path: test.info().outputPath('em-adverse.png'), fullPage: true });
+  await qc.ctx.close();
 });

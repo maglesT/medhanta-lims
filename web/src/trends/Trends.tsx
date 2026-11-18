@@ -298,6 +298,8 @@ function ApqrTab() {
           <h3>EM and water (the plant, in the period)</h3>
           <T label="EM and water" head={['Point', 'Name', 'Room or system', 'Grade', 'Sampling', 'Results', 'Alert', 'Action']} none="No EM or water results decided in the period."
             rows={r.em.map((e) => [e.point, e.name, e.where, e.grade, e.kind, e.n, e.alert, e.action])} />
+          <T label="EM adverse trends" head={['Adverse trend', 'Room or system', 'Date', 'What', 'QC acknowledged']} none="No EM adverse trend in the period."
+            rows={r.adverse.map((a) => [a.kind, a.room, plantDate(a.on), a.what, a.answer ? `${a.answer.by}: ${a.answer.reason}` : 'not yet'])} />
           <T label="Excursions" head={['Point', 'Level', 'Result', 'Deviation', 'Status', 'Recorded']} none="No excursions in the period."
             rows={r.excursions.map((x) => [x.point, x.level, x.shown, x.deviation, x.closed ? 'closed' : 'open', plantTime(x.at)])} />
         </section>

@@ -18,6 +18,8 @@ import {
 } from './api-em.js';
 import '../designer/designer.css';
 import '../samples/samples.css';
+import { AdversePanel } from '../trends/AdversePanel.js';
+import '../trends/trends.css';
 import './em.css';
 
 type Tab = 'due' | 'excursions' | 'map' | 'plans' | 'imports';
@@ -166,6 +168,7 @@ function ExcursionsTab({ me, onOpen, onSample }: { me: Me; onOpen: (id: number) 
               <td>{d.mayOpen && <button className="primary" onClick={() => setOpening(p)}>{p.level === 'action' ? 'Open the investigation' : 'Record the trend watch'}</button>}</td>
             </tr>))}</tbody></table></div>}
       </section>
+      <AdversePanel me={me} />
       <h2>Excursions</h2>
       {d === null ? <div className="skel skel-block" /> : !d.excursions.length ? <div className="card placeholder"><p>No excursions.</p></div> : (
         <div className="table-wrap"><table className="masters" aria-label="Excursions">
@@ -245,6 +248,7 @@ function PointTrend({ point, onBack, onSample }: { point: string; onBack: () => 
       {!g || !p ? <div className="skel skel-block" /> : (<>
         <div className="home-head"><div><h1>{p.code} <span className="muted">{p.name}</span></h1>
           <p className="greeting">{g.code} {g.name}{g.grade ? ` · grade ${g.grade}` : ''} · plan {p.planNumber}{p.critical ? ' · a critical location' : ''}</p></div></div>
+        <AdversePanel point={p.code} />
         {p.samplings.map((s) => (
           <section key={s.key} className="dash-panel samples-waiting" aria-label={`Trend ${s.kind}`}>
             <div className="panel-head"><h2>{samplingWords(s)}</h2><span className="pill">{s.limit}</span></div>

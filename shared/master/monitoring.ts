@@ -46,6 +46,9 @@ export const samplingSchema = z.object({
   // Taken each time, with its unit ("1 plate", "1 m³ air", "250 mL").
   quantity: text(60).regex(/^\d+(\.\d+)?\s*\S.*$/, 'give the quantity with its unit, e.g. 1 plate'),
   identify: z.enum(IDENTIFY).default('on action'),
+  // EU Annex 1 adverse trend: "n alert-or-action results in the last m samplings" (empty: the default by grade,
+  // shared/engine/em-trends.ts adverseRule).
+  adverse: z.object({ n: z.number().int().min(1).max(20), m: z.number().int().min(1).max(20) }).strict().optional(),
 }).strict();
 
 export const pointSchema = z.object({
@@ -122,6 +125,7 @@ export function monitoringChecks(doc: MonitoringDoc, specs: (masterId: number) =
       if (p.of === 'water' && !(WATER_KINDS as readonly string[]).includes(s.kind)) error(sp, `${what}: water is tested for TOC, conductivity, micro or endotoxin.`, rule);
       if (p.of === 'room' && !s.state) error(sp, `${what}: say whether it is sampled at rest or in operation (the limits differ).`, rule);
       if (p.of === 'water' && s.state) error(sp, `${what}: water has no at rest or in operation state.`, rule);
+      if (s.adverse && s.adverse.n > s.adverse.m) error(sp, `${what}: the adverse trend is n results in the last m samplings: n (${s.adverse.n}) cannot be more than m (${s.adverse.m}).`, 'LIMS-36');
       if (!s.spec) return void error(sp, `${what}: pick the specification test whose alert and action limits apply.`, rule);
       const spec = specs(s.spec.masterId);
       if (!spec) return void error(sp, `${what}: specification ${s.spec.number || s.spec.masterId} has no approved or effective version.`, rule);

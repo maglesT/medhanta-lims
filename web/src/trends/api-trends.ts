@@ -37,6 +37,7 @@ export interface Apqr {
   stabilityResults: { n: number; failed: number };
   em: { point: string; name: string; where: string; grade: string | null; kind: string; n: number; alert: number; action: number }[];
   excursions: { point: string; level: string; shown: string; deviation: string | null; closed: boolean; at: string }[];
+  adverse: { key: string; kind: string; room: string; on: string; what: string; answer: { reason: string; by: string; at: string } | null }[];
 }
 
 const qs = (o: Record<string, string | undefined>) => new URLSearchParams(Object.entries(o).filter((e): e is [string, string] => !!e[1])).toString();

@@ -12,7 +12,9 @@ import { limitFor, purposeLimits, testsFor, type SpecDoc } from '../../shared/ma
 import type { MasterDoc } from '../../shared/master/schema.js';
 import { oosStatus, type OosEvent } from '../../shared/engine/oos.js';
 import { SAMPLE_PURPOSES, type SamplePurpose } from '../../shared/engine/sample.js';
-import { excursionLevel } from '../../shared/engine/monitoring.js';
+import { excursionLevel, type Level } from '../../shared/engine/monitoring.js';
+import { adverseTrends, type Adverse, type EmResult, type Isolate } from '../../shared/engine/em-trends.js';
+import type { MonitoringDoc } from '../../shared/master/monitoring.js';
 import type { SamplingKind } from '../../shared/master/monitoring.js';
 import {
   TAT_DEFAULT_DAYS, assignRefusal, chartTrend, dueOn, kpis, plantDay, summaryOf, addDays,
@@ -125,6 +127,37 @@ const skillsOf = (doc: MasterDoc) => {
   for (const st of doc.stages) for (const t of st.steps) if (t.training) out.set(t.training.code, t.training);
   return [...out.values()];
 };
+
+/** An EM or water result's level as QC decided on it: out of its limit is action; else by its alert and action limits (grade A: any colony). */
+const emLevel = (x: { value: string | null; unit: string | null; pass: boolean | null; limit: Limit | null; grade: string | null; kind: SamplingKind }): Level =>
+  (x.pass === false ? 'action' : x.value && NUM.test(x.value) ? excursionLevel({ value: x.value, unit: x.unit ?? '' }, x.limit ?? undefined, x.grade, x.kind).level : 'none');
+
+/**
+ * LIMS-36 (EU Annex 1): the EM adverse trends (shared/engine/em-trends.ts) over every decided EM and water result and
+ * every isolate identified, each with QC's acknowledgement if given.
+ */
+export async function emAdverse(q: Sql | Tx): Promise<(Adverse & { answer: { reason: string; by: string; at: Date } | null })[]> {
+  const rows = await q<{ sampleId: number; sampleNo: string; room: string; m: NonNullable<SampleRow['monitoring']>; value: string | null; unit: string | null; pass: boolean | null }[]>`
+    select s.id::int as "sampleId", s.sample_no as "sampleNo", s.item->>'code' as room, s.monitoring as m, r->>'value' as value, r->>'unit' as unit, (r->>'pass')::boolean as pass
+    from samples s join sample_events d on d.sample_id = s.id and d.kind in ('approved', 'rejected')
+    left join lateral (select j from jsonb_array_elements(coalesce(d.payload->'results', '[]'::jsonb)) j where j->>'key' = s.monitoring->>'testKey' limit 1) rr(r) on true
+    where s.purpose = 'monitoring' order by s.monitoring->>'takenOn', s.id limit 20000`;
+  const planIds = [...new Set(rows.map((r) => r.m.planVersionId))];
+  const plans = planIds.length ? await q<{ id: number; doc: MonitoringDoc }[]>`select id::int, doc from master_versions where id = any(${planIds})` : [];
+  const results: EmResult[] = rows.map((r) => {
+    const set = plans.find((p) => p.id === r.m.planVersionId)?.doc.points.find((p) => p.key === r.m.point)?.samplings.find((x) => x.key === r.m.sampling)?.adverse;
+    return { sampleId: r.sampleId, sampleNo: r.sampleNo, on: r.m.takenOn, room: r.room, point: r.m.pointCode, sampling: r.m.sampling, kind: r.m.kind, grade: r.m.grade,
+      level: emLevel({ value: r.value, unit: r.unit, pass: r.pass, limit: r.m.limit, grade: r.m.grade, kind: r.m.kind as SamplingKind }), ...(set ? { rule: set } : {}) };
+  });
+  const isolates = await q<Isolate[]>`
+    select c.id::int, coalesce(s.item->>'code', e.point->>'where') as room, e.point->>'code' as point, c.payload->>'genus' as genus,
+      nullif(nullif(nullif(trim(c.payload->>'species'), ''), 'sp.'), 'spp.') as species, (c.at at time zone 'Asia/Kolkata')::date::text as on
+    from em_excursion_events c join em_excursions e on e.id = c.excursion_id left join samples s on s.id = e.sample_id
+    where c.kind = 'isolate' order by c.id`;
+  const answers = await q<{ key: string; reason: string; by: string; at: Date }[]>`
+    select a.key, a.reason, u.full_name as by, a.at from em_trend_answers a join users u on u.id = a.person_id`;
+  return adverseTrends(results, isolates).map((a) => { const x = answers.find((y) => y.key === a.key); return { ...a, answer: x ? { reason: x.reason, by: x.by, at: x.at } : null }; });
+}
 
 class TrendError extends Error { constructor(public status: number, public problems: string[]) { super(problems[0]); } }
 const fail = (e: unknown, reply: FastifyReply) => {
@@ -345,6 +378,31 @@ export function trendRoutes(app: FastifyInstance, sql: Sql) {
     (await workRows(sql)).filter((r) => r.assigned?.analystId === req.user!.id).map((r) => ({ sampleId: r.sampleId, sampleNo: r.sampleNo, item: r.item, lotNo: r.lotNo,
       method: r.method, tests: r.tests, due: r.due, overdue: r.overdue, analysis: r.analysis, by: r.assigned!.by, at: r.assigned!.at })));
 
+  // ---------------------------------------------------------------- EM adverse trends (LIMS-36, EU Annex 1)
+  // The adverse trends (repeated alerts at a point, alerts across a room in a week, new organisms), newest first; with
+  // ?point= those of one point (its trend screen).
+  app.get<{ Querystring: { point?: string } }>('/api/em/adverse', reader, async (req) => {
+    const all = await emAdverse(sql);
+    return req.query.point ? all.filter((a) => a.points.includes(String(req.query.point))) : all;
+  });
+  // QC acknowledges an adverse trend, with the reason (insert-only, once per trend).
+  app.post('/api/em/adverse/answer', { preHandler: requirePermission('lims.qc.approve') }, async (req, reply) => {
+    const b = z.object({ key: z.string().min(1).max(200), reason: z.string().trim().min(1).max(1000) }).strict().safeParse(req.body);
+    if (!b.success) return reply.code(400).send({ error: 'invalid', message: 'Give the reason.' });
+    try {
+      return await sql.begin(async (tx) => {
+        await tx`select pg_advisory_xact_lock(hashtext(${`adverse:${b.data.key}`}))`;
+        const a = (await emAdverse(tx)).find((x) => x.key === b.data.key);
+        if (!a) throw new TrendError(404, ['There is no such adverse trend.']);
+        if (a.answer) throw new TrendError(409, [`QC has already acknowledged it (${a.answer.by}).`]);
+        const [r] = await tx<{ id: number }[]>`
+          insert into em_trend_answers (key, kind, what, reason, person_id) values (${a.key}, ${a.kind}, ${a.what}, ${b.data.reason}, ${req.user!.id}) returning id::int`;
+        await audit(tx, { actorId: req.user!.id, action: 'em.adverse_trend_acknowledged', objectType: 'em_trend', objectId: r!.id, new: { key: a.key, what: a.what }, reason: b.data.reason });
+        return { ok: true, id: r!.id };
+      });
+    } catch (e) { return fail(e, reply); }
+  });
+
   // ---------------------------------------------------------------- APQR (LIMS-42)
   app.get('/api/apqr/items', reader, async () => sql`
     select distinct s.item->>'of' as of, s.item->>'code' as code, s.item->>'name' as name from samples s
@@ -441,7 +499,7 @@ async function apqr(q: Sql, f: { of: 'product' | 'material'; code: string; from:
     const k = `${x.point}|${x.kind}`;
     const g = emSummary.get(k) ?? { point: x.point, name: x.pointName, where: x.where, grade: x.grade, kind: x.kind, n: 0, alert: 0, action: 0 };
     g.n++;
-    const level = x.pass === false ? 'action' : x.value && NUM.test(x.value) ? excursionLevel({ value: x.value, unit: x.unit ?? '' }, x.limit ?? undefined, x.grade, x.kind).level : 'none';
+    const level = emLevel(x);
     if (level === 'alert') g.alert++;
     if (level === 'action') g.action++;
     emSummary.set(k, g);
@@ -456,6 +514,7 @@ async function apqr(q: Sql, f: { of: 'product' | 'material'; code: string; from:
     lots, failed: lots.filter((l) => l.decision === 'rejected'), results, oos, oot, changes, stability,
     stabilityResults: { n: stabilityResults.length, failed: stabilityResults.filter((r) => r.pass === false).length },
     em: [...emSummary.values()], excursions,
+    adverse: (await emAdverse(q)).filter((a) => a.on >= f.from && a.on <= f.to),
   };
 }
 
@@ -480,6 +539,8 @@ export function apqrCsv(r: Apqr): string {
   for (const e of r.em) L.push(['EM and water', e.point, e.name, e.where, e.grade, e.kind, e.n, e.alert, e.action]);
   L.push(['Excursions', 'Point', 'Level', 'Result', 'Deviation', 'Status', 'Recorded']);
   for (const x of r.excursions) L.push(['Excursions', x.point, x.level, x.shown, x.deviation, x.closed ? 'closed' : 'open', day(x.at)]);
+  L.push(['Adverse trends', 'Kind', 'Room or system', 'Points', 'Date', 'What', 'QC acknowledged', 'Reason']);
+  for (const a of r.adverse) L.push(['Adverse trends', a.kind, a.room, a.points.join(' '), a.on, a.what, a.answer ? `${a.answer.by}, ${day(a.answer.at)}` : 'not yet', a.answer?.reason ?? '']);
   return `﻿${L.map((l) => l.map(csvCell).join(',')).join('\r\n')}\r\n`;
 }
 
@@ -513,6 +574,7 @@ export function apqrDoc(r: Apqr, by: string, printedAt = new Date(), demo = fals
       r.stability.map((s) => [s.studyNo, s.lotNo, s.protocol, s.t0, s.lastMonth, s.evaluation]), 'No stability study of this item.'),
     h2('Environmental monitoring and water (the plant, in the period)'),
     table(['Point', 'Name', 'Room or system', 'Grade', 'Sampling', 'Results', 'Alert', 'Action'], r.em.map((e) => [e.point, e.name, e.where, e.grade, e.kind, e.n, e.alert, e.action]), 'No EM or water results decided in the period.'),
+    table(['Adverse trend', 'Room or system', 'Date', 'What', 'QC acknowledged'], r.adverse.map((a) => [a.kind, a.room, a.on, a.what, a.answer ? `${a.answer.by}, ${plant(a.answer.at)}: ${a.answer.reason}` : 'not yet']), 'No EM adverse trend in the period.'),
     table(['Point', 'Level', 'Result', 'Deviation', 'Status', 'Recorded'], r.excursions.map((x) => [x.point, x.level, x.shown, x.deviation, x.closed ? 'closed' : 'open', plant(x.at)]), 'No excursions in the period.'),
   ];
   return pageFrame(`Medhanta LIMS · APQR lab data · ${r.item.code}`, by, content, printedAt, demo);

@@ -543,5 +543,20 @@ OOS and OOT), KPIs (per month, per analyst and method, backlog, targets), Worklo
 "Assign", analysts), APQR (product, period, the summary, Export CSV and PDF); My work's "Assigned to you". Reading: any
 of `lims.view`, `lims.qc.approve`, `lims.analysis.review`, `lims.sample.register`, `lims.analysis.perform`.
 
-Not in this round: EM-specific trend rules beyond the Nelson rules (consecutive alerts at a point, flora shifts);
-QMS's reader of `trend_v1` (a QMS round).
+**EM adverse trends** (LIMS-36, EU Annex 1; `shared/engine/em-trends.ts`, pure and tested): three fixed checks over the
+decided EM and water results (level by the sampling's alert and action limits, grade A any colony) and the isolates
+identified, each an "adverse trend" entry with a stable key, computed when read:
+- **Repeated alerts at a point**: at an alert or action result, n or more of the last m samplings of that point's
+  sampling were alert or action. The plan's sampling has an optional setting "n alert-or-action results in the last m
+  samplings" (two numbers, n ≤ m, checked by `monitoringChecks`). Empty: the defaults, a starting point the plan's
+  author can change: grade A and B **2 in 3**, grade C and D (and water) **3 in 5**.
+- **Alerts across a room**: alert or action results at 2 or more points of one room in the same week (Monday to
+  Sunday, plant dates).
+- **New organism (flora shift)**: an isolate whose genus (or genus and species, when the species is given) was not
+  identified at that room (or water system) in the 12 months before.
+
+QC acknowledges each (`lims.qc.approve`): an insert-only answer with the reason (`em_trend_answers`, one per key, in
+migration 0020), as the OOT answer. Shown on the Excursions tab ("Adverse trends", with "Acknowledge"), on a point's
+trend screen, and in the APQR EM summary (screen, PDF, CSV).
+
+Not in this round: QMS's reader of `trend_v1` (a QMS round).

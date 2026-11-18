@@ -2,6 +2,7 @@
 // and approval (tab "Review and approval"), with the master check beside it. A draft saves itself as it is edited.
 // Rooms come from master data (with their grade); each sampling names a test of an approved or effective
 // environmental monitoring or water specification, whose alert and action limits apply.
+import { adverseRule } from '../../../shared/engine/em-trends.js';
 import { useEffect, useRef, useState } from 'react';
 import { ApiError, can, type Me } from '../api.js';
 import { getProblems, getSpec, listSpecs, loadMasterData, STATE_CHIP, STATE_LABEL, type MasterData } from '../api-designer.js';
@@ -149,6 +150,10 @@ export function PlanEditor({ me, versionId, onBack, onOpen }: { me: Me; versionI
                         <label>Taken each time<input aria-label={`${label} quantity`} value={s.quantity} onChange={(e) => setS(i, k, { quantity: e.target.value })} /></label>
                         <label>Isolates identified<select aria-label={`${label} identify`} value={s.identify} onChange={(e) => setS(i, k, { identify: e.target.value as Sampling['identify'] })}>
                           {IDENTIFY.map((x) => <option key={x}>{x}</option>)}</select></label>
+                        <label>Adverse trend: alert or action results<input type="number" min={1} max={20} aria-label={`${label} adverse n`} placeholder={String(adverseRule(p.room?.grade ?? null).n)}
+                          value={s.adverse?.n ?? ''} onChange={(e) => setS(i, k, { adverse: e.target.value ? { n: Number(e.target.value), m: s.adverse?.m ?? adverseRule(p.room?.grade ?? null).m } : undefined })} /></label>
+                        <label>… in the last samplings<input type="number" min={1} max={20} aria-label={`${label} adverse m`} placeholder={String(adverseRule(p.room?.grade ?? null).m)}
+                          value={s.adverse?.m ?? ''} onChange={(e) => setS(i, k, { adverse: e.target.value ? { n: s.adverse?.n ?? adverseRule(p.room?.grade ?? null).n, m: Number(e.target.value) } : undefined })} /></label>
                         <button type="button" className="link" onClick={() => setP(i, { samplings: p.samplings.filter((_, j) => j !== k) })}>Remove</button>
                       </div>);
                   })}

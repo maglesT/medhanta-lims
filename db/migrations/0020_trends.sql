@@ -31,9 +31,24 @@ create index lab_assignments_analyst on lab_assignments (analyst_id, id);
 create trigger lab_assignments_insert_only before update or delete or truncate on lab_assignments
   for each statement execute function refuse_change();
 
-revoke all on tat_targets, lab_assignments from lims_app;   -- the platform's default grants (0000)
-revoke all on sequence tat_targets_id_seq, lab_assignments_id_seq from lims_app;
-grant select on tat_targets, lab_assignments to lims_app;
+-- LIMS-36 (EU Annex 1): QC's acknowledgement of an EM adverse trend (repeated alerts at a point, alerts across a room in
+-- a week, a new organism; found by shared/engine/em-trends.ts, never stored): once per trend key, with the reason.
+create table em_trend_answers (
+  id bigint generated always as identity primary key,
+  key text not null unique check (length(key) between 1 and 200),
+  kind text not null check (kind in ('repeated alerts', 'alerts across a room', 'new organism')),
+  what text not null check (length(trim(what)) between 1 and 1000),
+  reason text not null check (length(trim(reason)) between 1 and 1000),
+  person_id bigint not null references users(id),
+  at timestamptz not null default now()
+);
+create trigger em_trend_answers_insert_only before update or delete or truncate on em_trend_answers
+  for each statement execute function refuse_change();
+
+revoke all on tat_targets, lab_assignments, em_trend_answers from lims_app;   -- the platform's default grants (0000)
+revoke all on sequence tat_targets_id_seq, lab_assignments_id_seq, em_trend_answers_id_seq from lims_app;
+grant select on tat_targets, lab_assignments, em_trend_answers to lims_app;
+grant insert (key, kind, what, reason, person_id) on em_trend_answers to lims_app;
 grant insert (purpose, days, set_by) on tat_targets to lims_app;
 grant insert (sample_id, method_master_id, analyst_id, training, assigned_by) on lab_assignments to lims_app;
 

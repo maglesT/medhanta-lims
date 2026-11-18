@@ -336,6 +336,22 @@ describe('EM and water on the server', () => {
     expect((await t.owner.unsafe(`select em_id from ${t.schema}_report.em_v1`))[0]!.em_id).toMatch(/^[0-9a-f-]{36}$/);
   });
 
+  it('LIMS-36 EM adverse trends: the first Staphylococcus epidermidis at B101 is a new organism QC acknowledges with the reason (insert-only, once)', async () => {
+    type Row = { key: string; kind: string; room: string; what: string; answer: { reason: string; by: string } | null };
+    const all = (await as('viewer', 'GET', '/api/em/adverse')).json() as Row[];
+    const flora = all.find((a) => a.kind === 'new organism')!;
+    expect(flora).toMatchObject({ room: 'B101', what: 'B101, B101-SP1: new organism Staphylococcus epidermidis (not identified at B101 in the 12 months before)', answer: null });
+    // One action result at the point (grade B: 2 in 3): no repeated-alerts trend yet.
+    expect(all.filter((a) => a.kind === 'repeated alerts')).toEqual([]);
+    expect(((await as('viewer', 'GET', '/api/em/adverse?point=B101-SP1')).json() as Row[]).map((a) => a.key)).toEqual([flora.key]);
+    const ack = (who: string, reason: string) => as(who, 'POST', '/api/em/adverse/answer', { key: flora.key, reason });
+    expect((await ack('sampler', 'Seen')).statusCode).toBe(403);
+    expect((await ack('qcman', 'Skin flora; gowning retraining under DEV-26-201')).statusCode).toBe(200);
+    expect((await ack('qcman', 'again')).statusCode).toBe(409);
+    expect(((await as('viewer', 'GET', '/api/em/adverse')).json() as Row[]).find((a) => a.key === flora.key)!.answer).toMatchObject({ reason: 'Skin flora; gowning retraining under DEV-26-201', by: 'QCMAN' });
+    await expect(t.owner`delete from em_trend_answers`).rejects.toThrow();
+  });
+
   it('LIMS-36 grade A acts on any colony: one CFU at a grade A point is an action excursion, though within the specification\'s limit', async () => {
     const r = await as('sampler', 'POST', '/api/em/take', { planVersionId: planId, point: 'a1', sampling: 'sp' });
     expect(r.statusCode, r.body).toBe(200);
