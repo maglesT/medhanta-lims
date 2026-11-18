@@ -1,5 +1,6 @@
 // Pure helpers of the designer over the method document: keys, units and their kinds, what an input may be picked
 // from. No GMP maths here: numbers go through the templates library.
+import { conditionLabel, type ProtocolDoc } from '../../../shared/master/protocol.js';
 import { BLOCKS, findBlock, type Block } from '../../../shared/blocks/index.js';
 import { stepTitle as title } from '../../../shared/engine/analysis.js';
 import { Dec, UNIT_LIST, type Kind } from '../../../shared/templates/index.js';
@@ -100,7 +101,12 @@ export function placeOf(path: string): Place {
 }
 
 /** A short label for a master-check path: "Granulation › 3. Charge a material". */
-export function placeLabel(doc: MasterDoc | SpecDoc, path: string): string {
+export function placeLabel(doc: MasterDoc | SpecDoc | ProtocolDoc, path: string): string {
+  if ('conditions' in doc) {
+    const m = /^conditions\[(\d+)\]/.exec(path);
+    const c = m ? doc.conditions[Number(m[1])] : undefined;
+    return c ? `Condition › ${conditionLabel(c)}` : path.startsWith('design') ? 'Design' : path.startsWith('conditions') ? 'Conditions' : path.startsWith('spec') ? 'Specification' : 'Protocol';
+  }
   if ('tests' in doc) {
     const m = /^tests\[(\d+)\]/.exec(path);
     return m ? `Test › ${doc.tests[Number(m[1])]?.name || `test ${Number(m[1]) + 1}`}` : path.startsWith('header') ? 'Header' : 'Tests';

@@ -23,7 +23,9 @@ export interface SampleEntry {
 }
 export interface SampleDetail {
   sample: { id: number; sampleNo: string; purpose: SamplePurpose; lotNo: string; item: SampleItem; source: Source; quantity: string; containers: number | null;
-    registeredByName: string; registeredAt: string };
+    registeredByName: string; registeredAt: string;
+    // A stability sample: its study and time point.
+    stability?: { studyId: number; studyNo: string; condition: string; label: string; month: number } | null };
   status: SampleStatus; events: SampleEntry[];
   spec: { id: number; versionNo: number; state: string; header: SpecDoc['header']; tests: (SpecTest & { applies: boolean; analyses: TestResult[] })[] } | null;
   methods: { versionId: number; masterId: number; versionNo: number; code: string; name: string }[];

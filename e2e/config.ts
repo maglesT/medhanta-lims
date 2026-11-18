@@ -9,6 +9,10 @@ export const E2E_RECRUITMENT = `${E2E_SCHEMA}_rc`;
 export const E2E_MMS = `${E2E_SCHEMA}_mms`;
 // Qualification's stand-in qualification_v1: the instruments' qualification (e2e/server.ts, LIMS-12).
 export const E2E_QUAL = `${E2E_SCHEMA}_ql`;
+// TrueBatch's batch_fact_v1 and the Logbook's equipment_status_v1 (the stability journey creates them and drops them
+// after; while they are not there, both links answer "not linked", as the other journeys expect).
+export const E2E_TB = `${E2E_SCHEMA}_tb`;
+export const E2E_LB = `${E2E_SCHEMA}_lb`;
 // The material of the samples journey, as master data and MMS name it.
 export const E2E_MATERIAL_ID = '00000000-0000-4000-8000-000000000012';
 // The material of the retest journey (LIMS-31): a released lot past its retest date in MMS.

@@ -12,6 +12,9 @@ export function seedMasterData(m: FakeMaster) {
     { ...item('eq-hplc', 'HPLC-01', 'HPLC with UV detector'), kind: 'instrument', type: 'hplc', room: 'INS-01' },
     // Due for requalification in Qualification (e2e/server.ts): never offered (the instruments journey).
     { ...item('eq-bal2', 'BAL-02', 'Analytical balance 120 g'), kind: 'instrument', type: 'analytical balance', room: 'QCL-01' },
+    // The stability chambers (the stability journey).
+    { ...item('eq-ch1', 'CH-01', 'Stability chamber 30 °C / 75 % RH'), kind: 'equipment', type: 'stability chamber', room: 'STB-01' },
+    { ...item('eq-ch2', 'CH-02', 'Stability chamber 40 °C / 75 % RH'), kind: 'equipment', type: 'stability chamber', room: 'STB-01' },
   );
   // The material of the samples journey.
   m.materials_.push({ ...item(E2E_MATERIAL_ID, 'RM-012', 'Demolol (active substance)'), category: 'API', unit: 'kg' });

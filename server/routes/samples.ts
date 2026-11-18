@@ -35,6 +35,8 @@ export interface SampleItem { of: Of; itemId: string; code: string; name: string
 export interface SampleRow {
   id: number; sampleNo: string; specVersionId: number; purpose: SamplePurpose; lotNo: string; item: SampleItem; source: Source;
   quantity: string; containers: number | null; registeredBy: number; registeredByName: string; registeredAt: Date;
+  // A stability sample: its study and time point (server/routes/stability.ts).
+  stability?: { studyId: number; studyNo: string; condition: string; label: string; month: number } | null;
 }
 export type EventRow = SampleEvent & { id: number; personName: string; at: Date; signature: { printedName: string; signedAt: Date } | null };
 
@@ -60,12 +62,12 @@ async function releaseSample(q: Sql | Tx, of: Of, lotNo: string) {
 }
 
 export const lotShown = (l: LotRead) => `MMS lot ${l.lotNumber}: ${l.materialCode ?? '—'}, ${l.status.replaceAll('_', ' ')}, expiry ${l.expiryDate ? plantDate(l.expiryDate) : '—'}, retest ${l.retestDate ? plantDate(l.retestDate) : '—'}${l.stock ? `, ${l.stock} ${l.unit ?? ''} in stock`.trimEnd() : ''}`;
-const batchShown = (b: BatchRead) => `TrueBatch batch ${b.batchNumber}: ${b.productCode ?? '—'}${b.productName ? ` ${b.productName}` : ''}, ${b.status.replaceAll('_', ' ').toLowerCase()}, completed ${b.completedAt ?? '—'}${b.quantity ? `, ${b.quantity} made` : ''}`;
+export const batchShown = (b: BatchRead) => `TrueBatch batch ${b.batchNumber}: ${b.productCode ?? '—'}${b.productName ? ` ${b.productName}` : ''}, ${b.status.replaceAll('_', ' ').toLowerCase()}, completed ${b.completedAt ?? '—'}${b.quantity ? `, ${b.quantity} made` : ''}`;
 
 async function loadSample(q: Sql | Tx, id: number): Promise<{ s: SampleRow; events: EventRow[] } | null> {
   const [s] = await q<SampleRow[]>`
     select s.id::int, s.sample_no as "sampleNo", s.spec_version_id::int as "specVersionId", s.purpose, s.lot_no as "lotNo", s.item, s.source,
-      s.quantity, s.containers, s.registered_by::int as "registeredBy", u.full_name as "registeredByName", s.registered_at as "registeredAt"
+      s.quantity, s.containers, s.registered_by::int as "registeredBy", u.full_name as "registeredByName", s.registered_at as "registeredAt", s.stability
     from samples s join users u on u.id = s.registered_by where s.id = ${id}`;
   if (!s) return null;
   const events = await q<EventRow[]>`
@@ -126,6 +128,26 @@ export function testStates(spec: SpecDoc, purpose: string, results: Record<strin
         limit: limitText(t, on), method: r.method, analysisNo: r.analysisNo, reviewedAt: r.reviewedAt } : null,
     };
   });
+}
+
+/**
+ * A new sample row with the next number of the plant year (never reused), audited: the one way a sample is made, by
+ * registration and by a stability pull (server/routes/stability.ts, which names the study and time point).
+ */
+export async function newSample(tx: Tx, person: number, row: { specVersionId: number; purpose: SamplePurpose; lotNo: string; item: SampleItem; source: Source;
+  quantity: string; containers: number | null; stability?: { studyId: number; studyNo: string; condition: string; label: string; month: number } }): Promise<{ id: number; sampleNo: string }> {
+  const [c] = await tx<{ n: number; yy: string }[]>`
+    insert into sample_counters (year, last_no) values (extract(year from now() at time zone ${PLANT_TZ})::int, 1)
+    on conflict (year) do update set last_no = sample_counters.last_no + 1
+    returning last_no as n, right(year::text, 2) as yy`;
+  const sampleNo = `${SAMPLE_PREFIX}${c!.yy}${String(c!.n).padStart(5, '0')}`;
+  const [s] = await tx<{ id: number }[]>`
+    insert into samples (sample_no, spec_version_id, purpose, lot_no, item, source, quantity, containers, registered_by, stability)
+    values (${sampleNo}, ${row.specVersionId}, ${row.purpose}, ${row.lotNo}, ${tx.json(row.item as never)}, ${tx.json(row.source as never)}, ${row.quantity}, ${row.containers},
+      ${person}, ${row.stability ? tx.json(row.stability as never) : null})
+    returning id::int`;
+  await audit(tx, { actorId: person, action: 'sample.registered', objectType: 'sample', objectId: s!.id, new: { sampleNo, ...row } });
+  return { id: s!.id, sampleNo };
 }
 
 export function sampleRoutes(app: FastifyInstance, sql: Sql) {
@@ -222,20 +244,8 @@ export function sampleRoutes(app: FastifyInstance, sql: Sql) {
         // LIMS-31: one retest sample of a lot at a time, until QC decides on it
         const retest = b.purpose === 'retest' && of === 'material' ? await openRetestSample(tx, lotNo) : null;
         if (retest) throw new SampleError(409, 'already_sampled', [`Lot ${lotNo} already has its retest sample ${retest}, waiting for QC's decision.`]);
-        // 4. the number of the plant year, never reused
-        const [c] = await tx<{ n: number; yy: string }[]>`
-          insert into sample_counters (year, last_no) values (extract(year from now() at time zone ${PLANT_TZ})::int, 1)
-          on conflict (year) do update set last_no = sample_counters.last_no + 1
-          returning last_no as n, right(year::text, 2) as yy`;
-        const sampleNo = `${SAMPLE_PREFIX}${c!.yy}${String(c!.n).padStart(5, '0')}`;
-        const row = { sampleNo, specVersionId: b.specVersionId, purpose: b.purpose, lotNo, item, source, quantity: b.quantity, containers: b.containers ?? null };
-        const [s] = await tx<{ id: number }[]>`
-          insert into samples (sample_no, spec_version_id, purpose, lot_no, item, source, quantity, containers, registered_by)
-          values (${sampleNo}, ${b.specVersionId}, ${b.purpose}, ${lotNo}, ${tx.json(item as never)}, ${tx.json(source as never)}, ${b.quantity}, ${b.containers ?? null}, ${user.id})
-          returning id::int`;
-        // 5. audit
-        await audit(tx, { actorId: user.id, action: 'sample.registered', objectType: 'sample', objectId: s!.id, new: row });
-        return { id: s!.id, sampleNo };
+        // 4. the number and the row (5. audit)
+        return newSample(tx, user.id, { specVersionId: b.specVersionId, purpose: b.purpose, lotNo, item, source, quantity: b.quantity, containers: b.containers ?? null });
       });
     } catch (e) {
       if (e instanceof SampleError) return reply.code(e.status).send({ error: e.code, problems: e.problems, message: e.problems[0] });

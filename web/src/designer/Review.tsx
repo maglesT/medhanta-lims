@@ -154,7 +154,8 @@ function Comments({ me, doc, data, versionId, onAdded, onGo }: { me: Me; doc: An
   const [path, setPath] = useState('');
   const may = ['master.author', 'master.check', 'master.approve'].some((p) => can(me, p));
   const about = [['header', 'Header'],
-    ...('tests' in doc ? doc.tests.map((t, i) => [`tests[${i}]`, `Test › ${t.name}`])
+    ...('conditions' in doc ? doc.conditions.map((_, i) => [`conditions[${i}]`, placeLabel(doc, `conditions[${i}]`)])
+      : 'tests' in doc ? doc.tests.map((t, i) => [`tests[${i}]`, `Test › ${t.name}`])
       : doc.stages.flatMap((s, i) => [[`stages[${i}]`, s.name], ...s.steps.map((_, j) => [`stages[${i}].steps[${j}]`, placeLabel(doc, `stages[${i}].steps[${j}]`)])]))];
   return (
     <div className="card comments">

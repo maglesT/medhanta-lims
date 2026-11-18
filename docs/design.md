@@ -424,3 +424,28 @@ records; a second sampler checks.
   lot (or one still waiting to be sampled), and one at a time per lot until QC decides on it. Its decision is published as any sample's (`coa_v1`,
   `result_v1`); MMS owns the lot's status and moves its retest date. MMS absent or down: the list says so and the retest
   sample is registered by hand (second-person check), as any sample.
+
+## Step 6: stability protocols and studies (build step 6, 18 Nov 2026)
+Plan 2.6 and 2b items 1, 2, 5, 6 (LIMS-26, LIMS-27, LIMS-28), the Logbook way: a record row, insert-only entries, and
+everything else computed by pure functions (`shared/engine/stability.ts`); migration `0013`; no new permission.
+
+| LIMS record | Copied from | How |
+|---|---|---|
+| **Protocol** (version: draft … effective) | Specification (`kind = 'spec'`) | A third kind of master version, `kind = 'protocol'` (`shared/master/protocol.ts`): same table, review, second-person check, QA approval with a change control, effective version. Its document: the product or material (master data, code and name pulled), purpose (registration, on-going, commitment, change), container closure and "the one marketed", shelf life in months, the specification version (approved or effective, same item, with stability tests; its number pulled), the quantity per time point, the pull window (± days), the conditions from a fixed list (25/60, 30/65, 30/75 India, 40/75, 5 °C, −20 °C, photostability, other with its words) each with its role and time points in months, and the design (full, bracketing, matrixing: factors with levels, sizes and those tested; formulations or closure system; the matrix of time points per cell and condition; reduction, variability). `protocolChecks` refuses approval while an element is missing or no long-term condition reaches the shelf life; the design is checked by template **L25** (ICH Q1D) per matrixed condition (or once for bracketing). |
+| **Study** (`STB26001`) | Sample | A row (`stability_studies`: the effective protocol version, the batch or lot, item, source, matrix cell, T0 = the plant date it was placed) and entries (`stability_events`): placed (per condition: the chamber and the units), extra (more placed, with a reason), extra_approved (QA, e-signature "QC approved", not the person who placed it), pulled (time point, the sample made; late: reason and deviation), checked (a second person checks what was typed by hand: the batch, a chamber without the Logbook, a deviation without Deviations), note. Batch from TrueBatch `batch_fact_v1` (a completed batch of the protocol's product), lot from MMS `lot_v1`; by hand only while the link is absent or down. Chambers: master-data equipment named a chamber; used only while the Logbook's `equipment_status_v1` says fit for use (not in the Logbook: refused; Logbook absent or down: accepted, its label checked by a second person before any pull). |
+| **Schedule and stock** | Item status | `schedule` (each time point due T0 + months, the 31st to the month's end, window ± days; a matrixed batch its cell's own months), `pointState` (pulled, due, overdue, not yet), `stock` (placed + approved extra − pulled, against what the later time points need), `pullRefusal` (before the window; late without reason and deviation; typed by hand not checked; the pull that would leave a later time point short, until QA approves more placement). |
+| **Pull** | Sample registration | A pull makes the stability sample through `newSample` (the code of sample registration, now one function): purpose `stability`, the protocol's specification version (shelf-life limits), the protocol's quantity, and `samples.stability` naming the study and time point (shown on the sample screen). |
+| **Excursion** | Logbook entry | Entered by QC until the Logbook publishes excursions (`stability_excursions`): chamber, period, readings at equal intervals, the deviation (one Deviations knows while it answers); the mean kinetic temperature by template **L23** (readings it refuses are refused at entry); the studies and time points whose samples were in the chamber (`affectedBy`); a second person checks the readings, QC assesses the impact. |
+| **On-going stability** (LIMS-27) | — | Per product and primary pack: the batches TrueBatch released this plant year (`releasedSince`), the effective on-going protocols and the on-going studies started this year (`ongoingFlags`); a flag with no study (or no on-going protocol at all), cleared by a study or QA's reason (`stability_ongoing_answers`). |
+| **Chamber capacity** | — | `capacity`: per chamber and condition the units in it now and still in it on 1 January of each of the next five years. |
+
+Screens: the Stability tab (pulls due this week and overdue, on-going flags, the studies; protocols; excursions; chamber
+capacity), the protocol editor (as the specification editor, with the same review screen and master check), the new
+study dialog (protocol, batch from TrueBatch, chamber and units per condition) and the study screen (schedule with Pull,
+late pull with reason and deviation, stock with "Place more" and QA's approval, checks, results per time point from the
+stability samples' analyses, excursions, entries). Permissions: protocols `lims.master.*`; studies, pulls, extra
+placement, excursions and checks `lims.sample.register`; QA's approval of extra placement, the excursion assessment and
+the on-going reason `lims.qc.approve`; reading also `lims.view`.
+
+Not in this round: the Q1E evaluation (L15), the out-of-trend prediction interval (L22), the Arrhenius advisory (L24),
+the CTD tables and `stability_v1` (LIMS-29, next round); excursions read from the Logbook.

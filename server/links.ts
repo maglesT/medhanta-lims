@@ -203,6 +203,15 @@ export const truebatchClient = (l: Link) => ({
   waiting: () => l.read(async (q, v) => (await q<BatchRow[]>`
     select ${q.unsafe(BATCH_COLS)} from ${v('batch_fact_v1')} b where completed_at is not null and released is not true
     order by completed_at, batch_number limit 500`).map(batchOf)),
+  // Stability (LIMS-27, plan 2.6): the completed batches of a product, newest first, to put on study; and the batches
+  // released since a plant date (released_at through to_jsonb: the completion on a view from before it was appended).
+  ofProduct: (productCode: string) => l.read(async (q, v) => (await q<BatchRow[]>`
+    select ${q.unsafe(BATCH_COLS)} from ${v('batch_fact_v1')} b where product_code = ${productCode} and completed_at is not null and status <> 'REJECTED'
+    order by completed_at desc, batch_number limit 100`).map(batchOf)),
+  releasedSince: (date: string) => l.read(async (q, v) => (await q<BatchRow[]>`
+    select ${q.unsafe(BATCH_COLS)} from ${v('batch_fact_v1')} b where released is true
+      and (coalesce((to_jsonb(b) ->> 'released_at')::timestamptz, completed_at) at time zone 'Asia/Kolkata')::date >= ${date}::date
+    order by product_code, batch_number limit 2000`).map(batchOf)),
 });
 
 // ---- Qualification: report.qualification_v1 (published), one row per qualified item; a machine is matched by its

@@ -4,6 +4,7 @@ import { findBlock } from '../../../shared/blocks/index.js';
 import { masterChecks } from '../../../shared/master/checks.js';
 import type { Limit, MasterDoc, Stage, Step } from '../../../shared/master/schema.js';
 import type { SpecDoc, SpecTest } from '../../../shared/master/spec.js';
+import { conditionLabel, PURPOSE_WORDS, type ProtocolDoc } from '../../../shared/master/protocol.js';
 import { stepTitle } from '../../../shared/engine/analysis.js';
 import { neededText } from '../../../shared/engine/training.js';
 import { placeLabel } from './model.js';
@@ -47,9 +48,10 @@ export function stepText(doc: MasterDoc, t: Step, j: number, _units?: Units): st
     t.orderAfter ? `Order-critical: after step ${after < 0 ? '(no longer in this stage)' : `${after + 1}. ${stepTitle(doc, steps[after]!)}`}.` : '',].filter(Boolean).join(' ');
 }
 
-/** A method or a specification (the review and changes views show both). */
-export type AnyDoc = MasterDoc | SpecDoc;
+/** A method, a specification or a stability protocol (the review and changes views show each). */
+export type AnyDoc = MasterDoc | SpecDoc | ProtocolDoc;
 export const isSpec = (doc: AnyDoc): doc is SpecDoc => 'tests' in doc;
+export const isProtocol = (doc: AnyDoc): doc is ProtocolDoc => 'conditions' in doc;
 
 const limitWords = (l: Limit) => [l.low !== undefined ? `${l.lowStrict ? 'more than' : 'not less than'} ${l.low}` : '', l.high !== undefined ? `${l.highStrict ? 'less than' : 'not more than'} ${l.high}` : '']
   .filter(Boolean).join(' and ') + (l.unit ? ` ${l.unit}` : '') + (l.alertLow !== undefined || l.alertHigh !== undefined ? ` (alert ${[l.alertLow && `below ${l.alertLow}`, l.alertHigh && `above ${l.alertHigh}`].filter(Boolean).join(', ')})` : '');
@@ -73,8 +75,29 @@ function describeSpec(doc: SpecDoc): Section[] {
   ];
 }
 
+/** A stability protocol in plain words (LIMS-26). */
+function describeProtocol(doc: ProtocolDoc): Section[] {
+  const h = doc.header;
+  const d = doc.design;
+  return [
+    { key: 'header', title: 'Protocol', lines: [
+      { key: 'what', text: `Stability protocol ${h.number} for the ${h.of} ${h.code} ${h.name}: ${PURPOSE_WORDS[h.purpose].toLowerCase()}.` },
+      { key: 'pack', text: `Container closure: ${h.containerClosure || '(not set)'}${h.sameAsMarketed ? ', as marketed' : ', NOT the one marketed'}. Shelf life ${h.shelfLifeMonths} months.` },
+      { key: 'spec', text: doc.spec ? `Tested to specification ${doc.spec.number}, version ${doc.spec.versionNo} (its stability tests and shelf-life limits).` : 'Specification (not set).' },
+      { key: 'quantity', text: `${doc.quantity.amount} ${doc.quantity.unit} pulled at each time point, within ± ${doc.pullWindowDays} days of its date.` },
+    ] },
+    { key: 'conditions', title: 'Conditions and time points', lines: doc.conditions.map((c) => ({ key: c.key, text: `${conditionLabel(c)} (${c.role}): ${c.months.join(', ') || '(none)'} months.` })) },
+    { key: 'design', title: 'Design', lines: [
+      { key: 'type', text: `${d.type[0]!.toUpperCase()}${d.type.slice(1)} design.${d.justification ? ` Why: ${d.justification}` : ''}` },
+      ...d.factors.map((f, i) => ({ key: `f${i}`, text: `${f.name} (${f.kind}): ${f.levels.map((l) => `${l.name}${l.tested ? ' (tested)' : ''}`).join(', ')}.` })),
+      ...d.matrix.map((m, i) => ({ key: `m${i}`, text: `${m.cell} at ${m.condition}: ${m.months.join(', ')} months.` })),
+    ] },
+  ];
+}
+
 export function describeMaster(doc: AnyDoc, units?: Units): Section[] {
   if (isSpec(doc)) return describeSpec(doc);
+  if (isProtocol(doc)) return describeProtocol(doc);
   const h = doc.header;
   const top: Section[] = [
     { key: 'header', title: 'Header', lines: [

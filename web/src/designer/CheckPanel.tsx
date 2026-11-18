@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { blocking, type Problem } from '../../../shared/master/checks.js';
 import type { SpecDoc } from '../../../shared/master/spec.js';
+import type { ProtocolDoc } from '../../../shared/master/protocol.js';
 import type { MasterDoc, MasterState } from '../../../shared/master/schema.js';
 import { placeLabel } from './model.js';
 
@@ -10,7 +11,7 @@ export type OnAnswer = (p: Problem, choice: string, reason: string) => void;
 
 // An approved, effective or retired version is past review: a check added after its approval is not "to fix before
 // review" but what a new version will need (an info line).
-export function CheckPanel({ doc, state, problems, invalid, onGo, onAnswer }: { doc: MasterDoc | SpecDoc; state?: MasterState; problems: Problem[] | null; invalid?: string; onGo: (path: string) => void; onAnswer?: OnAnswer }) {
+export function CheckPanel({ doc, state, problems, invalid, onGo, onAnswer }: { doc: MasterDoc | SpecDoc | ProtocolDoc; state?: MasterState; problems: Problem[] | null; invalid?: string; onGo: (path: string) => void; onAnswer?: OnAnswer }) {
   const past = state === 'approved' || state === 'effective' || state === 'retired';
   const later = past ? problems?.filter(blocking).length ?? 0 : 0;
   const errors = past ? 0 : problems?.filter((p) => p.level === 'error').length ?? 0;

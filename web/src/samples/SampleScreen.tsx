@@ -54,6 +54,7 @@ export function SampleScreen({ me, id, onBack, onOpenReserve }: { me: Me; id: nu
           <dt>Source</dt><dd>{sourceWords(s.source)}</dd>
           <dt>Quantity</dt><dd>{s.quantity}{s.containers ? ` from ${s.containers} container${s.containers === 1 ? '' : 's'}` : ''}</dd>
           <dt>Purpose</dt><dd>{PURPOSE_LABEL[s.purpose]}</dd>
+          {s.stability && <><dt>Stability study</dt><dd>{s.stability.studyNo}, {s.stability.label}, {s.stability.month} months</dd></>}
           <dt>Registered</dt><dd>{s.registeredByName}, {plantTime(s.registeredAt)}</dd>
           {d.spec && (<><dt>Specification</dt><dd>{d.spec.header.number}, version {d.spec.versionNo} · {d.spec.header.pharmacopoeia}{d.spec.header.edition ? ` ${d.spec.header.edition}` : ''}{d.spec.state !== 'effective' ? ` (now ${d.spec.state})` : ''}</dd></>)}
         </dl>
