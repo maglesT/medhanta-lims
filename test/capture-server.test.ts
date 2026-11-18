@@ -29,7 +29,7 @@ beforeAll(async () => {
     await db.owner.unsafe(`
       create schema ${S.lb}; create schema ${S.ql};
       create table ${S.lb}.equipment_status_v1 (master_id text, code text, kind text, state text, fit_for_use boolean, blockers text[], warnings text[],
-        in_use_analysis text, clean_until timestamptz, cleaned_at timestamptz, cleaned_by text, calibration_due date, qualification text,
+        in_use_batch text, clean_until timestamptz, cleaned_at timestamptz, cleaned_by text, calibration_due date, qualification text,
         checked_at timestamptz default now(), read_at timestamptz default now(), data_as_of timestamptz default now());
       create table ${S.ql}.qualification_v1 (item_id bigint, master_id text, code text, name text, kind text, status text, next_review_due date,
         status_since timestamptz default now(), status_source text, read_at timestamptz default now(), data_as_of timestamptz default now());

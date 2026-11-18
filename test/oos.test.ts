@@ -110,8 +110,8 @@ beforeAll(async () => {
   t = await freshApp(async (db) => {
     DV = `${db.schema}_dv`;
     await db.owner.unsafe(`create schema ${DV};
-      create table ${DV}.deviation_v1 (number text, status text, classification text, opened_at timestamptz, closed_at timestamptz, product text, analysis text,
-        analysis_norm text, outcome text, read_at timestamptz default now(), data_as_of timestamptz default now(), title text, source_ref text);
+      create table ${DV}.deviation_v1 (number text, status text, classification text, opened_at timestamptz, closed_at timestamptz, product text, batch text,
+        batch_norm text, outcome text, read_at timestamptz default now(), data_as_of timestamptz default now(), title text, source_ref text);
       grant usage on schema ${DV} to lims_app; grant select on all tables in schema ${DV} to lims_app;`);
     provider = connect(TEST_DATABASE_URL, { role: 'lims_app', link: true });
     return links({ deviations: provider }, { deviations: DV });
@@ -262,7 +262,7 @@ describe('OOS on the server', () => {
     await ok(act('supervisor', id, 'review', {}, 'reviewed'));
     expect(await view(oosNo)).toMatchObject({ status: 'OPEN', phase_ii_needed: true });
     // Deviations names the analysis: the deviation is picked; a number Deviations does not have is refused.
-    await t.owner.unsafe(`insert into ${DV}.deviation_v1 (number, status, analysis, analysis_norm, title) values
+    await t.owner.unsafe(`insert into ${DV}.deviation_v1 (number, status, batch, batch_norm, title) values
       ('DEV-26-0300', 'investigation', '${analysisNo}', '${analysisNo.toLowerCase()}', 'Phase II of ${oosNo}')`);
     expect((await get(id)).deviations).toEqual({ link: 'ok', list: [expect.objectContaining({ number: 'DEV-26-0300' })] });
     expect((await act('supervisor', id, 'phase2', { reference: 'DEV-26-9999' })).json().error).toBe('unknown_deviation');

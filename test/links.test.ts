@@ -28,15 +28,15 @@ beforeAll(async () => {
       create schema ${S.dv}; create schema ${S.qms}; create schema ${S.lb}; create schema ${S.mms}; create schema ${S.ql};
       create table ${S.ql}.qualification_v1 (item_id bigint, master_id text, code text, name text, kind text, status text, next_review_due date,
         status_since timestamptz default now(), status_source text, read_at timestamptz default now(), data_as_of timestamptz default now());
-      create table ${S.dv}.deviation_v1 (number text, status text, classification text, opened_at timestamptz, closed_at timestamptz, product text, analysis text,
-        analysis_norm text, outcome text, read_at timestamptz default now(), data_as_of timestamptz default now(), title text, source_ref text);
+      create table ${S.dv}.deviation_v1 (number text, status text, classification text, opened_at timestamptz, closed_at timestamptz, product text, batch text,
+        batch_norm text, outcome text, read_at timestamptz default now(), data_as_of timestamptz default now(), title text, source_ref text);
       create table ${S.qms}.change_v1 (number text, status text, title text, products text, qa_approved_at timestamptz, closed_at timestamptz,
         read_at timestamptz default now(), data_as_of timestamptz default now());
       create table ${S.lb}.equipment_status_v1 (master_id text, code text, kind text, state text, fit_for_use boolean, blockers text[], warnings text[],
-        in_use_analysis text, clean_until timestamptz, cleaned_at timestamptz, cleaned_by text, calibration_due date, qualification text,
+        in_use_batch text, clean_until timestamptz, cleaned_at timestamptz, cleaned_by text, calibration_due date, qualification text,
         checked_at timestamptz default now(), read_at timestamptz default now(), data_as_of timestamptz default now());
       create table ${S.mms}.lot_v1 (lot_number text, kind text, material_master_id text, material_code text, product_code text, status text, status_since timestamptz,
-        expiry_date date, retest_date date, manufacturer_analysis text, supplier_code text, qc_report_ref text, qc_conclusion text,
+        expiry_date date, retest_date date, manufacturer_batch text, supplier_code text, qc_report_ref text, qc_conclusion text,
         read_at timestamptz default now(), data_as_of timestamptz default now(), stock numeric, unit text);
       create table ${S.mms}.lot_test_v1 (lot_number text, report_ref text, test text, specification text, result text, value numeric, unit text, basis text,
         tested_at timestamptz, read_at timestamptz default now(), data_as_of timestamptz default now());
@@ -47,7 +47,7 @@ beforeAll(async () => {
         ('CC-2026-0003', 'rejected', 'Drop the identity test', null, now()),
         ('CC-2026-0004', 'implementation', 'Paracetamol assay by HPLC', 'FG-PCM500 Paracetamol 500 mg tablets', now()),
         ('CC-2026-0005', 'closure', 'New analytical balance', null, now());
-      insert into ${S.lb}.equipment_status_v1 (master_id, code, kind, state, fit_for_use, blockers, warnings, in_use_analysis, cleaned_at, cleaned_by, checked_at) values
+      insert into ${S.lb}.equipment_status_v1 (master_id, code, kind, state, fit_for_use, blockers, warnings, in_use_batch, cleaned_at, cleaned_by, checked_at) values
         ('eq-str', 'STR-01', 'equipment', 'clean', true, '{}', '{"Use allowed under exception EXC-7"}', null, null, null, now()),
         ('eq-str2', 'STR-02', 'equipment', 'dirty', false, '{"Dirty: clean and verify before the next use.","Calibration overdue."}', '{}', null, null, null, now()),
         ('eq-str3', 'STR-03', 'equipment', 'in use', true, '{}', '{}', 'XB26001', null, null, now()),
@@ -208,7 +208,7 @@ describe('LIMS-12 Logbook: equipment and rooms fit for use', () => {
   it('LIMS-12 a machine the Logbook says is not fit for use is refused with the Logbook\'s reasons; one in use by another analysis too', async () => {
     await act('asha', b.id, '0.1.1.1', 'start');
     expect(await problems(record(b.id, '0.1.1.1', { machine: 'eq-str2' }))).toEqual(['STR-02 is not fit for use (Logbook): Dirty: clean and verify before the next use; Calibration overdue.']);
-    expect(await problems(record(b.id, '0.1.1.1', { machine: 'eq-str3' }))).toEqual(['STR-03 is in use by analysis XB26001 (Logbook).']);
+    expect(await problems(record(b.id, '0.1.1.1', { machine: 'eq-str3' }))).toEqual(['STR-03 is in use by XB26001 (Logbook).']);
     expect(await problems(record(b.id, '0.1.1.1', { machine: 'eq-str5' }))).toEqual(['STR-05 is not in the Logbook, so it cannot be used.']);
   });
 
@@ -270,7 +270,7 @@ describe('LIMS-20 Deviations: the deviation number and its status come from the 
   const devs = async () => ((await as('meera', 'GET', `/api/analyses/${b.id}`)).json() as { analysis: { deviations: { reference: string; open: boolean; status?: string }[]; deviationsLink: string } }).analysis;
   beforeAll(async () => {
     b = await issue(small([{ steps: [{ checker: true }] }]));
-    await t.owner.unsafe(`insert into ${S.dv}.deviation_v1 (number, status, analysis, analysis_norm, title) values
+    await t.owner.unsafe(`insert into ${S.dv}.deviation_v1 (number, status, batch, batch_norm, title) values
       ('DEV-26-0001', 'investigation', '${b.analysisNo}', '${b.analysisNo.toLowerCase()}', 'pH out of limits'),
       ('DEV-26-0099', 'classification', '${b.analysisNo}', '${b.analysisNo.toLowerCase()}', 'Label torn'),
       ('DEV-26-0500', 'closed', 'OTHER1', 'other1', 'Another analysis')`);
@@ -390,7 +390,7 @@ describe('the deviation number flows back to the analysis record (owner, 17 Nov 
     expect(await devs()).toMatchObject({ deviationsLink: 'ok', deviations: [] });
     // Deviations names the note it filed the deviation from: "<product>:note:<step event id>".
     const n = (await loadAnalysis(t.sql, b.id))!.events.find((e) => e.kind === 'note')!;
-    await t.owner.unsafe(`insert into ${S.dv}.deviation_v1 (number, status, analysis, analysis_norm, title, source_ref) values
+    await t.owner.unsafe(`insert into ${S.dv}.deviation_v1 (number, status, batch, batch_norm, title, source_ref) values
       ('DEV-26-0123', 'investigation', '${b.analysisNo}', '${b.analysisNo.toLowerCase()}', 'Torn label', 'lims:note:${n.id}')`);
     const d = await devs();
     expect(d.deviations).toEqual([expect.objectContaining({ note: n!.id, step: '0.1.0.1', reference: 'DEV-26-0123', open: true, status: 'investigation', filed: true })]);

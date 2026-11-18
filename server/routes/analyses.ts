@@ -538,7 +538,7 @@ export function analysisRoutes(app: FastifyInstance, sql: Sql) {
     const dv = await deviationsRead(app, l);
     const r = review(l.doc, l.events, l.analysisEvents, l.now, dv.read);
     // Deviations that name this analysis in the Deviations system but no note of the record links.
-    const named = await app.links.deviations.byAnalysis(l.analysis.analysisNo);
+    const named = await app.links.deviations.byBatch(l.analysis.analysisNo, l.sample?.lotNo ?? '');
     const unlinked = named.state === 'ok' ? named.value.filter((d) => !r.deviations.some((x) => x.reference === d.number)) : [];
     return { status: view(l, dv.read).status, ...r, deviationsLink: dv.link, unlinked, signatures,
       corrections: r.corrections.map((c) => ({ ...c, personName: names.get(c.person) ?? null })),
@@ -550,9 +550,10 @@ export function analysisRoutes(app: FastifyInstance, sql: Sql) {
   // The deviations that name this analysis in the Deviations system, for the note's pick list (pull, don't type).
   app.get<{ Params: { id: string } }>('/api/analyses/:id/deviations', anyUser, async (req, reply) => {
     const id = parseId(req.params.id);
-    const [b] = id === null ? [] : await sql<{ analysisNo: string }[]>`select analysis_no as "analysisNo" from analyses where id = ${id}`;
+    const [b] = id === null ? [] : await sql<{ analysisNo: string; lotNo: string | null }[]>`
+      select a.analysis_no as "analysisNo", s.lot_no as "lotNo" from analyses a left join samples s on s.id = a.sample_id where a.id = ${id}`;
     if (!b) return reply.code(404).send({ error: 'not_found' });
-    const r = await app.links.deviations.byAnalysis(b.analysisNo);
+    const r = await app.links.deviations.byBatch(b.analysisNo, b.lotNo ?? '');
     return { link: r.state, deviations: r.state === 'ok' ? r.value : [] };
   });
 

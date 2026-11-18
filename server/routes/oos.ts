@@ -173,7 +173,7 @@ export function oosRoutes(app: FastifyInstance, sql: Sql) {
     const dev = await deviationNow(l);
     const p2 = phase2(l.events);
     const r2 = p2 ? await app.links.deviations.byNumbers([p2.reference]) : null;
-    const picks = await app.links.deviations.byAnalysis(l.o.analysisNo);
+    const picks = await app.links.deviations.byBatch(l.o.analysisNo, l.o.lotNo);
     const results = await sampleTestResults(sql, l.o.sampleId);
     const rt = retests(l.events);
     const retestIds = rt.started.map((e) => e.payload.analysis);

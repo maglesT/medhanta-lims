@@ -37,7 +37,7 @@ export async function pullItem(app: FastifyInstance, block: Block, f: BlockField
   if (s.onlyProduct && productCode && s.onlyProduct !== productCode) {
     return refused(`${item.code} was last used for an antibiotic (${s.onlyProduct}): a product-changeover cleaning is needed in the Logbook before ${productCode}.`);
   }
-  if (s.inUseAnalysis && s.inUseAnalysis !== analysisNo) return refused(`${item.code} is in use by analysis ${s.inUseAnalysis} (Logbook).`);
+  if (s.inUseBatch && s.inUseBatch !== analysisNo) return refused(`${item.code} is in use by ${s.inUseBatch} (Logbook).`);
   const source: Source = { from: 'logbook', asOf: s.checkedAt, shown: clauses([`${item.code}: ${stateWords(s.state)}`, ...s.warnings]) };
   const out: Pulled = { source, values: {}, sources: {}, problems: [] };
   // The line clearance facts the Logbook has (the room, or a packing line): clean (it is fit for use), when and by whom it was cleaned.
