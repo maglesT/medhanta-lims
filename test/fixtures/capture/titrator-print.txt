@@ -1,0 +1,5 @@
+Method      ASSAY-NAOH-01
+Sample      LS2600123-1
+Weight      0.3012 g
+EQP1        12.345 mL   E = 245 mV
+Result      98.7 %

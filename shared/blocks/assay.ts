@@ -9,10 +9,12 @@ import type { Block, BlockField, BlockSetting } from './format.js';
 // sets must have its result (C2). The standard is picked from the lab inventory (a usable reference or working
 // standard, LIMS-14): its potency and basis come with it and cannot be typed.
 const preps = [1, 2, 3] as const;
+/** The peak read from a CDS result file (shared/capture/cds-fill.ts): its name in the CDS, else the largest peak. */
+export const CDS_PEAK: BlockSetting = { name: 'cdsPeak', label: 'Peak read from the CDS result file: its name in the CDS (empty: the largest peak)', kind: 'text', optional: true };
 const opt = (k: number) => (k > 1 ? { optional: true } : {});
 
 export const assayFields = (unit: string): BlockField[] => preps.map((k) => (
-  { name: `responses${k}`, label: `Sample preparation ${k}: responses`, kind: 'number', unit, count: 6, minCount: 1, ...opt(k) }));
+  { name: `responses${k}`, label: `Sample preparation ${k}: responses`, kind: 'number', unit, count: 6, minCount: 1, capture: 'cds', ...opt(k) }));
 
 /** The settings every assay shares: the preparations, the sample masses and flasks, per mass or per unit, basis, limits. */
 export const sampleSettings: BlockSetting[] = [
@@ -46,10 +48,10 @@ export const meanCalcs = (label: string): Block['calcs'] => [
 
 export const assay: Block = {
   id: 'assay', version: 1, name: 'Assay by external standard', checker: true,
-  instruction: 'From the run, record the responses of the standard (and of the bracketing standards after the samples) and of each sample preparation. Pick the reference or working standard used: its potency and basis come from the inventory. The masses and dilutions come from the weigh and dilute steps.',
+  instruction: 'Import the CDS result file of the run (a chromatography run): the responses of the standard (and of the bracketing standards after the samples) and of each sample preparation come from it; otherwise record them. Pick the reference or working standard used: its potency and basis come from the inventory. The masses and dilutions come from the weigh and dilute steps.',
   fields: [
-    { name: 'stdResponses', label: 'Standard: responses', kind: 'number', unit: '$responseUnit', count: 6, minCount: 1 },
-    { name: 'stdResponsesAfter', label: 'Standard after the samples (bracketing): responses', kind: 'number', unit: '$responseUnit', count: 6, minCount: 1, optional: true },
+    { name: 'stdResponses', label: 'Standard: responses', kind: 'number', unit: '$responseUnit', count: 6, minCount: 1, capture: 'cds' },
+    { name: 'stdResponsesAfter', label: 'Standard after the samples (bracketing): responses', kind: 'number', unit: '$responseUnit', count: 6, minCount: 1, optional: true, capture: 'cds' },
     ...assayFields('$responseUnit'),
     { name: 'std', label: 'Reference or working standard used', kind: 'item', itemKinds: ['reference', 'working'] },
     { name: 'stdPotency', label: 'Standard: potency (from the inventory)', kind: 'number', unit: '%' },
@@ -65,6 +67,7 @@ export const assay: Block = {
     { name: 'stdMass', label: 'Standard: mass weighed (its weigh step)', kind: 'quantity' },
     { name: 'stdVolume', label: 'Standard: first flask (volume the standard is dissolved in)', kind: 'quantity' },
     { name: 'stdFactor', label: 'Standard: dilution factor after the first flask (its dilute step)', kind: 'number', optional: true },
+    CDS_PEAK,
     ...sampleSettings,
   ],
   calcs: [

@@ -1,0 +1,8 @@
+-------- KF TITRATION --------
+Method      KF-VOL-01
+Sample      LS2600123 / 1
+Sample size 0.2034 g
+Drift       12 ug/min
+EP1         2.3456 mL
+Content     0.452 %
+------------------------------

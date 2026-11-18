@@ -187,3 +187,9 @@
   .pending-row { grid-template-columns: 12px minmax(0, 1fr); } .pending-go { display: none; }
   .returns label { grid-template-columns: 1fr; }
 }
+/* Instrument capture (LIMS-32) and the CDS result file (LIMS-33). */
+.capture { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; margin: 6px 0 4px; }
+.capture .field-error, .capture .small { flex-basis: 100%; }
+.capture select { width: auto; }
+.cds-import { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin: 8px 0; }
+.cds-import .text { flex: 1 1 220px; }

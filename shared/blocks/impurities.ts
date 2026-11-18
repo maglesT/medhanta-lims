@@ -1,4 +1,5 @@
 import type { Block, BlockSetting } from './format.js';
+import { CDS_PEAK } from './assay.js';
 
 // Related substances by chromatography (L4): the peak table typed from the chromatogram (relative retention times and
 // areas in the same order), the method's named impurities with their RRT windows, limits and factors (safety rule S4:
@@ -11,12 +12,12 @@ const excluded = [1, 2] as const;
 
 export const impurities: Block = {
   id: 'impurities', version: 1, name: 'Related substances (impurities)', checker: true,
-  instruction: 'From the chromatogram of the test solution, record the relative retention time and the area of every peak other than the principal peak, in the same order, and the area of the principal peak. Against a reference solution, record its responses.',
+  instruction: 'Import the CDS result file of the run, or from the chromatogram of the test solution record the relative retention time and the area of every peak other than the principal peak, in the same order, and the area of the principal peak. Against a reference solution, record its responses.',
   fields: [
-    { name: 'principalArea', label: 'Principal peak: area (area normalisation)', kind: 'number', unit: '$areaUnit', optional: true },
-    { name: 'rrts', label: 'Peaks: relative retention times', kind: 'number', unit: '$areaUnit', count: 30, minCount: 1 },
-    { name: 'areas', label: 'Peaks: areas (in the same order)', kind: 'number', unit: '$areaUnit', count: 30, minCount: 1 },
-    { name: 'referenceResponses', label: 'Reference solution: responses', kind: 'number', unit: '$areaUnit', count: 6, minCount: 1, optional: true },
+    { name: 'principalArea', label: 'Principal peak: area (area normalisation)', kind: 'number', unit: '$areaUnit', optional: true, capture: 'cds' },
+    { name: 'rrts', label: 'Peaks: relative retention times', kind: 'number', unit: '$areaUnit', count: 30, minCount: 1, capture: 'cds' },
+    { name: 'areas', label: 'Peaks: areas (in the same order)', kind: 'number', unit: '$areaUnit', count: 30, minCount: 1, capture: 'cds' },
+    { name: 'referenceResponses', label: 'Reference solution: responses', kind: 'number', unit: '$areaUnit', count: 6, minCount: 1, optional: true, capture: 'cds' },
   ],
   settings: [
     { name: 'mode', label: 'Calculation', kind: 'text', options: ['area normalisation', 'external standard'] },
@@ -39,6 +40,7 @@ export const impurities: Block = {
       { name: `exclude${k}Reason`, label: `Peaks left out ${k}: why (blank, placebo …)`, kind: 'text', optional: true },
     ]),
     { name: 'limit', label: 'Total of impurities: limit', kind: 'limit', optional: true },
+    { ...CDS_PEAK, label: 'Principal peak in the CDS result file: its name in the CDS (empty: the largest peak)' },
   ],
   calcs: [{
     name: 'result', label: 'Total of impurities', template: 'L4',

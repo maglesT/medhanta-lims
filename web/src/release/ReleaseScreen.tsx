@@ -5,10 +5,11 @@ import {
   blockOf, changed, go, headline, pdfLink, plainClock, plainError, statusText, stepOf, tone, useBlocks, valueText, words,
   type AnalysisDetail, type Block, type FloorEvent, type Source, type TimerRow, type Value,
 } from '../api-floor.js';
-import { fieldLabel as labelOf, PROVIDER_NAME } from '../../../shared/engine/links.js';
+import { fieldLabel as labelOf, handWords } from '../../../shared/engine/links.js';
 import { stepLabel } from '../../../shared/engine/analysis.js';
 import { deviationNumber, deviationStatusWords } from '../../../shared/engine/release.js';
 import { skillText } from '../../../shared/engine/training.js';
+import { plantText } from '../../../shared/plant-time.js';
 import { AnalysisHeader } from '../floor/AnalysisScreen.js';
 import { ReasonDialog } from '../floor/ReasonDialog.js';
 import { stoppedText } from './Stop.js';
@@ -28,6 +29,8 @@ interface Review {
   deviations: { note: number; step: string; reference: string; text: string; open: boolean; status?: string; closedAt?: string | null; filed?: boolean; typed?: boolean; closed?: { personName: string; at: string; payload: { reason?: string } } }[];
   // Owner 15 Nov 2026: every value typed by hand because a link was absent or down, and the Deviations link's state.
   hand: (Extract<Source, { from: 'hand' }> & { step: string; field: string; event: number; personName: string | null; at: string })[];
+  // LIMS-19: every value read from an instrument and every CDS result file imported.
+  captured: { step: string; event: number; from: 'instrument' | 'cds'; fields: string[]; shown: string; reason?: string; personName: string | null; at: string }[];
   unlinked: { number: string; status: string; title: string | null }[];
   // Owner 17 Nov 2026: signatures whose training was ticked by the signer because Recruitment was not reachable.
   trainingTyped: { step: string; event: number; kind: string; code: string; title?: string; state: 'absent' | 'down'; personName: string | null; at: string }[];
@@ -130,8 +133,12 @@ export function ReleaseScreen({ me, id }: { me: Me; id: number }) {
         {r.unlinked.length > 0 && <Group title="Deviations naming this analysis that no note links" empty="">{r.unlinked.map((x) => (
           <li key={x.number} className="bad"><b>{x.number}</b><span>{x.title}</span><small>{deviationStatusWords(x.status)} in the Deviations system</small></li>))}</Group>}
         <Group title="Typed by hand (a link was off or down)" empty="Every linked value came through its link.">{r.hand.map((h, i) => (
-          <li key={i}><b>{name(h.step)} · {handLabel(h.step, h.field)}</b><span>{PROVIDER_NAME[h.link]} {h.state === 'down' ? 'link was down' : 'not linked'}</span>
+          <li key={i}><b>{name(h.step)} · {handLabel(h.step, h.field)}</b><span>{handWords(h)}</span>
             <small>{h.personName}, {plainClock(h.at)}</small></li>))}</Group>
+        <Group title="Read from instruments and imported from the CDS" empty="No value was read from an instrument or imported from a CDS file.">{r.captured.map((c, i) => (
+          <li key={i}><b>{name(c.step)} · {c.fields.map((f) => fieldLabel(c.step, f)).join(', ')}</b>
+            <span>{c.from === 'instrument' ? 'Read from the instrument' : 'Imported from the CDS'}: {plantText(c.shown)}</span>
+            <small>{c.personName}, {plainClock(c.at)}{c.reason ? ` · imported again: ${c.reason}` : ''}</small></li>))}</Group>
         {(r.trainingTyped.length > 0 || d.master.doc.stages.some((s) => s.steps.some((t) => t.training))) && <Group title="Training typed by hand (Recruitment not reachable)" empty="Every training was read from Recruitment.">{r.trainingTyped.map((x) => (
           <li key={x.event} className="bad"><b>{name(x.step)}</b><span>{x.personName} ({x.kind === 'checked' ? 'checked' : 'performed'}) ticked “I am trained in {skillText(x)}”: Recruitment {x.state === 'down' ? 'link was down' : 'not linked'}</span>
             <small>{plainClock(x.at)}</small></li>))}</Group>}

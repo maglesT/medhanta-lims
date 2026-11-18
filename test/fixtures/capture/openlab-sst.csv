@@ -1,0 +1,12 @@
+Sequence Name,SST_PARA_DEMO
+Result Set ID,OL-55120
+Processing Method,PARA_SST
+Processing Method Version,1
+Instrument,HPLC-01
+Injection,Sample Name,Compound,RT [min],Area,Tailing,Plates,Resolution,Signal-to-Noise
+1,STD 1,Paracetamol,4.51,1520345,1.12,8650,2.4,310
+1,STD 1,Impurity B,3.10,1502,,,,
+2,STD 2,Paracetamol,4.52,1518876,1.18,8702,2.3,305
+3,STD 3,Paracetamol,4.51,1522010,1.13,8590,2.5,298
+4,STD 4,Paracetamol,4.52,1519654,1.11,8544,2.4,312
+5,STD 5,Paracetamol,4.51,1521233,1.12,8611,2.2,301

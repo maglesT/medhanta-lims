@@ -219,7 +219,8 @@ describe('LIMS-12 Qualification: only qualified instruments are used', () => {
     expect((await sign('asha', c.id, RUN, 'check')).json()).toMatchObject({ error: 'own_work' });
     expect((await sign('ravi', c.id, RUN, 'check')).statusCode).toBe(200);
     const r = (await as('asha', 'GET', `/api/analyses/${c.id}/review`)).json() as { hand: { field: string; link: string; state: string }[] };
-    expect(r.hand).toMatchObject([{ field: qualKey('instrument'), link: 'qual', state: 'down' }]);
+    // The weighing's mass was typed, not read from the balance (LIMS-32): listed too.
+    expect(r.hand).toMatchObject([{ field: 'mass', link: 'instrument' }, { field: qualKey('instrument'), link: 'qual', state: 'down' }]);
   });
 
   it('LIMS-12 the use is published for the Logbook (instrument_use_v1): one row per analysis and instrument, ended when its steps are signed; a balance\'s use is the weighing', async () => {

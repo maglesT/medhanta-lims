@@ -12,7 +12,7 @@ export const waterKf: Block = {
   instruction: 'Titrate the solvent to the end point, add the weighed sample and titrate again. Record the titre (volumetric) or the water found (coulometric) of each determination, and the blank when the method has one.',
   fields: [
     { name: 'titrator', label: 'Karl Fischer titrator', kind: 'machine', types: ['karl fischer'] },
-    ...dets.map((k): BlockField => ({ name: `reading${k}`, label: `Determination ${k}: titre or water found`, kind: 'number', unit: '$readingUnit', ...opt(k) })),
+    ...dets.map((k): BlockField => ({ name: `reading${k}`, label: `Determination ${k}: titre or water found`, kind: 'number', unit: '$readingUnit', capture: 'kf', ...opt(k) })),
     { name: 'blank', label: 'Blank', kind: 'number', unit: '$readingUnit', optional: true },
   ],
   settings: [

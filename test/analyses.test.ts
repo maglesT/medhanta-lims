@@ -316,7 +316,8 @@ describe('corrections: checked by a second person, the original kept', () => {
     expect(text).toMatch(/^Medhanta LIMS · Analysis record LA\d{7} · M M/);
     expect(text).toContain('Status | Complete');
     expect(text).toContain('Changed values | marked CHANGED');
-    expect(text).toContain('Net mass: 48.00 mg  CHANGED');
+    // LIMS-32: a mass typed, not read from the balance, says so.
+    expect(text).toContain('Net mass: 48.00 mg (BY HAND: not read from the instrument)  CHANGED');
     expect(text).toMatch(/was ~50\.12 mg~ · reason: Weighed into the wrong flask · ASHA, \d+ \w+ 2026, \d\d:\d\d IST/);
     expect(text).toMatch(/was ~50\.20 mg~ · reason: Misread the balance · ASHA/);
     // The label questions typed by hand by their labels, never their names.

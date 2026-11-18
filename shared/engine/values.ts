@@ -51,7 +51,8 @@ export function currentValues(events: readonly StepEvent[]): Current {
     if (e.kind !== 'value' && e.kind !== 'corrected' && !e.payload.results) continue;
     for (const [k, v] of Object.entries(e.payload.values ?? {})) {
       const was = c.values[k];
-      if (e.kind === 'corrected' && was !== undefined) c.replaced.push({ field: k, was, now: v, reason: e.payload.reason ?? '', person: e.person, at: e.at });
+      // A correction, or a CDS file imported again with its reason (LIMS-24, LIMS-33): the value it replaced stays.
+      if ((e.kind === 'corrected' || e.payload.reason) && was !== undefined) c.replaced.push({ field: k, was, now: v, reason: e.payload.reason ?? '', person: e.person, at: e.at });
       c.values[k] = v;
       // A value typed again replaces where it came from too.
       if (e.payload.source?.[k]) c.source[k] = e.payload.source[k]; else delete c.source[k];

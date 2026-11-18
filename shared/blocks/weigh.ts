@@ -9,7 +9,7 @@ export const weigh: Block = {
   instruction: 'Tare the container on the balance, add the material and record the net mass shown.',
   fields: [
     { name: 'balance', label: 'Balance', kind: 'machine', types: ['balance'], notTypes: ['platform'] },
-    { name: 'mass', label: 'Net mass', kind: 'number', unit: '$unit' },
+    { name: 'mass', label: 'Net mass', kind: 'number', unit: '$unit', capture: 'balance' },
   ],
   settings: [
     { name: 'what', label: 'What is weighed (e.g. sample, reference standard)', kind: 'text' },

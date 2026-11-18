@@ -12,6 +12,7 @@ import { z } from 'zod';
 import { findUnit } from '../templates/index.js';
 import { TEMPLATES } from '../engine/templates.js';
 import { ITEM_KINDS } from '../engine/items.js';
+import { CAPTURE_KINDS } from '../capture/serial.js';
 
 const name = z.string().regex(/^[a-z][a-zA-Z0-9]{0,39}$/);
 
@@ -38,6 +39,10 @@ export const fieldSchema = z.object({
   // item: the kinds of lab inventory item it takes (shared/engine/items.ts), e.g. ["reference", "working"]. Only a usable
   // item can be picked; its values fill the block's fields named after it (std → stdPotency, stdBasis; vs → vsFactor).
   itemKinds: z.array(z.enum(ITEM_KINDS)).min(1).optional(),
+  // number: read from an instrument, not typed (LIMS-32, LIMS-33; shared/capture): from the step's machine over its
+  // serial port (balance, ph, kf, titrator; ph-temperature comes with the pH reading), or from a CDS result file (cds).
+  // Typed instead (no interface, no Web Serial, no file) it is marked typed by hand and the step needs a second person.
+  capture: z.enum(CAPTURE_KINDS).optional(),
 }).strict();
 
 export const SETTING_KINDS = ['quantity', 'limit', 'number', 'text', 'material'] as const;
@@ -110,6 +115,8 @@ export function blockProblems(b: Block): string[] {
     if (f.kind === 'choice' && !f.options?.length) p.push(`field ${f.name}: a choice needs options`);
     if ((f.kind === 'item') !== (f.itemKinds !== undefined)) p.push(`field ${f.name}: an item field, and only an item field, names its itemKinds`);
     if (f.minCount !== undefined && (f.count === undefined || f.minCount > f.count)) p.push(`field ${f.name}: minCount needs a count at least as large`);
+    if (f.capture && f.kind !== 'number') p.push(`field ${f.name}: only a number is read from an instrument`);
+    if (f.capture && f.capture !== 'cds' && (f.count !== undefined || b.fields.filter((x) => x.kind === 'machine').length !== 1)) p.push(`field ${f.name}: a reading from an instrument is one number, in a block with one machine`);
   }
   for (const s of b.settings) if (s.options && (s.kind !== 'text' || !s.options.length)) p.push(`setting ${s.name}: only a text setting has a list`);
   const known = new Set([...b.fields.map((f) => f.name), ...b.settings.map((s) => s.name)]);

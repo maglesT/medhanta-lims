@@ -5,7 +5,7 @@ import type { Block, BlockField } from '../../shared/blocks/format.js';
 import type { MasterDoc, Step } from '../../shared/master/schema.js';
 import type { Action, EventKind, Payload, State, StepKey } from '../../shared/engine/state.js';
 import type { Stored, Value } from '../../shared/engine/values.js';
-import { PROVIDER_NAME, SOURCE_NAME, type Source } from '../../shared/engine/links.js';
+import { handWords, PROVIDER_NAME, SOURCE_NAME, type Source } from '../../shared/engine/links.js';
 import type { QualPick } from '../../shared/engine/qualification.js';
 import { stepTitle as sharedStepTitle, TERMINATED_STATE } from '../../shared/engine/analysis.js';
 import { plantClock, plantText } from '../../shared/plant-time.js';
@@ -51,7 +51,9 @@ export interface PickItem { itemId: string; code: string; name: string; active: 
 
 /** Where a value came from, in plain words. */
 export const sourceWords = (s: Source | undefined) => (!s ? '' : s.from === 'hand'
-  ? `Typed by hand: ${PROVIDER_NAME[s.link]} ${s.state === 'down' ? 'link is down' : 'is not linked'}. A second person checks it.`
+  ? `Typed by hand: ${handWords(s)}. A second person checks it.`
+  // A CDS import in short on the step (its file, hash and run are listed once, in the CDS result file panel).
+  : s.from === 'cds' && s.cds ? `From the CDS result file: import ${s.cds.version}, run ${s.cds.run}, injection${s.cds.injections.length === 1 ? '' : 's'} ${s.cds.injections.join(', ')}.`
   : `From ${SOURCE_NAME[s.from]}: ${plantText(s.shown)}`);
 
 /** A pick list read through a link (pull, don't type): empty when the link is absent or down, and then the value is typed. */

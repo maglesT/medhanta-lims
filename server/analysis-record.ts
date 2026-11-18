@@ -4,8 +4,8 @@
 import type { Content, TDocumentDefinitions } from 'pdfmake/interfaces.js';
 import { findBlock, type Block } from '../shared/blocks/index.js';
 import type { Step } from '../shared/master/schema.js';
-import { qualKey } from '../shared/engine/links.js';
-import { analysisView, deviations, deviationNumber, deviationText, fieldLabel, handFields, lateItems, notYetText, cutShort, stoppedText, TERMINATED_STATE, openSteps, PROVIDER_NAME, deviationStatusWords, stepTitle, headline, limitOf, withoutVerdict, statusWords, CERTIFICATE, trainingOf, trainingText, trainingTyped, skillText, type DeviationStatus, type EventKind, type Source, type Stored, type StepView, type Value } from '../shared/engine/index.js';
+import { isCaptured, qualKey } from '../shared/engine/links.js';
+import { analysisView, deviations, deviationNumber, deviationText, fieldLabel, handFields, lateItems, notYetText, cutShort, stoppedText, TERMINATED_STATE, openSteps, PROVIDER_NAME, deviationStatusWords, stepTitle, headline, limitOf, withoutVerdict, statusWords, CERTIFICATE, trainingOf, trainingText, trainingTyped, skillText, handWords, type DeviationStatus, type EventKind, type Source, type Stored, type StepView, type Value } from '../shared/engine/index.js';
 import type { LoadedAnalysis } from './routes/analyses.js';
 import { pageFrame, plant, runs } from './pdf.js';
 import { plantText } from '../shared/plant-time.js';
@@ -136,6 +136,22 @@ export function analysisRecordDoc(r: RecordInput, by: string, printedAt = new Da
       small(!d ? 'note (no deviation number)' : d.status ? `${d.open ? 'OPEN: ' : ''}${deviationStatusWords(d.status)} in the Deviations system${d.closedAt ? `, ${plant(d.closedAt)}` : ''}` : d.open ? 'OPEN' : `closed by ${closed?.personName ?? ''}, ${plant(closed?.at)}: ${closed?.payload.reason ?? ''}`, d?.open ? { color: RED } : {})];
   })));
 
+  // LIMS-19, LIMS-32, LIMS-33, LIMS-49: what was read from an instrument (with the raw line) and each CDS result file
+  // imported (its file, size, SHA-256, run, sequence and processing method; the CDS stays the raw-data record).
+  const captured = events.flatMap((e) => Object.entries(e.payload.source ?? {}).filter(([, x]) => isCaptured(x)).map(([field, x]) => ({ e, field, x: x as Exclude<Source, { from: 'hand' }> })));
+  const cdsImports = [...new Map(captured.filter((c) => c.x.from === 'cds').map((c) => [c.e.id, c])).values()];
+  if (captured.length) {
+    content.push(heading('Read from instruments and imported from the CDS'));
+    const label = (c: (typeof captured)[number]) => fieldLabel(findBlock(doc.stages[c.e.stage]!.steps[c.e.step]!.block)?.fields ?? [], c.field);
+    content.push(table([170, 150, '*', 110], ['Step', 'Value', 'Source', 'Recorded'], [
+      ...captured.filter((c) => c.x.from === 'instrument').map((c) => [small(stepLabel(`${c.e.stage}.${c.e.sub}.${c.e.step}.${c.e.round}`)), small(label(c)),
+        small(`Read from ${c.x.capture?.instrument ?? 'the instrument'} (${c.x.shown}); raw: ${(c.x.capture?.raw ?? []).filter((l) => l.trim()).map((l) => `"${l.trim()}"`).join(' ')}; read ${plant(c.x.asOf)}`), small(`${who(c.e.person)}, ${plant(c.e.at)}`)]),
+      ...cdsImports.map((c) => [small(stepLabel(`${c.e.stage}.${c.e.sub}.${c.e.step}.${c.e.round}`)),
+        small(captured.filter((x) => x.e.id === c.e.id).map(label).join(', ')),
+        small(`Imported from the CDS: ${c.x.shown}${c.e.payload.reason ? `; imported again: ${c.e.payload.reason}` : ''}`), small(`${who(c.e.person)}, ${plant(c.e.at)}`)]),
+    ]));
+  }
+
   // Signatures whose training was typed by hand because Recruitment was not reachable, for QA (owner, 17 Nov 2026);
   // only when the master names a training.
   if (doc.stages.some((s) => s.steps.some((t) => t.training))) {
@@ -182,7 +198,7 @@ function valueLines(block: Block, v: StepView, who: (id: number | null) => strin
 }
 
 // Where a value came from: pulled through a link (as read), or typed by hand while the link was off or down.
-const sourceText = (s: Source | undefined) => (!s ? '' : s.from === 'hand' ? ` (BY HAND: ${PROVIDER_NAME[s.link]} ${s.state === 'down' ? 'link down' : 'not linked'})` : ` (${plantText(s.shown, true)})`);
+const sourceText = (s: Source | undefined) => (!s ? '' : s.from === 'hand' ? ` (BY HAND: ${handWords(s)})` : ` (${plantText(s.shown, true)})`);
 
 // A certificate value from MMS: its basis and report, without the value said again ("· as is, MMS report QC/RM/26/1171").
 function certificateText(s: Source | undefined): string {

@@ -7,8 +7,8 @@ export const ph: Block = {
   instruction: 'Calibrate the pH meter with the buffers the method gives, at the temperature of the sample. Measure the sample solution and record the reading and the temperature.',
   fields: [
     { name: 'meter', label: 'pH meter', kind: 'machine', types: ['ph meter'] },
-    { name: 'reading', label: 'pH reading', kind: 'number', unit: '$readingUnit' },
-    { name: 'temperature', label: 'Temperature of the sample', kind: 'number', unit: '°C' },
+    { name: 'reading', label: 'pH reading', kind: 'number', unit: '$readingUnit', capture: 'ph' },
+    { name: 'temperature', label: 'Temperature of the sample', kind: 'number', unit: '°C', capture: 'ph-temperature' },
     { name: 'calibrationTemperature', label: 'Temperature at calibration', kind: 'number', unit: '°C' },
   ],
   settings: [

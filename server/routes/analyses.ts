@@ -12,14 +12,16 @@ import { masterVersion } from './masters.js';
 import { analysisRecordDoc, type RecordInput, type Signature } from '../analysis-record.js';
 import { linkRetest, oosOfAnalysis, openOos } from './oos.js';
 import { render, sendPdf } from '../pdf.js';
-import { findBlock } from '../../shared/blocks/index.js';
+import { findBlock, type Block, type BlockField } from '../../shared/blocks/index.js';
 import { blocking, masterChecks } from '../../shared/master/checks.js';
-import type { MasterDoc } from '../../shared/master/schema.js';
+import type { MasterDoc, Step } from '../../shared/master/schema.js';
 import { applySpec, purposeLimits, testsFor, type SpecDoc, type SpecTest } from '../../shared/master/spec.js';
 import { sampleStatus, type SampleEvent } from '../../shared/engine/sample.js';
 import { isHand as sourceByHand } from '../../shared/engine/links.js';
+import { createHash } from 'node:crypto';
+import { captures, cdsFill, fileText, importSource, imported, isCaptureRaw, MAX_CDS_BYTES, parseCds, readCapture, typedSource } from '../../shared/capture/index.js';
 import {
-  ACTIONS, ANALYSIS_ACTIONS, CERTIFICATE, DEVIATION_DONE, LINK_OF, analysisRefusal, filedKey, stepLabel, stepPlace, stepTitle, handFields, isHand, analysisView, doneProblems, evaluate, lateItems, openSteps, parseKey, readValue, refusal, review, timers,
+  ACTIONS, ANALYSIS_ACTIONS, CERTIFICATE, currentValues, DEVIATION_DONE, LINK_OF, analysisRefusal, filedKey, stepLabel, stepPlace, stepTitle, handFields, isHand, analysisView, doneProblems, evaluate, lateItems, openSteps, parseKey, readValue, refusal, review, timers,
   trainingCheck, trainingTyped, type Training,
   type Action, type AnalysisAction, type AnalysisEvent, type DeviationStatus, type LinkState, type Source, type StageView, type Stored, type StepEvent, type StepKey, type StepView, type Timer, type Value,
 } from '../../shared/engine/index.js';
@@ -130,10 +132,13 @@ const stepHash = (analysisId: number, v: StepView) => contentHash('analysis_step
  * like lots, through their link (Logbook, MMS): pulled when it answers, else typed by hand with the label questions
  * (server/pull.ts). A pulled value cannot be typed over; certificate values come with the lot.
  */
-async function readValues(app: FastifyInstance, tx: Tx, doc: MasterDoc, key: StepKey, raw: Record<string, unknown>, now: Date, current: StepView, analysisNo: string) {
+async function readValues(app: FastifyInstance, tx: Tx, l: LoadedAnalysis, key: StepKey, raw: Record<string, unknown>, current: StepView, cds?: { name: string; content: string }, reason?: string) {
+  const { doc, now } = l;
+  const analysisNo = l.analysis.analysisNo;
   const stage = doc.stages[key.stage]!;
   const step = stage.steps[key.step]!;
   const block = findBlock(step.block)!;
+  const unitFor = (f: BlockField) => { const s = f.unit?.startsWith('$') ? step.settings[f.unit.slice(1)] : f.unit; return typeof s === 'string' ? s : ''; };
   const taken = new Set<string>();
   const out: Record<string, Value> = {};
   const source: Record<string, Source> = {};
@@ -188,6 +193,20 @@ async function readValues(app: FastifyInstance, tx: Tx, doc: MasterDoc, key: Ste
     // A standard's potency, a VS factor: only with the item picked from the inventory, never typed.
     if (fills[name]) { problems.push(`${f.label} comes from the LIMS inventory with the ${fills[name].item.label.toLowerCase()} and cannot be typed`); continue; }
     if (taken.has(name)) continue;
+    // LIMS-32: read from the step's machine over its serial port; the server parses the raw lines itself.
+    if (isCaptureRaw(x)) {
+      if (!captures(f, step.settings) || f.capture === 'cds') { problems.push(`${f.label} is not read from an instrument on this step.`); continue; }
+      const mf = block.fields.find((y) => y.kind === 'machine')!;
+      const mv = (out[mf.name] ?? current.values[mf.name]) as { code?: string } | undefined;
+      const r = readCapture(f, x.capture, { label: mf.label, code: mv?.code ?? null }, unitFor(f), now);
+      if (!r.ok) { problems.push(r.why); continue; }
+      out[name] = { value: r.value, unit: r.unit };
+      source[name] = r.source;
+      // A pH meter prints the temperature with the pH: it fills the temperature too (unless typed in the same save).
+      const tf = block.fields.find((y) => y.capture === 'ph-temperature');
+      if (f.capture === 'ph' && tf && r.temperature !== undefined && !(tf.name in raw)) { out[tf.name] = { value: r.temperature, unit: unitFor(tf) }; source[tf.name] = r.source; }
+      continue;
+    }
     const was = source[name] ?? current.source[name];
     // While the step's lot is typed by hand (its link off or down), the lot's date and certificate values are typed from
     // its label, whatever an earlier lot from MMS gave (they are never signed with this lot: doneProblems).
@@ -205,22 +224,71 @@ async function readValues(app: FastifyInstance, tx: Tx, doc: MasterDoc, key: Ste
     if (typeof v === 'object' && !Array.isArray(v) && 'error' in v) { problems.push(v.error); continue; }
     const no = typeof v !== 'string' ? null : name.includes('.') ? handProblem(f, v, now, PLANT_TZ) : null;
     if (no) problems.push(no);
-    else out[name] = v as Value;
+    else {
+      out[name] = v as Value;
+      // LIMS-32, LIMS-50: a value an instrument or the CDS gives, typed instead, is marked typed and checked by a second person.
+      if (captures(f, step.settings)) source[name] = typedSource(f);
+    }
+  }
+  // 3. a CDS result file (LIMS-33, LIMS-49, LIMS-50): its peaks fill the step's chromatography fields.
+  if (cds) {
+    const got = cdsValues(l, block, step.settings, current, out, cds, reason);
+    problems.push(...got.problems);
+    for (const [name, v] of Object.entries(got.values)) {
+      if (name in raw) { problems.push(`${block.fields.find((f) => f.name === name)!.label} comes from the CDS file: do not type it in the same save.`); continue; }
+      const f = block.fields.find((y) => y.name === name)!;
+      const r = readValue(f, v, unitFor(f));
+      if (typeof r === 'object' && !Array.isArray(r) && 'error' in r) { problems.push(r.error); continue; }
+      out[name] = r as Value;
+      source[name] = got.source!;
+    }
   }
   if (problems.length) throw new StepError(400, 'invalid_values', problems);
   return { values: out, source };
 }
 
+/**
+ * LIMS-33, LIMS-49, LIMS-50: the values a CDS result file gives a step, from its bytes. The file must be one of the
+ * layouts LIMS reads, of the run the analysis' instrument run recorded, with injections of this sample that fit the
+ * step. Its SHA-256 is worked out here; the file itself is not kept (the CDS is the raw-data record). An import over an
+ * earlier one needs a reason, and the earlier one stays in the record.
+ */
+function cdsValues(l: LoadedAnalysis, block: Block, settings: Step['settings'], current: StepView, now: Record<string, Value>, cds: { name: string; content: string }, reason?: string) {
+  const none = (...problems: string[]) => ({ values: {} as Record<string, string | string[]>, problems, source: undefined });
+  if (!block.fields.some((f) => f.capture === 'cds' && captures(f, settings))) return none('This step takes no CDS result file.');
+  const bytes = Buffer.from(cds.content, 'base64');
+  if (!bytes.length) return none('The file is empty.');
+  if (bytes.length > MAX_CDS_BYTES) return none(`The file is ${Math.round(bytes.length / 1024)} kB; a CDS result export is at most ${MAX_CDS_BYTES / 1024} kB: export only the peak table of this run.`);
+  const file = parseCds(fileText(bytes));
+  if ('error' in file) return none(file.error);
+  // LIMS-49: the file is of the run the analysis recorded on its instrument run.
+  const runs = l.doc.stages.flatMap((s, si) => s.steps.flatMap((t, ti) => (t.block.id !== 'instrument-run' ? [] : [currentValues(l.events.filter((e) => e.stage === si && e.step === ti)).values.runId])));
+  const recorded = runs.filter((x): x is string => typeof x === 'string');
+  if (runs.length && !recorded.length) return none('Record the run id on the instrument run step first: the file must be of that run.');
+  if (recorded.length && !recorded.includes(file.run)) return none(`The file is of CDS run ${file.run}; the instrument run of this analysis recorded ${recorded.join(', ')}: import the result of that run.`);
+  const std = (now.std ?? current.values.std) as { code?: string } | undefined;
+  const names = [l.sample?.sampleNo, l.analysis.analysisNo].filter((x): x is string => !!x);
+  const fill = cdsFill({ block, settings, names, standard: std?.code ?? null, file });
+  if (fill.problems.length) return none(...fill.problems);
+  const before = current.events.filter((e) => Object.values(e.payload.source ?? {}).some((s) => s.from === 'cds')).length;
+  if (before && !reason) return none('This step already has an imported CDS result: give the reason for importing again. The earlier import stays in the record.');
+  const hash = createHash('sha256').update(bytes).digest('hex');
+  return { values: fill.values, problems: [] as string[], source: importSource(imported(file, { name: cds.name, size: bytes.length, hash }, fill.injections, before + 1), l.now) };
+}
+
 const reason = z.string().trim().min(1).max(1000);
 const values = z.record(z.unknown());
+// A CDS result file as the browser read it: its name and its bytes in base64 (the hash is worked out from the bytes).
+const cdsFile = z.object({ name: z.string().trim().min(1).max(200), content: z.string().min(1).max(Math.ceil(MAX_CDS_BYTES / 3) * 4 + 8) });
 const BODIES: Record<Action, z.ZodTypeAny> = {
   start: z.object({}),
-  record: z.object({ values }),
+  // A reason only with a CDS file imported again (LIMS-24: the values it replaces stay, with the reason).
+  record: z.object({ values: values.optional(), cds: cdsFile.optional(), reason: reason.optional() }).refine((b) => (b.values || b.cds) && (!b.reason || b.cds), 'values or a CDS file'),
   // trained: the signer ticked "I am trained in …" while Recruitment was not reachable (shared/engine/training.ts).
   done: signBody.extend({ trained: z.boolean().optional() }),
   check: signBody.extend({ trained: z.boolean().optional() }),
   'send-back': z.object({ reason }),
-  correct: z.object({ values, reason }),
+  correct: z.object({ values: values.optional(), cds: cdsFile.optional(), reason }).refine((b) => b.values || b.cds, 'values or a CDS file'),
   'not-applicable': signBody.extend({ reason }),
   note: z.object({ text: reason, reference: z.string().trim().min(1).max(60).optional() }),
 };
@@ -475,6 +543,7 @@ export function analysisRoutes(app: FastifyInstance, sql: Sql) {
     return { status: view(l, dv.read).status, ...r, deviationsLink: dv.link, unlinked, signatures,
       corrections: r.corrections.map((c) => ({ ...c, personName: names.get(c.person) ?? null })),
       hand: r.hand.map((h) => ({ ...h, personName: names.get(h.person) ?? null })),
+      captured: r.captured.map((h) => ({ ...h, personName: names.get(h.person) ?? null })),
       trainingTyped: r.trainingTyped.map((h) => ({ ...h, personName: names.get(h.person) ?? null })) };
   });
 
@@ -594,7 +663,7 @@ export function analysisRoutes(app: FastifyInstance, sql: Sql) {
       const key = parseKey(req.params.key);
       const body = BODIES[action].safeParse(req.body);
       if (id === null || key === null || !body.success) return reply.code(400).send({ error: 'invalid', problems: body.error?.issues.map((i) => `${i.path.join('.')}: ${i.message}`) ?? [] });
-      const b = body.data as { proof?: string; contentHash?: string; reason?: string; text?: string; reference?: string; values?: Record<string, unknown>; trained?: boolean };
+      const b = body.data as { proof?: string; contentHash?: string; reason?: string; text?: string; reference?: string; values?: Record<string, unknown>; cds?: { name: string; content: string }; trained?: boolean };
       const user = req.user!;
       try {
         const signer = rule.meaning ? await authenticateSigner(sql, app.proofKey, user, { proof: b.proof! }, { objectType: 'analysis', objectId: id, meaning: rule.meaning }) : null;
@@ -616,8 +685,8 @@ export function analysisRoutes(app: FastifyInstance, sql: Sql) {
           if (signer && b.contentHash !== stepHash(id, v)) throw new StepError(409, 'content_changed', ['The step changed since you opened it.']);
           let payload: Record<string, unknown> = {};
           const uses: number[] = [];
-          if (b.values) {
-            const typed = await readValues(app, tx, l.doc, key, b.values, l.now, v, l.analysis.analysisNo);
+          if (b.values || b.cds) {
+            const typed = await readValues(app, tx, l, key, b.values ?? {}, v, b.cds, b.reason);
             payload = { values: typed.values, results: evaluate(l.doc, l.events, key, { ...v.values, ...typed.values }, uses), uses,
               ...(Object.keys(typed.source).length ? { source: typed.source } : {}) };
           }

@@ -233,6 +233,13 @@ export function doneProblems(doc: MasterDoc, v: StepView, now: Date): string[] {
       if (at !== undefined && at < lotAt) p.push(`${fieldLabel([...block.fields, ...handFields(block.fields, v.source)], k)} is the previous lot's: record it for lot ${String(v.values[lf.name])}`);
     }
   }
+  // LIMS-32: a value read from an instrument is from the machine the step records now (read again after a change of machine).
+  const machine = block.fields.find((f) => f.kind === 'machine');
+  for (const [k, s] of Object.entries(v.source)) {
+    if (s.from !== 'instrument' || !s.capture || !machine || v.values[k] === undefined) continue;
+    const code = (v.values[machine.name] as { code?: string } | undefined)?.code;
+    if (code !== s.capture.instrument) p.push(`${fieldLabel(block.fields, k)} was read from ${s.capture.instrument}, but the ${machine.label.toLowerCase()} is now ${code ?? 'not recorded'}: read it again${code ? ` from ${code}` : ''}`);
+  }
   const stop = stopName(st);
   const out = block.calcs.filter((c) => c.name !== stop && failed(v.results[c.name])).map((c) => c.label);
   // The note must come after the last value, or after the last change of an input from another step.

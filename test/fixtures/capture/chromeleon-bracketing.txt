@@ -1,0 +1,14 @@
+Sequence:	PARA_ASSAY_BRK
+Run ID:	CM-2611-0007
+Processing Method:	PARA_ASSAY_BRK
+Processing Method Version:	5
+Instrument:	HPLC-03
+
+Inj. No.	Injection Name	Peak Name	Ret.Time	Area	Tailing (USP)	Plates (USP)
+			min	mAU*min		
+1	Standard 1	Paracetamol	4.50	152.034	1.1	8600
+2	Standard 2	Paracetamol	4.51	151.988	1.1	8640
+3	LS2600123-1	Paracetamol	4.51	149.877	n.a.	n.a.
+4	LS2600123-1	Paracetamol	4.50	150.123	n.a.	n.a.
+5	Standard 3	Paracetamol	4.51	152.101	1.1	8610
+6	Standard 4	Paracetamol	4.50	151.876	1.1	8655

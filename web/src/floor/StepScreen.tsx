@@ -10,7 +10,9 @@ import { deviationText } from '../../../shared/engine/release.js';
 import { FieldInput } from './Fields.js';
 import { DemoSkip } from './DemoSkip.js';
 import { ReasonDialog } from './ReasonDialog.js';
-import { CERTIFICATE, fieldLabel, handEntered, LINK_OF, qualKey } from '../../../shared/engine/links.js';
+import { CERTIFICATE, fieldLabel, handEntered, isCaptured, LINK_OF, qualKey } from '../../../shared/engine/links.js';
+import { captures, serialKind, type CaptureRaw } from '../../../shared/capture/index.js';
+import { CdsImport, ReadInstrument } from './Capture.js';
 import { inQualification } from '../../../shared/engine/qualification.js';
 import { itemFills } from '../../../shared/engine/items.js';
 import { askedFields, cutShort, notYetText } from '../../../shared/engine/analysis.js';
@@ -198,6 +200,12 @@ export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: Ana
     }
     const unit = shownUnit(f);
     const src = row.source[f.name];
+    // LIMS-32: a value read from the step's machine over its serial port (the temperature comes with the pH reading).
+    const kind = captures(f, st.settings) && f.capture !== 'ph-temperature' ? serialKind(f.capture) : null;
+    const machineField = block.fields.find((x) => x.kind === 'machine');
+    const machineCode = machineField ? (row.values[machineField.name] as { code?: string } | undefined)?.code ?? null : null;
+    const reader = kind && machineField && can('record')
+      ? <ReadInstrument kind={kind} label={machineField.label} machine={machineCode} disabled={busy} onRead={(c) => record(f.name, c)} /> : null;
     // Pulled through a link: shown, never typed over. Certificate values come only with an MMS lot; a standard's potency
     // or a VS factor only with the item picked from the inventory.
     const pulled = (src && src.from !== 'hand' && !LINK_OF[f.kind] && f.kind !== 'item') || (lotPulled && CERTIFICATE[f.name] !== undefined) || fills[f.name] !== undefined;
@@ -207,6 +215,7 @@ export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: Ana
         <div key={f.name}>
           <FieldInput f={f} unit={unit} saved={v} picks={picksFor(f)} note={noteFor(f)} options={f.kind === 'lot' ? lots.map((l) => l.lotNumber) : []}
             disabled={!can('record')} out={outOf(f)} onSave={can('record') ? (raw) => record(f.name, raw) : undefined} />
+          {reader}
           {src && <p className="muted small">{sourceWords(src)}</p>}
           {row.source[qualKey(f.name)] && <p className="muted small">{sourceWords(row.source[qualKey(f.name)])}</p>}
           {!can('record') && can('correct') && <button className="big" onClick={() => setDialog({ kind: 'correct', field: f })}>Correct {f.label.toLowerCase()}</button>}
@@ -222,8 +231,9 @@ export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: Ana
         <div className="recorded">
           <span>{valueText(v, mdUnit)}</span>
           {e && <span className="by">{e.personName}, {plainClock(e.at)}</span>}
-          {can('correct') && v !== undefined && !pulled && <button className="big" onClick={() => setDialog({ kind: 'correct', field: f })}>Correct</button>}
+          {can('correct') && v !== undefined && (!pulled || (isCaptured(src) && src.from === 'instrument')) && <button className="big" onClick={() => setDialog({ kind: 'correct', field: f })}>Correct</button>}
         </div>
+        {reader}
         {src && <p className="muted small">{sourceWords(src)}</p>}
         {row.source[qualKey(f.name)] && <p className="muted small">{sourceWords(row.source[qualKey(f.name)])}</p>}
         <Replaced h={history} field={f.name} names={names} mdUnit={mdUnit} />
@@ -281,6 +291,11 @@ export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: Ana
               <div className="panel-head"><h2>Record</h2>{can('record') && <span className="muted">each value is saved when you leave the field</span>}</div>
               {fields.map(fieldView)}
             </section>
+          )}
+          {/* LIMS-33: the peak values of a chromatography step come from the CDS result file. */}
+          {block.fields.some((f) => f.capture === 'cds' && captures(f, st.settings)) && (can('record') || can('correct')) && (
+            <CdsImport events={events} names={(n) => fieldLabel(block.fields, n)} signed={!can('record')}
+              onImport={async (cds, reason) => { await post(can('record') ? 'record' : 'correct', { cds, ...(reason ? { reason } : {}) }); await reload(); }} />
           )}
         </div>
         <div>
@@ -359,6 +374,8 @@ export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: Ana
       )}
       {dialog?.kind === 'correct' && (
         <Correct f={dialog.field} unit={shownUnit(dialog.field)} mdUnit={mdUnit} saved={row.values[dialog.field.name]} picks={picksFor(dialog.field)}
+          read={row.source[dialog.field.name]?.from === 'instrument' && block.fields.find((x) => x.kind === 'machine')
+            ? { kind: serialKind(dialog.field.capture)!, label: block.fields.find((x) => x.kind === 'machine')!.label, machine: (row.values[block.fields.find((x) => x.kind === 'machine')!.name] as { code?: string } | undefined)?.code ?? null } : undefined}
           onCancel={() => setDialog(null)} onSave={async (raw, reason) => { await post('correct', { values: { [dialog.field.name]: raw }, reason }); setDialog(null); await reload(); }} />
       )}
     </>
@@ -477,9 +494,20 @@ function History_({ h, block, deviations }: { h: History | null; block: Block; d
   );
 }
 
-function Correct({ f, unit, mdUnit, saved, picks, onSave, onCancel }: { f: BlockField; unit: string; mdUnit: string | null; saved: StepRow['values'][string] | undefined; picks: PickItem[];
+function Correct({ f, unit, mdUnit, saved, picks, read, onSave, onCancel }: { f: BlockField; unit: string; mdUnit: string | null; saved: StepRow['values'][string] | undefined; picks: PickItem[];
+  // A value read from an instrument is corrected by reading it again, never by typing (LIMS-32).
+  read?: { kind: NonNullable<ReturnType<typeof serialKind>>; label: string; machine: string | null };
   onSave: (raw: unknown, reason: string) => Promise<void>; onCancel: () => void }) {
   const [raw, setRaw] = useState<unknown>(rawOf(saved));
+  if (read) {
+    return (
+      <ReasonDialog title={`Correct: ${f.label}`} label="Reason for the correction" submit="Save the correction" onCancel={onCancel}
+        hint={`Now: ${valueText(saved, mdUnit)}, read from the instrument. Read it again; the original value stays in the record, crossed out, with your reason.`}
+        onSubmit={(reason) => onSave(raw, reason)}>
+        <ReadInstrument kind={read.kind} label={read.label} machine={read.machine} onRead={async (c: { capture: CaptureRaw }) => setRaw(c)} />
+      </ReasonDialog>
+    );
+  }
   return (
     <ReasonDialog title={`Correct: ${f.label}`} label="Reason for the correction" submit="Save the correction" onCancel={onCancel}
       hint={`Now: ${valueText(saved, mdUnit)}. The original value stays in the record, crossed out, with your reason; the step must be signed again.`}

@@ -17,7 +17,7 @@ export const titration: Block = {
     { name: 'titrator', label: 'Titrator', kind: 'machine', types: ['titrator'], notTypes: ['karl fischer'], optional: true },
     { name: 'vs', label: 'VS titrated', kind: 'item', itemKinds: ['vs'] },
     { name: 'vsFactor', label: 'VS titrated: factor (from the inventory)', kind: 'text' },
-    ...preps.map((k): BlockField => ({ name: `titre${k}`, label: `Preparation ${k}: titre`, kind: 'number', unit: 'mL', ...opt(k) })),
+    ...preps.map((k): BlockField => ({ name: `titre${k}`, label: `Preparation ${k}: titre`, kind: 'number', unit: 'mL', capture: 'titrator', ...opt(k) })),
     { name: 'blank', label: 'Blank titration: titre', kind: 'number', unit: 'mL', optional: true },
     { name: 'excess', label: 'VS added in excess (back titration)', kind: 'item', itemKinds: ['vs'], optional: true },
     { name: 'excessFactor', label: 'VS added in excess: factor (from the inventory)', kind: 'text', optional: true },

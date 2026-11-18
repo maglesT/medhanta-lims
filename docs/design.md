@@ -182,7 +182,8 @@ answering) or **ok**.
   time (T13 from a start timer to an end timer) is such a wait too: once skipped, its lower limit counts as met, the
   recorded duration and the upper limit are kept, and the result says "DEMO: wait skipped" (16 November 2026).
 - The second-person checker signs on their own device.
-- Version 1: weights are typed (no balance connection).
+- Balances, pH meters, Karl Fischer titrators and titrators are read from the browser over Web Serial; chromatography
+  results are imported from the CDS result file (Step 5 below). Typed instead, a value is marked typed and checked by a second person.
 - PDF output as the Logbook does its exports.
 
 ## Calculation checks
@@ -320,3 +321,72 @@ is absent or down).
   open again), or when the analysis is stopped or reviewed. A balance (type contains "balance") is shared: its use is
   the weighing itself (ended when recorded), so it is never held in use by an analysis. The Logbook reads it as it
   reads TrueBatch's view (its reader of LIMS is a Logbook change).
+
+## Step 5: instrument data capture (build step 5, 18 Nov 2026)
+Plan 2.8 and question 3 (LIMS-32, LIMS-33, LIMS-49, LIMS-50). No new table, no new engine mechanism: a captured or
+imported value is an ordinary step value with its **source** (`shared/engine/links.ts`), as a value pulled through a link
+is; it cannot be typed over, the review lists it and the PDF prints it. The parsers are fixed, pure and tested
+(`shared/capture/`); there is no user-defined format.
+- **Which fields.** A number field may say `capture` in the block format: `balance` (the weighing's mass), `ph` (the pH
+  reading; `ph-temperature`, the sample's temperature, comes with it), `kf` (the Karl Fischer readings), `titrator` (the
+  titres), `cds` (the peaks of the assay, system suitability and related substances; not an assay that reads
+  absorbances). A serial capture field is one number of a block with one machine field: it is read from that machine.
+- **Serial instruments (Web Serial, Chrome or Edge, no install).** Next to the field: "Read from BAL-01" and the
+  protocol (remembered per machine in the browser). Protocols (`shared/capture/serial.ts`, each with its port
+  settings): Mettler Toledo SICS (sends "S", takes "S S"), Sartorius SBI print (ESC P; the net line of a GLP print),
+  Ohaus print ("IP"), any balance printing "value unit", pH meter print (pH and temperature), Karl Fischer result print
+  (the titre in mL or the water found in µg or mg; the content % is LIMS's own calculation and is skipped), titrator
+  result print (the end point volume). Refused in plain words: not stable (SICS "S D", no unit, "?"), overload,
+  underload, negative mass, an error, drift, abort, no end point, two readings in one print, a line the protocol does
+  not know. The browser parses to show the reading and sends `{ capture: { instrument, protocol, raw lines, readAt } }`;
+  the **server parses the raw lines again** and stores only its own value (never the browser's number), in the step's
+  unit (g to mg exactly: the decimal point is moved, nothing is rounded; mL never becomes mg). Refused: a reading from
+  another machine than the one recorded on the step, no machine recorded yet, a protocol of another kind, a reading
+  more than 10 minutes old or ahead of the server clock. A machine changed after a reading: the step cannot be signed
+  until it is read again. The source keeps the machine, protocol, raw lines and reading time; shown as
+  `BAL-01, Mettler Toledo SICS: "S S 0.05123 g" (51.23 mg)`. A captured value is corrected by reading it again (with
+  the reason), never by typing. A pH read from the meter needs no second person (the pH block has no checker).
+- **Typed instead (LIMS-32).** The instrument has no interface, the browser has no Web Serial, or the CDS export is not
+  available: the value is typed and its source is `{ from: 'hand', link: 'instrument' | 'cds' }`, "not read from the
+  instrument" / "not imported from the CDS". As for a link that is down, the step then needs a second-person check
+  and the value is listed for the reviewer ("Typed by hand") and marked BY HAND in the PDF.
+- **CDS result file (LIMS-33).** On an assay, system suitability or related substances step: "Import the CDS result
+  file" (at most 512 kB). Fixed parsers (`shared/capture/cds.ts`): Empower report CSV (UTF-8 or UTF-16), Chromeleon
+  export (tab separated, with its units line), OpenLab CDS CSV, and the **generic layout**:
+  ```
+  # run: RUN-0042
+  # sequence: PARA-ASSAY-2611
+  # processing method: PARA_ASSAY
+  # processing method version: 3
+  # instrument: HPLC-01
+  injection,sample name,peak,retention time,area,tailing,plates,resolution,signal to noise,rrt
+  2,STD,Paracetamol,4.51,1520345.2,1.12,8650,,310,
+  ```
+  (the last five columns optional). Every layout must give the run id and the processing method; a number with a
+  thousands separator, a row with more cells than the header, or a non-number is refused, never guessed.
+- **Naming and which peaks fill which field** (`shared/capture/cds-fill.ts`). Sample injections are named by the
+  sample number (or the analysis number), a preparation by `-1`, `-2`, `-3`; the standard `STD…`/`Standard…` (or the
+  inventory number of the standard picked on the step); the reference solution `REF…`/`Reference…`; other injections
+  (blanks, other samples of the sequence) are left out. The peak read is the one the method names (new optional
+  setting `cdsPeak`, "its name in the CDS"), else the largest. Assay: the standard injections (bracketing: those
+  before and after the samples; one between them is refused) and each preparation's injections; the preparations must
+  be exactly those the method sets. System suitability: the 5 or 6 replicate standard injections, and each check on its
+  worst injection (highest tailing, fewest plates, lowest resolution and signal-to-noise). Related substances: one
+  injection of the test solution; its other peaks in run order with the CDS's RRT, else the retention time over the
+  principal peak's to 2 decimals (half up), their areas, the principal area, and the reference solution's injections.
+  Counts that do not fit the field are refused with the numbers of the injections.
+- **Checks against the analysis (LIMS-49, LIMS-50).** The file must be of the run recorded on the analysis' instrument
+  run step (recorded first); it must have injections of this sample.
+- **What is kept (LIMS-49).** The uploaded file itself is **not stored**: the CDS stays the raw-data record (with its
+  own audit trail, which the reviewer checks, LIMS-19). LIMS keeps, with the values, the file's name, size and SHA-256
+  (worked out by the server from the bytes, so it matches `sha256sum` of the export), the layout, the CDS run,
+  sequence, processing method and version, instrument, the injections used and the import number. A **re-import**
+  needs a reason; it is a new import (number 2, 3 …), and the values it replaces stay visible as replaced values with
+  that reason (LIMS-24). After signing, a re-import is a correction.
+- **Where it shows (LIMS-19).** The step shows each value's source and the step's imports (number, file, run, method,
+  hash, fields, reason, who); the review lists "Read from instruments and imported from the CDS" (each reading with its
+  raw line, each import with its file, hash and run) next to "Typed by hand"; the analysis PDF prints the same section
+  and each value's source.
+- Not in this round: a direct CDS connection (later, plan question 3), UV spectrophotometer capture, the run id read
+  from the file onto the instrument run step.
+

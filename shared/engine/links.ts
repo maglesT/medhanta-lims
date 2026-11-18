@@ -17,10 +17,29 @@ export const PROVIDER_NAME: Record<Provider, string> = { deviations: 'Deviations
  * Pulled through a link (with what was read, PL-07), or typed by hand while the link was absent or down; or taken from
  * this product's own lab inventory (a standard's potency, a VS factor: shared/engine/items.ts), never typed.
  */
-export type Source = { from: 'hand'; link: Provider; state: 'absent' | 'down' } | { from: Provider | 'inventory'; asOf: string | null; shown: string };
+export type Source = { from: 'hand'; link: HandLink; state: 'absent' | 'down' }
+  | { from: Provider | 'inventory' | 'instrument' | 'cds'; asOf: string | null; shown: string; capture?: Captured; cds?: Imported };
+/**
+ * Read from an instrument over its serial port (LIMS-32, shared/capture/serial.ts): the machine, the protocol, the raw
+ * lines it sent (the server parsed them itself) and when the browser read them.
+ */
+export type Captured = { instrument: string; protocol: string; raw: string[]; readAt: string };
+/**
+ * Imported from a CDS result file (LIMS-33, LIMS-49, shared/capture/cds.ts): the file's name, size and SHA-256 (the file
+ * itself is not kept: the CDS is the raw-data record), its layout, the CDS run, sequence and processing method, the
+ * injections the values came from, and the import's number on the step (a re-import is a new one, with a reason).
+ */
+export type Imported = { file: string; size: number; hash: string; format: string; run: string; sequence: string | null; method: string; instrument: string | null; injections: number[]; version: number };
+/** Typed by hand: a link absent or down, or a value an instrument or the CDS gives when it is read (typed instead). */
+export type HandLink = Provider | 'instrument' | 'cds';
 /** Where a pulled value came from, in words. */
-export const SOURCE_NAME: Record<Provider | 'inventory', string> = { ...PROVIDER_NAME, inventory: 'the LIMS inventory' };
+export const SOURCE_NAME: Record<Provider | 'inventory' | 'instrument' | 'cds', string> = { ...PROVIDER_NAME, inventory: 'the LIMS inventory', instrument: 'the instrument', cds: 'the CDS result file' };
 export const isHand = (s: Source | undefined): s is Extract<Source, { from: 'hand' }> => s?.from === 'hand';
+/** Why a value was typed by hand, in a few words ("MMS link down", "not read from the instrument"). */
+export const handWords = (s: { link: HandLink; state: 'absent' | 'down' }) => (s.link === 'instrument' ? 'not read from the instrument'
+  : s.link === 'cds' ? 'not imported from the CDS' : `${PROVIDER_NAME[s.link]} ${s.state === 'down' ? 'link down' : 'not linked'}`);
+/** Read from an instrument or imported from the CDS (LIMS-19: the reviewer sees which values were). */
+export const isCaptured = (s: Source | undefined): s is Exclude<Source, { from: 'hand' }> => s?.from === 'instrument' || s?.from === 'cds';
 
 /** The link that gives a field kind's value. */
 export const LINK_OF: Partial<Record<BlockField['kind'], Provider>> = { lot: 'mms', machine: 'logbook', room: 'logbook' };

@@ -1,0 +1,19 @@
+# Medhanta LIMS generic CDS result layout (invented demo data)
+# run: RUN-0042
+# sequence: PARA-ASSAY-2611
+# processing method: PARA_ASSAY
+# processing method version: 3
+# instrument: HPLC-01
+injection,sample name,peak,retention time,area,tailing,plates,resolution,signal to noise
+1,Blank,,,,,,,
+2,STD,Paracetamol,4.51,1520345.2,1.12,8650,,310
+3,STD,Paracetamol,4.52,1518876.9,1.10,8702,,305
+4,STD,Paracetamol,4.51,1522010.4,1.13,8590,,298
+5,STD,Paracetamol,4.52,1519654.0,1.11,8644,,312
+6,STD,Paracetamol,4.51,1521233.7,1.12,8611,,301
+7,LS2600123-1,Impurity B,3.10,1520.4,,,,
+7,LS2600123-1,Paracetamol,4.52,1498765.1,,,,
+8,LS2600123-1,Paracetamol,4.51,1501234.8,,,,
+9,LS2600123-2,Paracetamol,4.52,1510987.3,,,,
+10,LS2600123-2,Paracetamol,4.52,1509876.5,,,,
+11,LS2600999-1,Paracetamol,4.52,1400000.0,,,,

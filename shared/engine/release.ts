@@ -5,9 +5,10 @@
 import type { Permission } from '../../server/auth.js';
 import type { MasterDoc } from '../master/schema.js';
 import { openSteps, outOfLimits, stepLabel, timers, type StepView, type Timer } from './analysis.js';
-import { keyId, parseKey, type State, type StepEvent } from './state.js';
+import { keyId, parseKey, type State, type StepEvent, type StepKey } from './state.js';
+import { findBlock } from '../blocks/index.js';
 import { failed } from './values.js';
-import { isHand, PROVIDER_NAME, type LinkState, type Source } from './links.js';
+import { isCaptured, isHand, PROVIDER_NAME, type LinkState, type Source } from './links.js';
 import { trainingTyped } from './training.js';
 
 // 'invalidated': QA invalidated its result in an OOS investigation (LIMS-24); the record stays, marked (LIMS-48).
@@ -144,6 +145,17 @@ export function review(doc: MasterDoc, events: readonly StepEvent[], analysisEve
     // Every value typed by hand because a link was absent or down (owner 15 Nov 2026), and who typed it.
     hand: events.flatMap((e) => Object.entries(e.payload.source ?? {}).filter(([, x]) => isHand(x))
       .map(([field, x]) => ({ step: keyId(e), event: e.id, kind: e.kind, field, ...(x as Extract<Source, { from: 'hand' }>), person: e.person, at: e.at }))),
+    // LIMS-19, LIMS-32, LIMS-33: every value read from an instrument (one per field, with the raw line) and every CDS
+    // result file imported (one per import, with its file, hash and run, and the reason of a re-import).
+    captured: events.flatMap((e) => {
+      const got = Object.entries(e.payload.source ?? {}).filter((x): x is [string, Exclude<Source, { from: 'hand' }>] => isCaptured(x[1]));
+      const base = { step: keyId(e), event: e.id, kind: e.kind, person: e.person, at: e.at, ...(e.payload.reason ? { reason: e.payload.reason } : {}) };
+      const cds = got.filter(([, x]) => x.from === 'cds');
+      return [
+        ...got.filter(([, x]) => x.from === 'instrument').map(([field, x]) => ({ ...base, from: 'instrument' as const, fields: [field], shown: x.shown })),
+        ...(cds.length ? [{ ...base, from: 'cds' as const, fields: inBlockOrder(doc, e, cds.map(([f]) => f)), shown: cds[0]![1].shown }] : []),
+      ];
+    }),
     notApplicable: events.filter((e) => e.kind === 'not_applicable'),
     // Every signature whose training was typed by hand because Recruitment was not reachable (owner, 17 Nov 2026).
     trainingTyped: trainingTyped(events),
@@ -151,4 +163,10 @@ export function review(doc: MasterDoc, events: readonly StepEvent[], analysisEve
     demoSkips: events.filter((e) => e.kind === 'demo_wait_skipped'),
     analysisEvents,
   };
+}
+
+/** Field names of a step event in the order its block lists them (the database keeps a payload's keys in its own order). */
+function inBlockOrder(doc: MasterDoc, e: StepKey, names: string[]): string[] {
+  const order = findBlock(doc.stages[e.stage]!.steps[e.step]!.block)?.fields.map((f) => f.name) ?? [];
+  return [...names].sort((a, b) => order.indexOf(a) - order.indexOf(b));
 }

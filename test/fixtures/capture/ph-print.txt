@@ -1,0 +1,3 @@
+pH meter print
+Sample ID   LS2600123
+pH          6.85 pH   24.8 °C   |A|
