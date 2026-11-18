@@ -92,6 +92,17 @@ describe('applySpec: the specification fills the method', () => {
     const r = applySpec(assayMethod(), test1({ limitType: 'report only', limit: undefined }));
     expect(r.stages[3]!.steps[3]!.settings.limit).toBeUndefined();
   });
+
+  it('LIMS-17 one method serves two tests: each result step gets the limit of the test whose result it is', () => {
+    const d = assayMethod();
+    d.stages[2]!.steps.find((x) => x.key === 'temp')!.settings.limit = { spec: 'limit' };
+    const assay = test1({ result: 'sample/result/readingCheck' });
+    const temp = test1({ key: 'temp', name: 'Column temperature', result: 'run/temp/readingCheck', limit: { low: '25', high: '35', unit: '°C' }, values: {} });
+    const both = applySpec(d, [assay, temp]);
+    expect(both.stages[3]!.steps.find((x) => x.key === 'result')!.settings.limit).toEqual({ low: '95.0', high: '105.0', unit: '%' });
+    expect(both.stages[2]!.steps.find((x) => x.key === 'temp')!.settings.limit).toEqual({ low: '25', high: '35', unit: '°C' });
+    expect(both.stages[0]!.steps.find((x) => x.key === 'weigh-std')!.settings.target).toBe('50.0 mg');
+  });
 });
 
 // ---- On the server: kept, checked and approved as methods ----

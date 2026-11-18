@@ -93,19 +93,26 @@ export function limitFor(t: SpecTest, purpose: 'release' | 'stability'): Limit |
 }
 
 /**
- * The method with the specification's values in place of its `{ spec: name }` settings (release or stability). A name
- * the test does not give is left as it is: the calculation needing it waits, and specChecks reports it before approval.
+ * The method with the specification's values in place of its `{ spec: name }` settings (release or stability). One
+ * method may serve several tests of a specification (an assay and the impurities from one run): a `limit` is the limit
+ * of the test whose result is that step (or of the only test); other names come from the tests' values. A name no
+ * test gives is left as it is: the calculation needing it waits, and specChecks reports it before approval.
  */
-export function applySpec(doc: MasterDoc, t: SpecTest, purpose: 'release' | 'stability' = 'release'): MasterDoc {
-  const limit = limitFor(t, purpose);
-  const valueOf = (name: string): SettingValue | undefined => (name === 'limit' ? limit : t.values[name]);
+export function applySpec(doc: MasterDoc, tests: SpecTest | readonly SpecTest[], purpose: 'release' | 'stability' = 'release'): MasterDoc {
+  const list = Array.isArray(tests) ? tests : [tests as SpecTest];
+  const stepOf = (t: SpecTest) => t.result.split('/').slice(0, 2).join('/');
+  const limitAt = (where: string) => {
+    const t = list.find((x) => stepOf(x) === where) ?? (list.length === 1 ? list[0] : undefined);
+    return t && limitFor(t, purpose);
+  };
+  const valueOf = (name: string) => list.map((t) => t.values[name]).find((x) => x !== undefined);
   return {
     ...doc,
     stages: doc.stages.map((s) => ({ ...s, steps: s.steps.map((st) => ({
       ...st,
-      settings: Object.fromEntries(Object.entries(st.settings).flatMap(([n, v]) => {
+      settings: Object.fromEntries(Object.entries(st.settings).flatMap(([n, v]): [string, SettingValue][] => {
         if (typeof v !== 'object' || !('spec' in v)) return [[n, v]];
-        const x = valueOf(v.spec);
+        const x = v.spec === 'limit' ? limitAt(`${s.key}/${st.key}`) : valueOf(v.spec);
         return x === undefined ? (v.spec === 'limit' ? [] : [[n, v]]) : [[n, x]];
       })),
     })) })),
