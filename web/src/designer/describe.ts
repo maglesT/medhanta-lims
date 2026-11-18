@@ -2,7 +2,8 @@
 // changes view against the previous version. Each line has a key, so two versions can be compared line by line.
 import { findBlock } from '../../../shared/blocks/index.js';
 import { masterChecks } from '../../../shared/master/checks.js';
-import type { MasterDoc, Stage, Step } from '../../../shared/master/schema.js';
+import type { Limit, MasterDoc, Stage, Step } from '../../../shared/master/schema.js';
+import type { SpecDoc, SpecTest } from '../../../shared/master/spec.js';
 import { stepTitle } from '../../../shared/engine/analysis.js';
 import { neededText } from '../../../shared/engine/training.js';
 import { placeLabel } from './model.js';
@@ -46,7 +47,33 @@ export function stepText(doc: MasterDoc, t: Step, j: number, _units?: Units): st
     t.orderAfter ? `Order-critical: after step ${after < 0 ? '(no longer in this stage)' : `${after + 1}. ${stepTitle(doc, steps[after]!)}`}.` : '',].filter(Boolean).join(' ');
 }
 
-export function describeMaster(doc: MasterDoc, units?: Units): Section[] {
+/** A method or a specification (the review and changes views show both). */
+export type AnyDoc = MasterDoc | SpecDoc;
+export const isSpec = (doc: AnyDoc): doc is SpecDoc => 'tests' in doc;
+
+const limitWords = (l: Limit) => [l.low !== undefined ? `${l.lowStrict ? 'more than' : 'not less than'} ${l.low}` : '', l.high !== undefined ? `${l.highStrict ? 'less than' : 'not more than'} ${l.high}` : '']
+  .filter(Boolean).join(' and ') + (l.unit ? ` ${l.unit}` : '') + (l.alertLow !== undefined || l.alertHigh !== undefined ? ` (alert ${[l.alertLow && `below ${l.alertLow}`, l.alertHigh && `above ${l.alertHigh}`].filter(Boolean).join(', ')})` : '');
+/** A specification test in plain words: the limit as its type says, the method, the values it gives the method. */
+export function testText(t: SpecTest, n: number): string {
+  const limit = t.limitType === 'conforms' ? `Conforms: ${t.conforms ?? '(not said)'}` : t.limitType === 'report only' ? 'Reported only, no limit'
+    : t.limitType === 'release and shelf life' ? `Release ${t.limit ? limitWords(t.limit) : '(not set)'}; shelf life ${t.shelfLifeLimit ? limitWords(t.shelfLifeLimit) : '(not set)'}`
+    : t.limit ? `${t.limitType === 'alert and action' ? 'Action limit' : 'Limit'} ${limitWords(t.limit)}` : 'Limit (not set)';
+  const values = Object.entries(t.values).map(([k, v]) => `${k} ${typeof v === 'string' ? v : limitWords(v)}`).join('; ');
+  return `${n + 1}. ${t.name}: ${limit}. Method ${t.method.code} ${t.method.name}, result ${t.result}. Applies ${t.use === 'release and stability' ? 'at release and on stability' : t.use === 'release' ? 'at release' : 'on stability'}.${values ? ` Gives the method: ${values}.` : ''}`;
+}
+function describeSpec(doc: SpecDoc): Section[] {
+  const h = doc.header;
+  return [
+    { key: 'header', title: 'Header', lines: [
+      { key: 'what', text: `Specification ${h.number} for the ${h.of} ${h.code} ${h.name} (${h.type.toLowerCase()})${h.market ? `, market ${h.market}` : ''}.` },
+      { key: 'pharmacopoeia', text: `Pharmacopoeia ${h.pharmacopoeia}${h.edition ? `, ${h.edition}` : ''}.` },
+    ] },
+    { key: 'tests', title: 'Tests', lines: doc.tests.map((t, n) => ({ key: t.key, text: testText(t, n) })) },
+  ];
+}
+
+export function describeMaster(doc: AnyDoc, units?: Units): Section[] {
+  if (isSpec(doc)) return describeSpec(doc);
   const h = doc.header;
   const top: Section[] = [
     { key: 'header', title: 'Header', lines: [
@@ -72,7 +99,7 @@ export interface DiffLine extends Line { change: Change; was?: string }
 export interface DiffSection { key: string; title: string; change: Change; lines: DiffLine[] }
 
 /** The changes from the previous version, line by line (by key; a step that moved shows its new number). */
-export function diffMasters(prev: MasterDoc, next: MasterDoc, units?: Units): DiffSection[] {
+export function diffMasters(prev: AnyDoc, next: AnyDoc, units?: Units): DiffSection[] {
   const before = new Map(describeMaster(prev, units).map((s) => [s.key, s]));
   const after = describeMaster(next, units);
   const out: DiffSection[] = after.map((s) => {

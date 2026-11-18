@@ -6,8 +6,7 @@ import { ApiError, can, plantTime, type Me } from '../api.js';
 import { addComment, getReview, loadMasterData, reviewAction, STATE_LABEL, type MasterEvent, type ReviewAction, type ReviewData, type Version } from '../api-designer.js';
 import { SignDialog } from '../components/SignDialog.js';
 import { useLinked } from '../api-floor.js';
-import type { MasterDoc } from '../../../shared/master/schema.js';
-import { describeMaster, diffMasters, type DiffSection, type Units } from './describe.js';
+import { describeMaster, diffMasters, type AnyDoc, type DiffSection, type Units } from './describe.js';
 import { placeLabel } from './model.js';
 
 const EVENT_TEXT: Record<MasterEvent['kind'], string> = { submitted: 'Sent for review', passed: 'Checked (passed)', returned: 'Returned to the author', approved: 'Approved by QA', effective: 'Made effective', retired: 'Retired' };
@@ -19,7 +18,7 @@ const SIGNED: Partial<Record<ReviewAction, { meaning: string; what: string }>> =
 const BUTTON: Record<ReviewAction, string> = { submit: 'Send for review', pass: 'Pass the check', return: 'Return to the author', approve: 'Approve', 'make-effective': 'Make effective' };
 
 export function Review({ me, version, doc, blocked, onChanged, onGo }: {
-  me: Me; version: Version; doc: MasterDoc; blocked: boolean; onChanged: () => Promise<void>; onOpen: (id: number) => void; onGo: (path: string) => void;
+  me: Me; version: Pick<Version, 'id' | 'versionNo' | 'state'>; doc: AnyDoc; blocked: boolean; onChanged: () => Promise<void>; onOpen: (id: number) => void; onGo: (path: string) => void;
 }) {
   const [data, setData] = useState<ReviewData | null>(null);
   const [view, setView] = useState<'plain' | 'changes'>('plain');
@@ -110,7 +109,7 @@ export function Review({ me, version, doc, blocked, onChanged, onGo }: {
             await done();
           }}>
           <div className="signbox">
-            <p><b>{doc.header.code} {doc.header.name}</b>, version {version.versionNo}</p>
+            <p><b>{'tests' in doc ? `${doc.header.number} · ${doc.header.code} ${doc.header.name}` : `${doc.header.code} ${doc.header.name}`}</b>, version {version.versionNo}</p>
             {doing === 'approve' && <p>Change control number: <b>{cc}</b></p>}
           </div>
         </SignDialog>
@@ -150,12 +149,13 @@ function Dialog({ title, children, onCancel, onSubmit, submit, error }: { title:
   );
 }
 
-function Comments({ me, doc, data, versionId, onAdded, onGo }: { me: Me; doc: MasterDoc; data: ReviewData; versionId: number; onAdded: () => Promise<void>; onGo: (path: string) => void }) {
+function Comments({ me, doc, data, versionId, onAdded, onGo }: { me: Me; doc: AnyDoc; data: ReviewData; versionId: number; onAdded: () => Promise<void>; onGo: (path: string) => void }) {
   const [text, setText] = useState('');
   const [path, setPath] = useState('');
   const may = ['master.author', 'master.check', 'master.approve'].some((p) => can(me, p));
   const about = [['header', 'Header'],
-    ...doc.stages.flatMap((s, i) => [[`stages[${i}]`, s.name], ...s.steps.map((_, j) => [`stages[${i}].steps[${j}]`, placeLabel(doc, `stages[${i}].steps[${j}]`)])])];
+    ...('tests' in doc ? doc.tests.map((t, i) => [`tests[${i}]`, `Test › ${t.name}`])
+      : doc.stages.flatMap((s, i) => [[`stages[${i}]`, s.name], ...s.steps.map((_, j) => [`stages[${i}].steps[${j}]`, placeLabel(doc, `stages[${i}].steps[${j}]`)])]))];
   return (
     <div className="card comments">
       <h2>Comments</h2>

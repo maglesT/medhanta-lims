@@ -1,12 +1,15 @@
 // The master designer's server calls and types (server/routes/masters.ts, masterdata.ts).
 import { api } from './api.js';
 import type { MasterDoc, MasterState } from '../../shared/master/schema.js';
+import type { SpecDoc } from '../../shared/master/spec.js';
 
 export interface MasterRow {
   id: number; masterId: number; versionNo: number; state: MasterState; header: MasterDoc['header'];
-  createdAt: string; createdByName: string; materialIds: string[];
+  createdAt: string; createdByName: string;
 }
-export interface Version { id: number; masterId: number; versionNo: number; state: MasterState; doc: MasterDoc; createdBy: number; createdAt: string }
+export interface SpecRow { id: number; masterId: number; versionNo: number; state: MasterState; header: SpecDoc['header']; createdAt: string; createdByName: string }
+export interface Version { id: number; masterId: number; versionNo: number; state: MasterState; kind?: 'method'; doc: MasterDoc; createdBy: number; createdAt: string }
+export interface SpecVersion { id: number; masterId: number; versionNo: number; state: MasterState; kind: 'spec'; doc: SpecDoc; createdBy: number; createdAt: string }
 
 interface Item { itemId: string; code: string; name: string; version: number; active: boolean }
 export interface Product extends Item { strength: string | null; dosageForm: string | null; kind?: 'bulk' | 'pack' | null }
@@ -20,7 +23,7 @@ export interface MasterEvent { id: number; kind: 'submitted' | 'passed' | 'retur
 export interface Comment { id: number; path: string | null; text: string; personName: string; at: string }
 export interface ReviewData {
   events: MasterEvent[]; comments: Comment[]; contentHash: string;
-  previous: { id: number; versionNo: number; state: MasterState; doc: MasterDoc } | null;
+  previous: { id: number; versionNo: number; state: MasterState; doc: MasterDoc | SpecDoc } | null;
   actions: ReviewAction[]; refusals: Record<ReviewAction, string | null>;
 }
 
@@ -31,6 +34,11 @@ export const listMasters = () => api<MasterRow[]>('GET', '/api/masters');
 export const getVersion = (id: number) => api<Version>('GET', `/api/master-versions/${id}`);
 export const saveVersion = (id: number, doc: MasterDoc) => api<{ ok: true }>('PUT', `/api/master-versions/${id}`, { doc });
 export const createMaster = (doc: MasterDoc) => api<{ id: number; masterId: number; versionNo: number }>('POST', '/api/masters', { doc });
+export const listSpecs = () => api<SpecRow[]>('GET', '/api/masters?kind=spec');
+export const getSpec = (id: number) => api<SpecVersion>('GET', `/api/master-versions/${id}`);
+export const saveSpec = (id: number, doc: SpecDoc) => api<{ ok: true }>('PUT', `/api/master-versions/${id}`, { doc });
+export const createSpec = (doc: SpecDoc) => api<{ id: number; masterId: number; versionNo: number }>('POST', '/api/masters', { kind: 'spec', doc });
+export const getProblems = (id: number) => api<{ problems: import('../../shared/master/checks.js').Problem[] }>('GET', `/api/master-versions/${id}/checks`);
 export const newVersion = (masterId: number) => api<{ id: number }>('POST', `/api/masters/${masterId}/versions`, {});
 export const getReview = (id: number) => api<ReviewData>('GET', `/api/master-versions/${id}/review`);
 export const addComment = (id: number, text: string, path?: string) => api<{ id: number }>('POST', `/api/master-versions/${id}/comments`, { text, ...(path ? { path } : {}) });

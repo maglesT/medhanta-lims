@@ -5,11 +5,12 @@ import { MyWork } from './floor/MyWork.js';
 import { AnalysisScreen } from './floor/AnalysisScreen.js';
 import { go, useRoute } from './api-floor.js';
 import { Masters } from './designer/Masters.js';
+import { Specs } from './specs/Specs.js';
 import { ToReview } from './release/ToReview.js';
 import { ReleaseScreen } from './release/ReleaseScreen.js';
 import { product } from './product.js';
 
-type Page = 'home' | 'masters';
+type Page = 'home' | 'masters' | 'specs';
 
 export function App() {
   const [me, setMe] = useState<Me | null | undefined>(undefined);
@@ -71,6 +72,9 @@ export function App() {
           {['master.author', 'master.check', 'master.approve', 'analysis.perform', 'view'].some((c) => can(me, c)) && (
             <button className={page === 'masters' && !release ? 'tab on' : 'tab'} onClick={() => { setPage('masters'); go('#/'); }}>{product.masters}</button>
           )}
+          {['master.author', 'master.check', 'master.approve', 'view'].some((c) => can(me, c)) && (
+            <button className={page === 'specs' && !release ? 'tab on' : 'tab'} onClick={() => { setPage('specs'); go('#/'); }}>Specifications</button>
+          )}
         </nav>
         <span className="who">
           {me.fullName}
@@ -81,6 +85,7 @@ export function App() {
         {release ? (release === 'list' ? <ToReview me={me} /> : <ReleaseScreen me={me} id={release} />) : (<>
           {page === 'home' && (route.analysis ? <AnalysisScreen me={me} id={route.analysis} step={route.step} approve={route.approve} /> : <MyWork me={me} />)}
           {page === 'masters' && <Masters me={me} />}
+          {page === 'specs' && <Specs me={me} />}
         </>)}
       </main>
     </>

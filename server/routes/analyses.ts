@@ -259,7 +259,7 @@ export function analysisRoutes(app: FastifyInstance, sql: Sql) {
       const signer = await authenticateSigner(sql, app.proofKey, user, b.data, { objectType: 'master_version', objectId: b.data.masterVersionId, meaning: 'issued' });
       return await sql.begin(async (tx) => {
         const v = await masterVersion(tx, b.data.masterVersionId, true);
-        if (v?.state !== 'effective') throw new StepError(409, 'not_effective', ['Only an effective master version can be issued.']);
+        if (v?.state !== 'effective' || v.kind !== 'method') throw new StepError(409, 'not_effective', ['Only an effective method version can be issued.']);
         // Approval will refuse a version with errors; until that workflow exists, issuing checks it too.
         const errors = masterChecks(v.doc).filter(blocking);
         if (errors.length) throw new StepError(409, 'master_has_errors', errors.map((p) => `${p.path}: ${p.message}`));

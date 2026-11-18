@@ -6,7 +6,8 @@ import { parseId, requirePermission, type Permission, type SessionUser } from '.
 import { usableItem, type Master } from '../master.js';
 import { SignError, authenticateSigner, contentHash, sign, type Meaning } from '../signatures.js';
 import { BLOCKS } from '../../shared/blocks/index.js';
-import { blocking, masterChecks } from '../../shared/master/checks.js';
+import { blocking, masterChecks, type Problem } from '../../shared/master/checks.js';
+import { specChecks, specSchema, type SpecDoc } from '../../shared/master/spec.js';
 import { masterSchema, type MasterDoc, type MasterState } from '../../shared/master/schema.js';
 import { isHand, type Source } from '../../shared/engine/links.js';
 import { CHANGE_STEPS, approvedChange, namesProduct } from '../links.js';
@@ -14,23 +15,43 @@ import { CHANGE_STEPS, approvedChange, namesProduct } from '../links.js';
 // Master versions: the model, the table, the draft routes, and the review and approval workflow (LIMS-01). A version
 // leaves draft only through that workflow (or, in tests, the database owner).
 
-export interface VersionRow { id: number; masterId: number; versionNo: number; state: MasterState; doc: MasterDoc; createdBy: number; createdAt: Date }
+// A version of a method or of a specification (kind): the same table, review and approval (LIMS-01).
+interface VersionBase { id: number; masterId: number; versionNo: number; state: MasterState; createdBy: number; createdAt: Date }
+export type VersionRow = VersionBase & ({ kind: 'method'; doc: MasterDoc } | { kind: 'spec'; doc: SpecDoc });
+export type Kind = VersionRow['kind'];
 
 export async function masterVersion(q: Sql | Tx, id: number, lock = false): Promise<VersionRow | undefined> {
   const rows = lock
-    ? await q<VersionRow[]>`select id::int, master_id::int as "masterId", version_no as "versionNo", state, doc, created_by::int as "createdBy", created_at as "createdAt"
+    ? await q<VersionRow[]>`select id::int, master_id::int as "masterId", version_no as "versionNo", state, kind, doc, created_by::int as "createdBy", created_at as "createdAt"
         from master_versions where id = ${id} for share`
-    : await q<VersionRow[]>`select id::int, master_id::int as "masterId", version_no as "versionNo", state, doc, created_by::int as "createdBy", created_at as "createdAt"
+    : await q<VersionRow[]>`select id::int, master_id::int as "masterId", version_no as "versionNo", state, kind, doc, created_by::int as "createdBy", created_at as "createdAt"
         from master_versions where id = ${id}`;
   return rows[0];
 }
 
-// A method names nothing of master data in its header (its instruments are picked on the floor), so it is kept as written.
-async function withMasterData(_master: Master, doc: MasterDoc): Promise<MasterDoc> {
-  return doc;
+// A method names nothing of master data in its header (its instruments are picked on the floor). A specification's
+// material or product must be active in master data now; its code and name are copied from it (PL-08).
+async function withMasterData(master: Master, kind: Kind, doc: MasterDoc | SpecDoc): Promise<MasterDoc | SpecDoc> {
+  if (kind === 'method') return doc;
+  const s = doc as SpecDoc;
+  const item = s.header.of === 'product' ? usableItem(await master.products(), s.header.itemId, 'product') : usableItem(await master.materials(), s.header.itemId, 'material');
+  return { ...s, header: { ...s.header, code: item.code, name: item.name } };
+}
+const schemaOf = (kind: Kind) => (kind === 'spec' ? specSchema : masterSchema);
+
+/**
+ * The problems that stop a version going for review or approval: a method's own checks, or a specification's against
+ * its methods as they stand now (each method's latest approved or effective version, LIMS-01).
+ */
+export async function docProblems(q: Sql | Tx, v: { kind: 'method'; doc: MasterDoc } | { kind: 'spec'; doc: SpecDoc }): Promise<Problem[]> {
+  if (v.kind === 'method') return masterChecks(v.doc);
+  const ids = [...new Set(v.doc.tests.map((t) => t.method.masterId))];
+  const rows = ids.length ? await q<{ masterId: number; doc: MasterDoc; state: string }[]>`
+    select distinct on (master_id) master_id::int as "masterId", doc, state from master_versions
+    where kind = 'method' and master_id = any(${ids}) and state in ('approved', 'effective') order by master_id, (state = 'effective') desc, version_no desc` : [];
+  return specChecks(v.doc, (id) => rows.find((x) => x.masterId === id) ?? null);
 }
 
-const docBody = z.object({ doc: masterSchema });
 const invalid = (reply: FastifyReply, issues?: z.ZodIssue[]) =>
   reply.code(400).send({ error: 'invalid', problems: (issues ?? []).map((i) => `${i.path.join('.')}: ${i.message}`) });
 
@@ -40,19 +61,21 @@ export function masterRoutes(app: FastifyInstance, sql: Sql) {
 
   app.get('/api/blocks', anyUser, async () => BLOCKS);
 
-  app.get('/api/masters', anyUser, async () => sql`
-    select v.id::int, v.master_id::int as "masterId", v.version_no as "versionNo", v.state, v.doc->'header' as header, v.created_at as "createdAt",
+  // Methods (default) or specifications (?kind=spec).
+  app.get<{ Querystring: { kind?: string } }>('/api/masters', anyUser, async (req) => sql`
+    select v.id::int, v.master_id::int as "masterId", v.version_no as "versionNo", v.state, v.kind, v.doc->'header' as header, v.created_at as "createdAt",
       u.full_name as "createdByName"
-    from master_versions v join users u on u.id = v.created_by order by v.master_id, v.version_no`);
+    from master_versions v join users u on u.id = v.created_by where v.kind = ${req.query.kind === 'spec' ? 'spec' : 'method'} order by v.master_id, v.version_no`);
 
-  // A new master: version 1, a draft.
+  // A new method or specification: version 1, a draft.
   app.post('/api/masters', author, async (req, reply) => {
-    const b = docBody.safeParse(req.body);
+    const kind: Kind = (req.body as { kind?: string } | null)?.kind === 'spec' ? 'spec' : 'method';
+    const b = z.object({ kind: z.enum(['method', 'spec']).optional(), doc: schemaOf(kind) }).safeParse(req.body);
     if (!b.success) return invalid(reply, b.error.issues);
-    const doc = await withMasterData(app.master, b.data.doc);
+    const doc = await withMasterData(app.master, kind, b.data.doc);
     return sql.begin(async (tx) => {
       const [v] = await tx<{ id: number; masterId: number }[]>`
-        insert into master_versions (version_no, doc, created_by) values (1, ${tx.json(doc as never)}, ${req.user!.id})
+        insert into master_versions (version_no, kind, doc, created_by) values (1, ${kind}, ${tx.json(doc as never)}, ${req.user!.id})
         returning id::int, master_id::int as "masterId"`;
       await audit(tx, { actorId: req.user!.id, action: 'master.created', objectType: 'master_version', objectId: v!.id, new: doc });
       return { id: v!.id, masterId: v!.masterId, versionNo: 1 };
@@ -62,16 +85,16 @@ export function masterRoutes(app: FastifyInstance, sql: Sql) {
   // A new draft version of a master, starting from its latest version (or from the document sent).
   app.post<{ Params: { masterId: string } }>('/api/masters/:masterId/versions', author, async (req, reply) => {
     const masterId = parseId(req.params.masterId);
-    const b = z.object({ doc: masterSchema.optional() }).safeParse(req.body);
-    if (masterId === null || !b.success) return invalid(reply, b.error?.issues);
-    const [latest] = await sql<{ versionNo: number; doc: MasterDoc }[]>`
-      select version_no as "versionNo", doc from master_versions where master_id = ${masterId} order by version_no desc limit 1`;
+    const [latest] = masterId === null ? [] : await sql<{ versionNo: number; kind: Kind; doc: MasterDoc | SpecDoc }[]>`
+      select version_no as "versionNo", kind, doc from master_versions where master_id = ${masterId} order by version_no desc limit 1`;
     if (!latest) return reply.code(404).send({ error: 'not_found' });
-    const doc = await withMasterData(app.master, b.data.doc ?? latest.doc);
+    const b = z.object({ doc: schemaOf(latest.kind).optional() }).safeParse(req.body);
+    if (!b.success) return invalid(reply, b.error?.issues);
+    const doc = await withMasterData(app.master, latest.kind, b.data.doc ?? latest.doc);
     try {
       return await sql.begin(async (tx) => {
         const [v] = await tx<{ id: number }[]>`
-          insert into master_versions (master_id, version_no, doc, created_by) values (${masterId}, ${latest.versionNo + 1}, ${tx.json(doc as never)}, ${req.user!.id})
+          insert into master_versions (master_id, version_no, kind, doc, created_by) values (${masterId}, ${latest.versionNo + 1}, ${latest.kind}, ${tx.json(doc as never)}, ${req.user!.id})
           returning id::int`;
         await audit(tx, { actorId: req.user!.id, action: 'master.version_created', objectType: 'master_version', objectId: v!.id, new: doc });
         return { id: v!.id, masterId, versionNo: latest.versionNo + 1 };
@@ -91,11 +114,13 @@ export function masterRoutes(app: FastifyInstance, sql: Sql) {
   // Only a draft is edited; the database refuses any change to a version that left draft.
   app.put<{ Params: { id: string } }>('/api/master-versions/:id', author, async (req, reply) => {
     const id = parseId(req.params.id);
-    const b = docBody.safeParse(req.body);
-    if (id === null || !b.success) return invalid(reply, b.error?.issues);
-    const doc = await withMasterData(app.master, b.data.doc);
+    const was = id === null ? undefined : await masterVersion(sql, id);
+    if (!was) return reply.code(404).send({ error: 'not_found' });
+    const b = z.object({ doc: schemaOf(was.kind) }).safeParse(req.body);
+    if (!b.success) return invalid(reply, b.error?.issues);
+    const doc = await withMasterData(app.master, was.kind, b.data.doc);
     return sql.begin(async (tx) => {
-      const v = await masterVersion(tx, id, true);
+      const v = await masterVersion(tx, id!, true);
       if (!v) return reply.code(404).send({ error: 'not_found' });
       if (v.state !== 'draft') return reply.code(409).send({ error: 'locked', message: `This version is ${v.state.replace('_', ' ')} and cannot be changed.` });
       await tx`update master_versions set doc = ${tx.json(doc as never)} where id = ${id}`;
@@ -108,7 +133,7 @@ export function masterRoutes(app: FastifyInstance, sql: Sql) {
     const id = parseId(req.params.id);
     const v = id === null ? undefined : await masterVersion(sql, id);
     if (!v) return reply.code(404).send({ error: 'not_found' });
-    return { problems: masterChecks(v.doc) };
+    return { problems: await docProblems(sql, v) };
   });
 
   reviewRoutes(app, sql);
@@ -128,7 +153,7 @@ const REVIEW_NAMES = Object.keys(REVIEW_ACTIONS) as ReviewAction[];
 
 interface MasterEvent { id: number; kind: string; payload: { reason?: string; changeControl?: string; source?: { changeControl?: Source } }; person: number; personName: string; at: Date }
 // previous: the document of the version before this one of the same master (none for version 1).
-interface Loaded { v: VersionRow; events: MasterEvent[]; authors: number[]; previous?: { id: number; versionNo: number; state: MasterState; doc: MasterDoc } }
+interface Loaded { v: VersionRow; events: MasterEvent[]; authors: number[]; problems: Problem[]; previous?: { id: number; versionNo: number; state: MasterState; doc: MasterDoc | SpecDoc } }
 
 async function loadReview(q: Sql | Tx, id: number, lock = false): Promise<Loaded | null> {
   const v = await masterVersion(q, id, lock);
@@ -143,7 +168,7 @@ async function loadReview(q: Sql | Tx, id: number, lock = false): Promise<Loaded
   const authors = [...new Set([v.createdBy, ...edited.map((r) => r.id), ...events.filter((e) => e.kind === 'submitted').map((e) => e.person)])];
   const [previous] = await q<NonNullable<Loaded['previous']>[]>`
     select id::int, version_no as "versionNo", state, doc from master_versions where master_id = ${v.masterId} and version_no < ${v.versionNo} order by version_no desc limit 1`;
-  return { v, events: [...events], authors, ...(previous ? { previous } : {}) };
+  return { v, events: [...events], authors, problems: await docProblems(q, v), ...(previous ? { previous } : {}) };
 }
 
 // What a signer is shown: the version's document, as it stands, after its last event.
@@ -168,7 +193,7 @@ export function reviewRefusal(action: ReviewAction, l: Loaded, user: SessionUser
   }
   if (action === 'submit' || action === 'approve') {
     // LIMS-01, and the calculation checks: errors, and warnings that need an answer and have none.
-    const open = masterChecks(l.v.doc).filter(blocking);
+    const open = l.problems.filter(blocking);
     if (open.length) return no(409, 'master_has_errors', `The master check shows ${open.length} problem${open.length === 1 ? '' : 's'} to fix or answer first (LIMS-01).`);
   }
   if (action === 'pass') {
@@ -193,8 +218,10 @@ export function reviewRefusal(action: ReviewAction, l: Loaded, user: SessionUser
  * LIMS-01: while QMS answers, the change control must be one of its change controls, approved by QA (CHANGE_STEPS);
  * its title and approval are kept with the approval (PL-07). Otherwise the number is typed by hand.
  */
-/** The product a change control must name: none for a method (a method serves many products). */
-const productOf = (_doc: MasterDoc | undefined): { productCode: string; productName: string } | undefined => undefined;
+/** The product a change control must name: a specification's material or product; none for a method (a method serves
+ *  many products). */
+const productOf = (v: VersionRow | undefined): { productCode: string; productName: string } | undefined =>
+  (v?.kind === 'spec' ? { productCode: v.doc.header.code, productName: v.doc.header.name } : undefined);
 
 async function changeControlSource(app: FastifyInstance, number: string, product?: { productCode: string; productName: string }): Promise<Source> {
   const r = await app.links.qms.change(number);
@@ -245,7 +272,7 @@ function reviewRoutes(app: FastifyInstance, sql: Sql) {
     const id = parseId(String(req.query.version ?? ''));
     const v = id === null ? undefined : await masterVersion(sql, id);
     const r = await app.links.qms.approved();
-    const changes = r.state === 'ok' ? r.value.map((c) => ({ ...c, names: productOf(v?.doc) ? namesProduct(c, productOf(v?.doc)!) : 'yes' })).filter((c) => c.names !== 'no') : [];
+    const changes = r.state === 'ok' ? r.value.map((c) => ({ ...c, names: productOf(v) ? namesProduct(c, productOf(v)!) : 'yes' })).filter((c) => c.names !== 'no') : [];
     return { link: r.state, changes };
   });
 
@@ -274,7 +301,7 @@ function reviewRoutes(app: FastifyInstance, sql: Sql) {
       const user = req.user!;
       try {
         const signer = rule.meaning ? await authenticateSigner(sql, app.proofKey, user, { proof: b.proof! }, { objectType: 'master_version', objectId: id, meaning: rule.meaning }) : null;
-        const source = b.changeControl ? await changeControlSource(app, b.changeControl, productOf((await masterVersion(sql, id))?.doc)) : null;
+        const source = b.changeControl ? await changeControlSource(app, b.changeControl, productOf(await masterVersion(sql, id))) : null;
         return await sql.begin(async (tx) => {
           await tx`select pg_advisory_xact_lock(${-id}::bigint)`;
           // 1. read

@@ -10,6 +10,7 @@ import { isBalance, machineRefusal } from '../../../shared/engine/picks.js';
 import type { BlockField } from '../../../shared/blocks/format.js';
 import type { MasterData } from '../api-designer.js';
 import type { MasterDoc, Stage, Step } from '../../../shared/master/schema.js';
+import type { SpecDoc } from '../../../shared/master/spec.js';
 
 // The unit list as offered in pick lists: every unit of the templates' unit table (shared/templates/units.ts).
 export const UNITS = UNIT_LIST;
@@ -99,7 +100,11 @@ export function placeOf(path: string): Place {
 }
 
 /** A short label for a master-check path: "Granulation › 3. Charge a material". */
-export function placeLabel(doc: MasterDoc, path: string): string {
+export function placeLabel(doc: MasterDoc | SpecDoc, path: string): string {
+  if ('tests' in doc) {
+    const m = /^tests\[(\d+)\]/.exec(path);
+    return m ? `Test › ${doc.tests[Number(m[1])]?.name || `test ${Number(m[1]) + 1}`}` : path.startsWith('header') ? 'Header' : 'Tests';
+  }
   const p = placeOf(path);
   if (p.tab === 'header') return 'Header';
   const s = p.stage === undefined ? undefined : doc.stages[p.stage];
