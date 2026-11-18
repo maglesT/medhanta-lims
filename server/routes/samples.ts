@@ -6,7 +6,7 @@ import { parseId, requirePermission } from '../auth.js';
 import { usableItem } from '../master.js';
 import { LOT_USABLE, LOT_WAITING, batchWaiting, type BatchRead, type LotRead } from '../links.js';
 import { SignError, authenticateSigner, contentHash, sign, signBody } from '../signatures.js';
-import { identityContainers, limitFor, limitText, limitWords, outOfTrend, purposeLimits, type SpecDoc } from '../../shared/master/spec.js';
+import { SAMPLING_DETAILS, identityContainers, limitFor, sampledProblem, samplingPlan, limitText, limitWords, outOfTrend, purposeLimits, type SpecDoc } from '../../shared/master/spec.js';
 import { OOT_ANSWERS, approvalProblems, ootRefusal, rejectionRefusal, sampleDecision, type TestState } from '../../shared/engine/sample.js';
 import { oosOfSample } from './oos.js';
 import { loadReserves, openRetestSample, reserveNeed } from './reserve.js';
@@ -48,7 +48,10 @@ export interface SampleRow {
   // A stability sample: its study and time point (server/routes/stability.ts).
   stability?: { studyId: number; studyNo: string; condition: string; label: string; month: number } | null;
   monitoring?: MonitoringTaken | null;
+  // LIMS-05: the sampling plan as applied (null: the specification names none).
+  sampling?: SamplingTaken | null;
 }
+export interface SamplingTaken { received: number; plan: 'square root' | 'every container'; line: string; numbers: number[]; details: Record<string, string> }
 export type EventRow = SampleEvent & { id: number; personName: string; at: Date; signature: { printedName: string; signedAt: Date } | null };
 
 class SampleError extends Error {
@@ -58,7 +61,8 @@ class SampleError extends Error {
 /** The effective specifications of a material (by its master-data id) or a product (by its code) (LIMS-01). */
 export async function effectiveSpecs(q: Sql | Tx, of: Of, key: string) {
   return q<{ id: number; masterId: number; versionNo: number; header: SpecDoc['header'] }[]>`
-    select id::int, master_id::int as "masterId", version_no as "versionNo", doc->'header' as header from master_versions
+    select id::int, master_id::int as "masterId", version_no as "versionNo", doc->'header' as header,
+      jsonb_path_exists(doc, '$.tests[*] ? (@.identity == true)') as identity from master_versions
     where kind = 'spec' and state = 'effective' and doc->'header'->>'of' = ${of}
       and (case when ${of} = 'material' then doc->'header'->>'itemId' else doc->'header'->>'code' end) = ${key}
     order by doc->'header'->>'number', master_id`;
@@ -78,7 +82,7 @@ export const batchShown = (b: BatchRead) => `TrueBatch batch ${b.batchNumber}: $
 async function loadSample(q: Sql | Tx, id: number): Promise<{ s: SampleRow; events: EventRow[] } | null> {
   const [s] = await q<SampleRow[]>`
     select s.id::int, s.sample_no as "sampleNo", s.spec_version_id::int as "specVersionId", s.purpose, s.lot_no as "lotNo", s.item, s.source,
-      s.quantity, s.containers, s.registered_by::int as "registeredBy", u.full_name as "registeredByName", s.registered_at as "registeredAt", s.stability, s.monitoring
+      s.quantity, s.containers, s.registered_by::int as "registeredBy", u.full_name as "registeredByName", s.registered_at as "registeredAt", s.stability, s.monitoring, s.sampling
     from samples s join users u on u.id = s.registered_by where s.id = ${id}`;
   if (!s) return null;
   const events = await q<EventRow[]>`
@@ -110,6 +114,9 @@ const registerBody = z.object({
   specVersionId: z.number().int().positive(),
   quantity: text(60).regex(/^\d+(\.\d+)?\s*\S.*$/, 'give the quantity with its unit, e.g. 120 g'),
   containers: z.number().int().min(1).max(100000).optional(),
+  // LIMS-05: where the specification names a sampling plan: the containers received and the numbers of those sampled.
+  received: z.number().int().min(1).max(100000).optional(),
+  sampled: z.array(z.number().int()).max(100000).optional(),
   // A monitoring sample is taken from its plan (server/routes/em.ts), not registered.
   purpose: z.enum(SAMPLE_PURPOSES).default('release').refine((p) => p !== 'monitoring', 'an EM or water sample is taken from its monitoring plan'),
 }).strict();
@@ -174,16 +181,16 @@ export function testStates(spec: SpecDoc, purpose: string, results: Record<strin
  * sampling of a monitoring plan (server/routes/em.ts, which names the plan, point and sampling).
  */
 export async function newSample(tx: Tx, person: number, row: { specVersionId: number; purpose: SamplePurpose; lotNo: string; item: SampleItem; source: Source;
-  quantity: string; containers: number | null; stability?: { studyId: number; studyNo: string; condition: string; label: string; month: number }; monitoring?: MonitoringTaken }): Promise<{ id: number; sampleNo: string }> {
+  quantity: string; containers: number | null; stability?: { studyId: number; studyNo: string; condition: string; label: string; month: number }; monitoring?: MonitoringTaken; sampling?: SamplingTaken }): Promise<{ id: number; sampleNo: string }> {
   const [c] = await tx<{ n: number; yy: string }[]>`
     insert into sample_counters (year, last_no) values (extract(year from now() at time zone ${PLANT_TZ})::int, 1)
     on conflict (year) do update set last_no = sample_counters.last_no + 1
     returning last_no as n, right(year::text, 2) as yy`;
   const sampleNo = `${SAMPLE_PREFIX}${c!.yy}${String(c!.n).padStart(5, '0')}`;
   const [s] = await tx<{ id: number }[]>`
-    insert into samples (sample_no, spec_version_id, purpose, lot_no, item, source, quantity, containers, registered_by, stability, monitoring)
+    insert into samples (sample_no, spec_version_id, purpose, lot_no, item, source, quantity, containers, registered_by, stability, monitoring, sampling)
     values (${sampleNo}, ${row.specVersionId}, ${row.purpose}, ${row.lotNo}, ${tx.json(row.item as never)}, ${tx.json(row.source as never)}, ${row.quantity}, ${row.containers},
-      ${person}, ${row.stability ? tx.json(row.stability as never) : null}, ${row.monitoring ? tx.json(row.monitoring as never) : null})
+      ${person}, ${row.stability ? tx.json(row.stability as never) : null}, ${row.monitoring ? tx.json(row.monitoring as never) : null}, ${row.sampling ? tx.json(row.sampling as never) : null})
     returning id::int`;
   await audit(tx, { actorId: person, action: 'sample.registered', objectType: 'sample', objectId: s!.id, new: { sampleNo, ...row } });
   return { id: s!.id, sampleNo };
@@ -202,14 +209,14 @@ export function sampleRoutes(app: FastifyInstance, sql: Sql) {
       const item = { of: 'material' as const, itemId: l.materialMasterId ?? '', code: l.materialCode ?? '' };
       const specs = l.materialMasterId ? await effectiveSpecs(sql, 'material', l.materialMasterId) : [];
       requests.push({ source: 'mms' as const, lotNo: l.lotNumber, ...item, name: specs[0]?.header.name ?? null, status: l.status, shown: lotShown(l), asOf: l.dataAsOf,
-        stock: l.stock ? `${l.stock} ${l.unit ?? ''}`.trim() : null, specs: specs.map(({ header, ...x }) => ({ ...x, number: header.number, type: header.type, market: header.market ?? null })),
+        stock: l.stock ? `${l.stock} ${l.unit ?? ''}`.trim() : null, specs: specs.map(({ header, ...x }) => ({ ...x, number: header.number, type: header.type, market: header.market ?? null, sampling: header.sampling ?? null })),
         noSpec: specs.length ? null : `No effective specification for ${l.materialCode ?? 'this material'}.`, sampleNo: await releaseSample(sql, 'material', l.lotNumber) });
     }
     if (batches.state === 'ok') for (const b of batches.value) {
       const specs = b.productCode ? await effectiveSpecs(sql, 'product', b.productCode) : [];
       requests.push({ source: 'truebatch' as const, lotNo: b.batchNumber, of: 'product' as const, itemId: null, code: b.productCode ?? '', name: b.productName ?? specs[0]?.header.name ?? null,
         status: b.status, shown: batchShown(b), asOf: b.dataAsOf, stock: b.quantity,
-        specs: specs.map(({ header, ...x }) => ({ ...x, number: header.number, type: header.type, market: header.market ?? null })),
+        specs: specs.map(({ header, ...x }) => ({ ...x, number: header.number, type: header.type, market: header.market ?? null, sampling: header.sampling ?? null })),
         noSpec: specs.length ? null : `No effective specification for ${b.productCode ?? 'this product'}.`, sampleNo: await releaseSample(sql, 'product', b.batchNumber) });
     }
     return { links: { mms: lots.state, truebatch: batches.state } satisfies Record<From, LinkState>, requests };
@@ -221,7 +228,7 @@ export function sampleRoutes(app: FastifyInstance, sql: Sql) {
     const id = String(req.query.itemId ?? '');
     const item = of === 'product' ? (await app.master.products()).find((p) => p.itemId === id) : (await app.master.materials()).find((m) => m.itemId === id);
     if (!item) return [];
-    return (await effectiveSpecs(sql, of, of === 'material' ? item.itemId : item.code)).map(({ header, ...x }) => ({ ...x, number: header.number, type: header.type, market: header.market ?? null }));
+    return (await effectiveSpecs(sql, of, of === 'material' ? item.itemId : item.code)).map(({ header, ...x }) => ({ ...x, number: header.number, type: header.type, market: header.market ?? null, sampling: header.sampling ?? null }));
   });
 
   // Register a sample (LIMS-05): from a lot or batch waiting now, or by hand while its link is absent or down.
@@ -283,12 +290,26 @@ export function sampleRoutes(app: FastifyInstance, sql: Sql) {
         // LIMS-31: one retest sample of a lot at a time, until QC decides on it
         const retest = b.purpose === 'retest' && of === 'material' ? await openRetestSample(tx, lotNo) : null;
         if (retest) throw new SampleError(409, 'already_sampled', [`Lot ${lotNo} already has its retest sample ${retest}, waiting for QC's decision.`]);
-        // LIMS-08: a starting material's identity is tested on each container sampled: their number is needed.
-        const spec = await tx<{ doc: SpecDoc }[]>`select doc from master_versions where id = ${b.specVersionId}`;
-        if (identityContainers(spec[0]!.doc, b.purpose, b.containers ?? null) === 0) throw new SampleError(400, 'containers_needed',
-          ['Containers sampled: give their number. The identity of a starting material is tested on each container (one sample from every container of the lot).']);
+        // LIMS-05: the specification's sampling plan (LIMS-08: every container of a starting material with an identity
+        // test): the containers received give the number to sample (L19); the sampler confirms the numbers sampled.
+        const [spec] = await tx<{ doc: SpecDoc }[]>`select doc from master_versions where id = ${b.specVersionId}`;
+        let containers = b.containers ?? null;
+        let sampling: SamplingTaken | undefined;
+        if (samplingPlan(spec!.doc, b.purpose, 1) !== null) {
+          if (!b.received) throw new SampleError(400, 'containers_needed', ['Containers received: give their number. The specification\'s sampling plan says how many of them are sampled'
+            + `${identityContainers(spec!.doc, b.purpose, 1) !== null ? ' (every container: the identity of a starting material is tested on each)' : ''}.`]);
+          const p = samplingPlan(spec!.doc, b.purpose, b.received)!;
+          if ('problem' in p) throw new SampleError(400, 'invalid', [p.problem]);
+          const numbers = [...(b.sampled ?? [])].sort((x, y) => x - y);
+          const no = sampledProblem(numbers, p.n, b.received);
+          if (no) throw new SampleError(400, 'sampled', [no]);
+          containers = p.n;
+          const h = spec!.doc.header.sampling;
+          sampling = { received: b.received, plan: p.mode, line: p.line, numbers,
+            details: Object.fromEntries(SAMPLING_DETAILS.flatMap(([k]) => (h?.[k] ? [[k, h[k]!]] : []))) };
+        }
         // 4. the number and the row (5. audit)
-        return newSample(tx, user.id, { specVersionId: b.specVersionId, purpose: b.purpose, lotNo, item, source, quantity: b.quantity, containers: b.containers ?? null });
+        return newSample(tx, user.id, { specVersionId: b.specVersionId, purpose: b.purpose, lotNo, item, source, quantity: b.quantity, containers, ...(sampling ? { sampling } : {}) });
       });
     } catch (e) {
       if (e instanceof SampleError) return reply.code(e.status).send({ error: e.code, problems: e.problems, message: e.problems[0] });

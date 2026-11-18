@@ -4,7 +4,7 @@ import type { OosAction, OosEventKind, OosPayload, OosStatus } from '../../../sh
 
 export interface OosResult { name: string; value: string; unit: string; shown: string; line: string; limit: string; step: string }
 export interface OosRow {
-  id: number; oosNo: string; sampleId: number; analysisId: number; testKey: string; result: OosResult; openedBy: number; openedByName: string; openedAt: string;
+  id: number; oosNo: string; sampleId: number; analysisId: number | null; outsideResultId: number | null; testKey: string; result: OosResult; openedBy: number; openedByName: string; openedAt: string;
   sampleNo: string; lotNo: string; purpose: string; item: { of: string; code: string; name: string }; analysisNo: string; specNumber: string; specVersionNo: number;
 }
 export interface OosListRow extends OosRow { status: OosStatus; closedAt: string | null; deviation: string | null }
@@ -12,7 +12,7 @@ export interface OosEntry {
   id: number; kind: OosEventKind; payload: OosPayload; person: number; personName: string; at: string;
   signature: { printedName: string; meaning: string; signedAt: string } | null;
 }
-export interface AnalysisResult { analysisId: number; analysisNo: string; status: string; result: { shown: string; value: string; unit: string; pass?: boolean } | null }
+export interface AnalysisResult { analysisId: number; analysisNo: string; status: string; result: { shown: string; value: string; unit: string; pass?: boolean } | null; method: string }
 export interface OosDetail {
   oos: OosRow; status: OosStatus; events: OosEntry[]; checklist: [string, string][];
   plans: { plan: OosEntry; result: OosEntry | null }[]; conclusion: OosEntry | null;

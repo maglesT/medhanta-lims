@@ -4,7 +4,8 @@ import { z } from 'zod';
 import type { Sql, Tx } from '../db.js';
 import { audit } from '../audit.js';
 import { parseId, requirePermission } from '../auth.js';
-import { identityContainers, purposeLimits, type SpecDoc } from '../../shared/master/spec.js';
+import { identityContainers, limitText, purposeLimits, type SpecDoc } from '../../shared/master/spec.js';
+import { openOutsideOos } from './oos.js';
 import { outsideCheckRefusal, outsideEntryRefusal, outsideFigure } from '../../shared/engine/outside.js';
 import { sampleDecision, type SampleEvent } from '../../shared/engine/sample.js';
 import type { TestResult } from './analyses.js';
@@ -16,14 +17,15 @@ import type { TestResult } from './analyses.js';
 /** At most 8 MB: a lab's report as a PDF or scan. */
 export const MAX_REPORT_BYTES = 8 * 1024 * 1024;
 
-interface Row { id: number; testKey: string; lab: string; reportNo: string; fileName: string; size: number; sha256: string; value: string | null; unit: string; conforms: boolean | null;
+interface Row { id: number; testKey: string; oosOutcome: string | null; lab: string; reportNo: string; fileName: string; size: number; sha256: string; value: string | null; unit: string; conforms: boolean | null;
   enteredBy: number; enteredByName: string; enteredAt: Date; checkedBy: number | null; checkedByName: string | null; checkedAt: Date | null }
 
 async function rows(q: Sql | Tx, sampleId: number, id?: number) {
   return q<Row[]>`
     select o.id::int, o.test_key as "testKey", o.lab, o.report_no as "reportNo", o.file_name as "fileName", o.size, o.sha256, o.value, o.unit, o.conforms,
       o.entered_by::int as "enteredBy", u.full_name as "enteredByName", o.entered_at as "enteredAt",
-      c.person_id::int as "checkedBy", cu.full_name as "checkedByName", c.at as "checkedAt"
+      c.person_id::int as "checkedBy", cu.full_name as "checkedByName", c.at as "checkedAt",
+      (select e.payload->>'outcome' from oos x join oos_events e on e.oos_id = x.id and e.kind = 'concluded' where x.outside_result_id = o.id) as "oosOutcome"
     from outside_results o join users u on u.id = o.entered_by
       left join outside_result_checks c on c.result_id = o.id left join users cu on cu.id = c.person_id
     where o.sample_id = ${sampleId} and (${id ?? null}::bigint is null or o.id = ${id ?? null}) order by o.id`;
@@ -39,7 +41,8 @@ export async function outsideResults(q: Sql | Tx, sampleId: number): Promise<{ t
     const f = t && outsideFigure(t, s!.purpose, { ...(o.value !== null ? { value: o.value, unit: o.unit } : {}), ...(o.conforms !== null ? { conforms: o.conforms } : {}) });
     if (!f || 'problem' in f) return [];
     return [{ testKey: o.testKey, result: {
-      analysisId: 0, analysisNo: o.reportNo, status: o.checkedBy !== null ? 'reviewed' : 'waiting for check', method: `Outside lab: ${o.lab}`,
+      // LIMS-24: invalidated by QA in its OOS investigation, it stays on the record and no longer counts.
+      analysisId: 0, analysisNo: o.reportNo, status: o.oosOutcome === 'invalidated' ? 'invalidated' : o.checkedBy !== null ? 'reviewed' : 'waiting for check', method: `Outside lab: ${o.lab}`,
       people: [o.enteredBy, ...(o.checkedBy !== null ? [o.checkedBy] : [])], openDeviations: 0, reviewedAt: o.checkedAt, result: f,
       outside: { id: o.id, lab: o.lab, reportNo: o.reportNo, fileName: o.fileName, size: o.size, sha256: o.sha256, enteredBy: o.enteredByName, enteredAt: o.enteredAt, checkedBy: o.checkedByName, checkedAt: o.checkedAt },
     } satisfies TestResult }];
@@ -113,14 +116,19 @@ export function outsideRoutes(app: FastifyInstance, sql: Sql) {
     const user = req.user!;
     try {
       return await sql.begin(async (tx) => {
-        const { decided } = await load(tx, id);
+        const { s, decided } = await load(tx, id);
         const [o] = await rows(tx, id, rid);
         if (!o) throw new OutsideError(404, ['There is no such outside result of this sample.']);
         const no = outsideCheckRefusal({ enteredBy: o.enteredBy, checked: o.checkedBy !== null }, user.id, decided);
         if (no) throw new OutsideError(no.startsWith('The person') ? 403 : 409, [no]);
         await tx`insert into outside_result_checks (result_id, person_id) values (${rid}, ${user.id})`;
         await audit(tx, { actorId: user.id, action: 'sample.outside_checked', objectType: 'sample', objectId: id, new: { result: rid, reportNo: o.reportNo, sha256: o.sha256 } });
-        return { ok: true };
+        // LIMS-23: out of its limit, it opens an OOS as the lab's own result does.
+        const t = s.spec.tests.find((x) => x.key === o.testKey)!;
+        const f = outsideFigure(t, s.purpose, { ...(o.value !== null ? { value: o.value, unit: o.unit } : {}), ...(o.conforms !== null ? { conforms: o.conforms } : {}) });
+        const oosNo = !('problem' in f) && f.pass === false ? await openOutsideOos(tx, { id: rid, sampleId: id, testKey: t.key, testName: t.name, limit: limitText(t, purposeLimits(s.purpose)),
+          value: f.value, unit: f.unit, line: f.shown, reportNo: o.reportNo }, user.id) : null;
+        return { ok: true, ...(oosNo ? { oosNo } : {}) };
       });
     } catch (e) { return fail(e, reply); }
   });

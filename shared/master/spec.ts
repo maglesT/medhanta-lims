@@ -8,7 +8,7 @@
  */
 import { z } from 'zod';
 import { findBlock } from '../blocks/index.js';
-import { c1WithinLimits } from '../templates/index.js';
+import { c1WithinLimits, l19SamplingPlan } from '../templates/index.js';
 import { keySchema, limitSchema, type Limit, type MasterDoc, type SettingValue } from './schema.js';
 import { masterChecks, type Problem } from './checks.js';
 
@@ -65,6 +65,15 @@ export const specHeaderSchema = z.object({
   // quantity needed for all the tests except sterility and pyrogen (US 211.170(a)). QC approval of a release sample waits
   // for a reserve sample of its lot logged at least at this quantity; blank: none is checked (the decision says so).
   reserveQuantity: text(60).regex(/^\d+(\.\d+)?\s*\S.*$/, 'give the quantity with its unit, e.g. 60 tablets').optional(),
+  // LIMS-05: the sampling plan of a release sample: how many of the containers received are sampled (template L19: 1 + √N
+  // rounded up, or every container), and how (method and tool, equipment, amount per container, sub-division into the
+  // test, reserve and retained portions, precautions, storage of the sample). An identity test of a starting material
+  // always samples every container (LIMS-08).
+  sampling: z.object({
+    plan: z.enum(['square root', 'every container']),
+    method: text(300).optional(), equipment: text(200).optional(), amount: text(60).optional(), subdivision: text(300).optional(),
+    precautions: text(300).optional(), storage: text(200).optional(),
+  }).strict().optional(),
 }).strict();
 
 export const specSchema = z.object({
@@ -190,6 +199,30 @@ export const STARTING_MATERIALS: readonly string[] = ['Raw material', 'Active su
  */
 export function identityContainers(doc: SpecDoc, purpose: string, containers: number | null): number | null {
   return purpose === 'release' && STARTING_MATERIALS.includes(doc.header.type) && doc.tests.some((t) => t.identity) ? containers ?? 0 : null;
+}
+
+/** LIMS-05: the plan details a sampler follows, in the order the register lists them (label, value). */
+export const SAMPLING_DETAILS = [['method', 'Method and tool'], ['equipment', 'Equipment'], ['amount', 'Amount per container'], ['subdivision', 'Sub-division'],
+  ['precautions', 'Precautions'], ['storage', 'Storage of the sample']] as const;
+
+/**
+ * LIMS-05: the sampling plan of a release sample, or null when its specification names none (and has no identity test
+ * of a starting material): the containers to sample of those received, worked out by template L19, with its worked line.
+ */
+export function samplingPlan(doc: SpecDoc, purpose: string, received: number): { mode: 'square root' | 'every container'; n: number; line: string } | { problem: string } | null {
+  const perContainer = identityContainers(doc, purpose, received) !== null;
+  if (purpose !== 'release' || (!doc.header.sampling && !perContainer)) return null;
+  const mode = perContainer ? 'every container' : doc.header.sampling!.plan;
+  const r = l19SamplingPlan({ mode, containers: String(received), test: 'each container' });
+  if (!r.ok) return { problem: `Containers received: ${r.message}` };
+  return { mode, n: Number(r.value.toString()), line: `${r.shown.replace(/; each tested: .*$/, '')}${perContainer ? ' (each identified, LIMS-08)' : ''}` };
+}
+/** LIMS-05: why the container numbers the sampler confirms do not fit the plan; null when they do. */
+export function sampledProblem(numbers: readonly number[], n: number, received: number): string | null {
+  if (numbers.some((x) => !Number.isInteger(x) || x < 1 || x > received)) return `Container numbers are 1 to ${received}, the containers received.`;
+  if (new Set(numbers).size !== numbers.length) return 'A container number is given twice.';
+  if (numbers.length !== n) return `The plan samples ${n} of ${received} containers: give ${n} container numbers (${numbers.length} given).`;
+  return null;
 }
 
 /** Which limits a sample's purpose is tested against: stability samples the shelf-life ones, the others release. */

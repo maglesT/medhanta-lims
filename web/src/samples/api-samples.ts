@@ -5,7 +5,9 @@ import type { SpecDoc, SpecTest } from '../../../shared/master/spec.js';
 import type { ReserveState } from '../../../shared/engine/reserve.js';
 
 export type From = 'mms' | 'truebatch';
-export interface SpecChoice { id: number; masterId: number; versionNo: number; number: string; type: string; market: string | null }
+export interface SpecChoice { id: number; masterId: number; versionNo: number; number: string; type: string; market: string | null;
+  // LIMS-05, LIMS-08: the specification's sampling plan, and whether it has an identity test.
+  sampling?: SpecDoc['header']['sampling'] | null; identity?: boolean }
 export interface SampleRequest {
   source: From; lotNo: string; of: 'material' | 'product'; itemId: string | null; code: string; name: string | null; status: string;
   shown: string; asOf: string | null; stock: string | null; specs: SpecChoice[]; noSpec: string | null; sampleNo: string | null;
@@ -25,6 +27,8 @@ export interface SampleEntry {
 export interface SampleDetail {
   sample: { id: number; sampleNo: string; purpose: SamplePurpose; lotNo: string; item: SampleItem; source: Source; quantity: string; containers: number | null;
     registeredByName: string; registeredAt: string;
+    // LIMS-05: the sampling plan as applied.
+    sampling?: { received: number; plan: string; line: string; numbers: number[]; details: Record<string, string> } | null;
     // A stability sample: its study and time point.
     stability?: { studyId: number; studyNo: string; condition: string; label: string; month: number } | null;
     // An EM or water sample: the plan, point and sampling it was taken for (LIMS-36, LIMS-37).
@@ -55,7 +59,7 @@ export interface TestResult { analysisId: number; analysisNo: string; status: st
   container?: number | null; outside?: OutsideFacts }
 export interface RegisterInput {
   source: From; lotNumber?: string; batchNumber?: string; byHand?: boolean; itemId?: string; specVersionId: number;
-  quantity: string; containers?: number; purpose: SamplePurpose;
+  quantity: string; containers?: number; received?: number; sampled?: number[]; purpose: SamplePurpose;
 }
 
 export const sampleRequests = () => api<Requests>('GET', '/api/sample-requests');

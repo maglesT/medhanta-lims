@@ -27,12 +27,16 @@ export function labelsDoc(s: SampleRow, spec: { number: string; versionNo: numbe
   // Made anew for each label: pdfmake changes the content objects it lays out.
   const common = () => [line(s.item.of === 'material' ? 'Material' : s.item.of === 'product' ? 'Product' : 'Item', `${s.item.code} · ${s.item.name}`), line(lot, s.lotNo, true)];
   const n = s.containers ?? 0;
+  // LIMS-05: the container numbers the sampler confirmed under the sampling plan; else containers 1 to n.
+  const numbers = s.sampling?.numbers ?? Array.from({ length: n }, (_, i) => i + 1);
+  const of = s.sampling?.received ?? n;
   const labels: Content[] = [
     box(`QC SAMPLE ${s.sampleNo}`, [...common(),
-      line('Containers', n ? `${n} (sampled from container${n === 1 ? '' : 's'} 1${n > 1 ? ` to ${n}` : ''})` : 'not stated'),
+      line('Containers', s.sampling ? `${numbers.length} sampled of ${of} received: ${numbers.join(', ')}` : n ? `${n} (sampled from container${n === 1 ? '' : 's'} 1${n > 1 ? ` to ${n}` : ''})` : 'not stated'),
+      ...(s.sampling?.details.storage ? [line('Storage', s.sampling.details.storage)] : []),
       line('Quantity', s.quantity), line('Purpose', s.purpose), line('Specification', `${spec.number} version ${spec.versionNo}`),
       line('Sampled by', s.registeredByName), line('Date', date)]),
-    ...Array.from({ length: n }, (_, i) => box(`SAMPLED · container ${i + 1} of ${n}`, [...common(), line('Sample', s.sampleNo, true), line('Sampled by', s.registeredByName), line('Date', date)])),
+    ...numbers.map((k) => box(`SAMPLED · container ${k} of ${of}`, [...common(), line('Sample', s.sampleNo, true), line('Sampled by', s.registeredByName), line('Date', date)])),
   ];
   return { ...pageFrame(`Medhanta LIMS · Labels of sample ${s.sampleNo} · ${s.item.code} ${s.lotNo}`, by, labels, printedAt, demo), pageOrientation: 'portrait' };
 }

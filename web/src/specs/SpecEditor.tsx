@@ -7,7 +7,7 @@ import { ApiError, can, type Me } from '../api.js';
 import { getProblems, getSpec, getVersion, listMasters, saveSpec, STATE_CHIP, STATE_LABEL, type MasterRow, type SpecVersion } from '../api-designer.js';
 import { blocking, type Problem } from '../../../shared/master/checks.js';
 import type { Limit, MasterDoc } from '../../../shared/master/schema.js';
-import { LIMIT_TYPES, resultsOf, specNames, specSchema, TEST_USES, type SpecDoc, type SpecTest } from '../../../shared/master/spec.js';
+import { LIMIT_TYPES, SAMPLING_DETAILS, resultsOf, specNames, specSchema, TEST_USES, type SpecDoc, type SpecTest } from '../../../shared/master/spec.js';
 import { CheckPanel } from '../designer/CheckPanel.js';
 import { Review } from '../designer/Review.js';
 import { newKey, placeOf, unitsOf, unitLabel } from '../designer/model.js';
@@ -93,6 +93,15 @@ export function SpecEditor({ me, versionId, onBack, onOpen }: { me: Me; versionI
                   <label>Market<input aria-label="Market" value={h.market ?? ''} onChange={(e) => change({ ...doc, header: e.target.value ? { ...h, market: e.target.value } : (({ market: _, ...x }) => x)(h) })} /></label>
                   <label>Reserve quantity<input aria-label="Reserve quantity" placeholder="e.g. 60 tablets: twice the test quantity, except sterility and pyrogen" value={h.reserveQuantity ?? ''}
                     onChange={(e) => change({ ...doc, header: e.target.value ? { ...h, reserveQuantity: e.target.value } : (({ reserveQuantity: _, ...x }) => x)(h) })} /></label>
+                  {/* LIMS-05: the sampling plan of a release sample (containers to sample by L19, and how). */}
+                  <label>Sampling plan<select aria-label="Sampling plan" value={h.sampling?.plan ?? ''} onChange={(e) => change({ ...doc, header: e.target.value
+                    ? { ...h, sampling: { ...h.sampling, plan: e.target.value as 'square root' } } : (({ sampling: _, ...x }) => x)(h) })}>
+                    <option value="">none</option><option value="square root">1 + √N containers</option><option value="every container">every container</option></select></label>
+                  {h.sampling && SAMPLING_DETAILS.map(([k, label]) => (
+                    <label key={k}>{label}<input aria-label={`Sampling ${label}`} value={h.sampling?.[k] ?? ''} onChange={(e) => {
+                      const { [k]: _, ...rest } = h.sampling!;
+                      change({ ...doc, header: { ...h, sampling: e.target.value ? { ...rest, [k]: e.target.value } : rest } as typeof h });
+                    }} /></label>))}
                 </div>
               </div>
               {doc.tests.map((t, i) => (

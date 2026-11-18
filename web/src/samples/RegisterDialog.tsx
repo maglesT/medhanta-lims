@@ -8,6 +8,8 @@ import { Picker } from '../designer/ui.js';
 import { PROVIDER_NAME } from '../../../shared/engine/links.js';
 import { SAMPLE_PURPOSES, type SamplePurpose } from '../../../shared/engine/sample.js';
 import { plantText } from '../../../shared/plant-time.js';
+import { SAMPLING_DETAILS, STARTING_MATERIALS } from '../../../shared/master/spec.js';
+import { l19SamplingPlan } from '../../../shared/templates/index.js';
 import { PURPOSE_LABEL, registerSample, specsFor, type From, type SampleRequest, type SpecChoice } from './api-samples.js';
 
 export function RegisterDialog({ from, onDone, onCancel, purpose: initial = 'release' }: { from: SampleRequest | { hand: From }; onDone: (id: number) => void; onCancel: () => void; purpose?: SamplePurpose }) {
@@ -21,6 +23,9 @@ export function RegisterDialog({ from, onDone, onCancel, purpose: initial = 'rel
   const [specId, setSpecId] = useState<number | null>(hand ? null : (from as SampleRequest).specs[0]?.id ?? null);
   const [quantity, setQuantity] = useState('');
   const [containers, setContainers] = useState('');
+  // LIMS-05: the specification's sampling plan: containers received → containers to sample; the numbers sampled.
+  const [received, setReceived] = useState('');
+  const [sampled, setSampled] = useState('');
   const [purpose, setPurpose] = useState<SamplePurpose>(initial);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -32,6 +37,12 @@ export function RegisterDialog({ from, onDone, onCancel, purpose: initial = 'rel
     specsFor(source === 'mms' ? 'material' : 'product', item.id).then((s) => { setSpecs(s); setSpecId(s[0]?.id ?? null); }, (e) => setError(plainError(e)));
   }, [hand, item, source]);
 
+  const spec = specs?.find((x) => x.id === specId);
+  const every = !!spec?.identity && STARTING_MATERIALS.includes(spec.type);
+  const planned = purpose === 'release' && !!spec && (!!spec.sampling || every);
+  const N = Number(received);
+  const plan = planned && Number.isInteger(N) && N >= 1 ? l19SamplingPlan({ mode: every ? 'every container' : spec!.sampling!.plan, containers: String(N), test: 'each container' }) : null;
+  const numbers = sampled.split(/[\s,;]+/).filter(Boolean).map(Number);
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (!lotNo.trim()) return setError(`Give the ${what} number.`);
@@ -40,10 +51,11 @@ export function RegisterDialog({ from, onDone, onCancel, purpose: initial = 'rel
     if (!/^\d+(\.\d+)?\s*\S/.test(quantity.trim())) return setError('Give the quantity with its unit, e.g. 120 g.');
     const n = containers.trim() ? Number(containers) : undefined;
     if (n !== undefined && (!Number.isInteger(n) || n < 1)) return setError('Containers sampled: a whole number, 1 or more.');
+    if (planned && !plan?.ok) return setError('Containers received: a whole number, 1 or more.');
     setBusy(true);
     try {
       const r = await registerSample({ source, ...(source === 'mms' ? { lotNumber: lotNo.trim() } : { batchNumber: lotNo.trim() }),
-        ...(hand ? { byHand: true, itemId: item!.id } : {}), specVersionId: specId, quantity: quantity.trim(), ...(n ? { containers: n } : {}), purpose });
+        ...(hand ? { byHand: true, itemId: item!.id } : {}), specVersionId: specId, quantity: quantity.trim(), ...(planned ? { received: N, sampled: numbers } : n ? { containers: n } : {}), purpose });
       onDone(r.id);
     } catch (err) { setError(plainError(err)); setBusy(false); }
   };
@@ -76,10 +88,22 @@ export function RegisterDialog({ from, onDone, onCancel, purpose: initial = 'rel
         ))}
         <div className="form-grid">
           <label>Quantity taken<input aria-label="Quantity" value={quantity} onChange={(e) => setQuantity(e.target.value)} placeholder="e.g. 120 g" /></label>
-          <label>Containers sampled<input aria-label="Containers sampled" inputMode="numeric" value={containers} onChange={(e) => setContainers(e.target.value)} placeholder="optional" /></label>
+          {planned ? <label>Containers received<input aria-label="Containers received" inputMode="numeric" value={received} onChange={(e) => {
+            setReceived(e.target.value);
+            const k = Number(e.target.value);
+            if (every && Number.isInteger(k) && k >= 1 && k <= 500) setSampled(Array.from({ length: k }, (_, i) => i + 1).join(', '));
+          }} /></label>
+            : <label>Containers sampled<input aria-label="Containers sampled" inputMode="numeric" value={containers} onChange={(e) => setContainers(e.target.value)} placeholder="optional" /></label>}
           <label>Purpose<select aria-label="Purpose" value={purpose} onChange={(e) => setPurpose(e.target.value as SamplePurpose)}>
             {SAMPLE_PURPOSES.map((p) => <option key={p} value={p}>{PURPOSE_LABEL[p]}</option>)}</select></label>
         </div>
+        {planned && (
+          <div className="summary-box" aria-label="Sampling plan">
+            <p><b>Sampling plan</b> ({spec!.number}): {plan?.ok ? plan.shown.replace(/; each tested: .*$/, '') : every ? 'every container (identity of each container)' : spec!.sampling!.plan === 'square root' ? '1 + √N containers' : 'every container'}</p>
+            {SAMPLING_DETAILS.map(([k, label]) => spec!.sampling?.[k] ? <p key={k} className="small">{label}: {spec!.sampling[k]}</p> : null)}
+            <label>Container numbers sampled<input aria-label="Container numbers sampled" value={sampled} onChange={(e) => setSampled(e.target.value)} placeholder="e.g. 1, 4, 9" /></label>
+          </div>
+        )}
         {error && <p className="error" role="alert">{error}</p>}
         <div className="actions">
           <button type="button" onClick={onCancel}>Cancel</button>

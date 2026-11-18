@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import type { Sql, Tx } from '../db.js';
 import { audit } from '../audit.js';
@@ -55,15 +56,33 @@ export async function openOos(tx: Tx, analysisId: number, person: number): Promi
   }
 }
 
-type Row = { id: number; oosNo: string; sampleId: number; analysisId: number; testKey: string; result: OosResult; openedBy: number; openedByName: string; openedAt: Date;
+/**
+ * LIMS-22, LIMS-23: opens the OOS of an outside lab's result out of its limit, when a second person has checked it
+ * against the report (the moment it counts, as a signed step does for the lab's own). Once per outside result.
+ */
+export async function openOutsideOos(tx: Tx, o: { id: number; sampleId: number; testKey: string; testName: string; limit: string; value: string; unit: string; line: string; reportNo: string }, person: number): Promise<string> {
+  const [c] = await tx<{ n: number; yy: string }[]>`
+    insert into oos_counters (year, last_no) values (extract(year from now() at time zone ${PLANT_TZ})::int, 1)
+    on conflict (year) do update set last_no = oos_counters.last_no + 1 returning last_no as n, right(year::text, 2) as yy`;
+  const oosNo = `${OOS_PREFIX}${c!.yy}${String(c!.n).padStart(4, '0')}`;
+  const result: OosResult = { name: o.testName, value: o.value, unit: o.unit, shown: `${o.value} ${o.unit}`.trim(), line: o.line, limit: o.limit, step: `outside lab report ${o.reportNo}` };
+  const [r] = await tx<{ id: number }[]>`
+    insert into oos (oos_no, sample_id, outside_result_id, test_key, result, opened_by)
+    values (${oosNo}, ${o.sampleId}, ${o.id}, ${o.testKey}, ${tx.json(result as never)}, ${person}) returning id::int`;
+  await audit(tx, { actorId: person, action: 'oos.opened', objectType: 'oos', objectId: r!.id, new: { oosNo, outsideResult: o.id, report: o.reportNo, test: o.testKey, ...result } });
+  return oosNo;
+}
+
+type Row = { id: number; oosNo: string; sampleId: number; analysisId: number | null; outsideResultId: number | null; testKey: string; result: OosResult; openedBy: number; openedByName: string; openedAt: Date;
   sampleNo: string; lotNo: string; purpose: string; item: { of: string; code: string; name: string }; analysisNo: string; spec: SpecDoc; specNumber: string; specVersionNo: number };
 type EventRow = OosEvent & { personName: string; at: Date; signature: { printedName: string; meaning: string; signedAt: Date } | null };
 
 const ROW = (q: Sql | Tx) => q`
-  select o.id::int, o.oos_no as "oosNo", o.sample_id::int as "sampleId", o.analysis_id::int as "analysisId", o.test_key as "testKey", o.result,
+  select o.id::int, o.oos_no as "oosNo", o.sample_id::int as "sampleId", o.analysis_id::int as "analysisId", o.outside_result_id::int as "outsideResultId", o.test_key as "testKey", o.result,
     o.opened_by::int as "openedBy", u.full_name as "openedByName", o.opened_at as "openedAt", s.sample_no as "sampleNo", s.lot_no as "lotNo", s.purpose, s.item,
-    a.analysis_no as "analysisNo", v.doc as spec, v.doc->'header'->>'number' as "specNumber", v.version_no as "specVersionNo"
-  from oos o join users u on u.id = o.opened_by join samples s on s.id = o.sample_id join analyses a on a.id = o.analysis_id
+    coalesce(a.analysis_no, x.report_no) as "analysisNo", v.doc as spec, v.doc->'header'->>'number' as "specNumber", v.version_no as "specVersionNo"
+  from oos o join users u on u.id = o.opened_by join samples s on s.id = o.sample_id left join analyses a on a.id = o.analysis_id
+  left join outside_results x on x.id = o.outside_result_id
   join master_versions v on v.id = s.spec_version_id`;
 
 async function events(q: Sql | Tx, ids: number[]): Promise<(EventRow & { oosId: number })[]> {
@@ -78,7 +97,13 @@ async function loadOos(q: Sql | Tx, id: number) {
   const [o] = await q<Row[]>`${ROW(q)} where o.id = ${id}`;
   if (!o) return null;
   const ev = await events(q, [id]);
-  const a = (await loadAnalysis(q, o.analysisId))!;
+  if (o.outsideResultId !== null) {
+    // An outside result: the people who typed and checked it stand where the analysis's people do.
+    const [x] = await q<{ people: number[] }[]>`
+      select array_remove(array[o.entered_by::int, c.person_id::int], null) as people from outside_results o left join outside_result_checks c on c.result_id = o.id where o.id = ${o.outsideResultId}`;
+    return { o, events: ev as EventRow[], facts: { analysisPeople: x!.people, outside: true } };
+  }
+  const a = (await loadAnalysis(q, o.analysisId!))!;
   const people = analysisView(a.doc, a.events, a.analysisEvents, a.now).people;
   return { o, events: ev as EventRow[], facts: { analysisPeople: people } };
 }
@@ -132,7 +157,9 @@ const BODIES: Record<OosAction, z.ZodTypeAny> = {
   checklist: z.object({ answers: z.object(Object.fromEntries(OOS_CHECKLIST.map(([k]) => [k, answer.optional()]))).strict() }),
   plan: z.object({ what: text(), by: text(200) }),
   remeasure: z.object({ plan: z.number().int().positive(), value: z.string().trim().regex(/^-?\d+(\.\d+)?$/, 'a number'), reference: text(200) }),
-  'conclude-phase1': z.object({ labError: z.boolean(), cause: z.string().trim().max(1000).optional() }),
+  // report: an outside result's phase I, the contract lab's investigation report (its number and file).
+  'conclude-phase1': z.object({ labError: z.boolean(), cause: z.string().trim().max(1000).optional(),
+    report: z.object({ reportNo: text(60), file: z.object({ name: text(255), content: z.string().min(1).max(12 * 1024 * 1024) }).strict() }).strict().optional() }),
   return: z.object({ reason: text() }),
   review: signBody,
   phase2: z.object({ reference: text(60) }),
@@ -197,7 +224,7 @@ export function oosRoutes(app: FastifyInstance, sql: Sql) {
       deviations: { link: picks.state, list: picks.state === 'ok' ? picks.value : [] },
       retests: { authorised: rt.authorised, by: l.events.find((e) => e.kind === 'concluded' && e.payload.outcome === 'invalidated') ?? null,
         analyses: (results[l.o.testKey] ?? []).filter((r) => retestIds.includes(r.analysisId)) },
-      original: (results[l.o.testKey] ?? []).find((r) => r.analysisId === l.o.analysisId) ?? null,
+      original: (results[l.o.testKey] ?? []).find((r) => (l.o.outsideResultId !== null ? r.outside?.id === l.o.outsideResultId : r.analysisId === l.o.analysisId)) ?? null,
       test: test ? { name: test.name, limit: limitText(test, purposeLimits(l.o.purpose)), method: test.method } : null,
       others, actions: OOS_ACTION_NAMES.filter((a) => refusals[a] === null), refusals, contentHash: oosHash(l),
       retestRefusal: retestRefusal(l.events), retestMethod: method ?? null,
@@ -208,11 +235,16 @@ export function oosRoutes(app: FastifyInstance, sql: Sql) {
   // the entry (and its signature), audit; an invalidation marks the analysis (LIMS-24, LIMS-48).
   for (const action of OOS_ACTION_NAMES) {
     const rule = OOS_ACTIONS[action];
-    app.post<{ Params: { id: string } }>(`/api/oos/:id/${action}`, reader, async (req, reply) => {
+    // The contract lab's report comes with an outside result's phase I conclusion (at most 8 MB, in base64).
+    app.post<{ Params: { id: string } }>(`/api/oos/:id/${action}`, { ...reader, ...(action === 'conclude-phase1' ? { bodyLimit: 12 * 1024 * 1024 } : {}) }, async (req, reply) => {
       const id = parseId(req.params.id);
       const body = BODIES[action].safeParse(req.body);
       if (id === null || !body.success) return reply.code(400).send({ error: 'invalid', problems: body.error?.issues.map((i) => `${i.path.join('.') || 'body'}: ${i.message}`) ?? [] });
-      const { proof, contentHash: shown, ...input } = body.data as { proof?: string; contentHash?: string } & OosPayload & { answers?: Record<string, { yes: boolean; comment?: string }> };
+      const { proof, contentHash: shown, report: sent, ...input } = body.data as { proof?: string; contentHash?: string; report?: { reportNo: string; file: { name: string; content: string } } } & Omit<OosPayload, 'report'> & { answers?: Record<string, { yes: boolean; comment?: string }> };
+      // An outside result's phase I: the contract lab's report, named by its file's size and SHA-256 (the file is not kept).
+      const bytes = sent ? Buffer.from(sent.file.content, 'base64') : null;
+      if (bytes && !bytes.length) return reply.code(400).send({ error: 'invalid', problems: ['The report file is empty.'] });
+      if (sent && bytes) (input as OosPayload).report = { reportNo: sent.reportNo, fileName: sent.file.name, size: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex') };
       const user = req.user!;
       try {
         const signer = rule.meaning ? await authenticateSigner(sql, app.proofKey, user, { proof: proof! }, { objectType: 'oos', objectId: id, meaning: rule.meaning }) : null;
@@ -249,7 +281,7 @@ export function oosRoutes(app: FastifyInstance, sql: Sql) {
             }
             case 'conclude-phase1':
               if (input.labError && !input.cause?.trim()) throw new OosError(400, 'invalid', ['Name the assignable laboratory error found.']);
-              payload = { labError: input.labError, ...(input.labError ? { cause: input.cause } : {}) };
+              payload = { labError: input.labError, ...(input.labError ? { cause: input.cause } : {}), ...(l.facts.outside ? { report: (input as OosPayload).report! } : {}) };
               break;
             case 'return': payload = { reason: input.reason }; break;
             case 'phase2': {
@@ -274,8 +306,9 @@ export function oosRoutes(app: FastifyInstance, sql: Sql) {
           }
           await audit(tx, { actorId: user.id, action: `oos.${rule.event}`, objectType: 'oos', objectId: id, old: { status }, new: { event: ev!.id, ...payload }, reason: payload.reason ?? null });
           // LIMS-24, LIMS-48: the invalidated analysis stays, marked; its result no longer counts for the sample.
-          if (action === 'conclude' && payload.outcome === 'invalidated') await tx`select pg_advisory_xact_lock(${l.o.analysisId}::bigint)`;
-          if (action === 'conclude' && payload.outcome === 'invalidated'
+          // An outside result invalidated no longer counts (outsideResults reads the conclusion); there is no analysis to mark.
+          if (action === 'conclude' && payload.outcome === 'invalidated' && l.o.analysisId !== null) await tx`select pg_advisory_xact_lock(${l.o.analysisId}::bigint)`;
+          if (action === 'conclude' && payload.outcome === 'invalidated' && l.o.analysisId !== null
               && !(await tx`select 1 from analysis_events where analysis_id = ${l.o.analysisId} and kind = 'invalidated'`).length) {
             const [ae] = await tx<{ id: number }[]>`
               insert into analysis_events (analysis_id, kind, payload, person_id)

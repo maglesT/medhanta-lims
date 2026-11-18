@@ -26,7 +26,7 @@ function entryText(e: OosEntry): string {
     case 'checklist': return Object.values(p.answers ?? {}).filter((a) => a && !a.yes).length ? `${Object.values(p.answers ?? {}).filter((a) => a && !a.yes).length} answered no` : 'All answered yes';
     case 'plan': return `${p.what} · by ${p.by}`;
     case 'remeasured': return `${p.shown ?? p.value} · raw data: ${p.reference}`;
-    case 'phase1_concluded': return p.labError ? `Assignable laboratory error: ${p.cause}` : 'No laboratory error found';
+    case 'phase1_concluded': return `${p.report ? `Contract lab report ${p.report.reportNo} (file ${p.report.fileName}, SHA-256 ${p.report.sha256.slice(0, 16)}…): ` : ''}${p.labError ? `Assignable laboratory error: ${p.cause}` : 'No laboratory error found'}`;
     case 'phase2': return `${p.reference}${p.source?.from === 'hand' ? ' (typed by hand: Deviations was not reachable)' : ' (picked from Deviations)'}`;
     case 'concluded': return `${p.outcome === 'invalidated' ? 'Invalidated' : 'OOS confirmed'}: ${p.reason}${p.cause ? ` · cause: ${p.cause}` : ''}${p.retests ? ` · ${p.retests} retest${p.retests === 1 ? '' : 's'} authorised` : ''}`;
     case 'retest': return `Analysis ${p.analysisNo}`;
@@ -61,12 +61,18 @@ export function OosScreen({ me, id }: { me: Me; id: number }) {
         <dl className="details">
           <dt>Test</dt><dd>{o.result.name} · limit {o.result.limit}</dd>
           <dt>Result</dt><dd><b>{o.result.shown}</b> <span className="chip chip-bad">out of limits</span></dd>
-          <dt>Analysis</dt><dd><a href={analysisLink(o.analysisId)}>{o.analysisNo}</a>{d.original ? ` · ${d.original.status}` : ''}</dd>
+          {o.analysisId !== null ? <><dt>Analysis</dt><dd><a href={analysisLink(o.analysisId)}>{o.analysisNo}</a>{d.original ? ` · ${d.original.status}` : ''}</dd></>
+            : <><dt>Outside lab</dt><dd>{d.original?.method.replace(/^Outside lab: /, '')}, report {o.analysisNo}{d.original ? ` · ${d.original.status}` : ''}</dd></>}
           <dt>Sample</dt><dd>{o.sampleNo} · {o.specNumber}, version {o.specVersionNo}</dd>
           <dt>Opened</dt><dd>at once, when {o.openedByName} signed the result, {plantTime(o.openedAt)}</dd>
         </dl>
       </section>
 
+      {o.outsideResultId !== null ? (
+        <Phase title="Phase I: the contract lab's investigation" sub="the contract lab investigates its own result; its report is recorded here and reviewed by a second person">
+          {!d.conclusion && !can('conclude-phase1') && <p className="muted">Not recorded yet.</p>}
+        </Phase>
+      ) : (<>
       <Phase title="Phase Ia: laboratory checklist" sub="by the analyst: every item answered; a “no” says what was found">
         <Checklist d={d} edit={can('checklist')} onSave={(answers) => run('checklist', { answers })} />
       </Phase>
@@ -84,10 +90,11 @@ export function OosScreen({ me, id }: { me: Me; id: number }) {
         </ol>
         {can('plan') && <Fields label="Write a plan" button="Save the plan" fields={[['what', 'What is re-measured, and how', 'e.g. Re-inject the same sample solution twice'], ['by', 'By whom', 'e.g. The analyst, on HPLC-02']]} onSave={(v) => run('plan', v)} />}
       </Phase>
+      </>)}
 
       <Phase title="Phase I conclusion and review" sub="concluded by the analyst; reviewed by a supervisor who did no part of it">
         {d.conclusion ? <p className={d.conclusion.payload.labError ? 'notice' : 'notice info'}><b>{entryText(d.conclusion)}</b> · {by(d.conclusion)}</p> : !can('conclude-phase1') && <p className="muted">Not concluded yet.{d.status === 'phase I' && d.refusals['conclude-phase1'] ? ` ${d.refusals['conclude-phase1']}` : ''}</p>}
-        {can('conclude-phase1') && <ConcludePhase1 onSave={(b) => run('conclude-phase1', b)} />}
+        {can('conclude-phase1') && <ConcludePhase1 outside={o.outsideResultId !== null} onSave={(b) => run('conclude-phase1', b)} />}
         {d.events.filter((e) => e.kind === 'phase1_reviewed' || e.kind === 'phase1_returned').map((e) => (
           <p key={e.id} className={e.kind === 'phase1_reviewed' ? 'all-good' : 'notice'}>{ENTRY_WORDS[e.kind]}{e.payload.reason ? `: ${e.payload.reason}` : ''} · {by(e)}</p>))}
         {can('review') && <Signed meaning="reviewed" button="Sign: phase I reviewed" what={`Phase I of ${o.oosNo}: ${d.conclusion ? entryText(d.conclusion) : ''}`} why="Your signature means: you reviewed the checklist, the re-measurements and the conclusion of phase I and agree with them." onSign={(proof) => run('review', { proof, contentHash: d.contentHash })} />}
@@ -191,18 +198,29 @@ const Remeasure = ({ onSave }: { onSave: (b: { value: string; reference: string 
     onSave={(v) => onSave({ value: v.value!, reference: v.reference! })} />
 );
 
-function ConcludePhase1({ onSave }: { onSave: (b: { labError: boolean; cause?: string }) => Promise<void> }) {
+// outside: an outside result's phase I is the contract lab's investigation report, its number and file (LIMS-22).
+const base64 = (bytes: Uint8Array) => { let s = ''; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000)); return btoa(s); };
+
+function ConcludePhase1({ outside, onSave }: { outside?: boolean; onSave: (b: object) => Promise<void> }) {
   const [lab, setLab] = useState<boolean | null>(null);
   const [cause, setCause] = useState('');
+  const [reportNo, setReportNo] = useState('');
+  const [file, setFile] = useState<File | null>(null);
+  const report = async () => (outside && file ? { report: { reportNo: reportNo.trim(), file: { name: file.name, content: base64(new Uint8Array(await file.arrayBuffer())) } } } : {});
   return (
     <div className="decide">
+      {outside && <>
+        <label>Contract lab's investigation report number<input aria-label="Investigation report number" value={reportNo} onChange={(e) => setReportNo(e.target.value)} /></label>
+        <label>The report (PDF or scan)<input aria-label="Investigation report file" type="file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} /></label>
+      </>}
       <fieldset>
         <legend>Was an assignable laboratory error found?</legend>
         <label className="inline"><input type="radio" name="lab" checked={lab === true} onChange={() => setLab(true)} /> Yes: a laboratory error</label>
         <label className="inline"><input type="radio" name="lab" checked={lab === false} onChange={() => setLab(false)} /> No laboratory error found</label>
       </fieldset>
       {lab && <label>The assignable cause<input aria-label="The assignable cause" value={cause} onChange={(e) => setCause(e.target.value)} placeholder="e.g. pH meter calibrated with an expired buffer" /></label>}
-      <button className="primary" disabled={lab === null || (lab && !cause.trim())} onClick={() => void onSave(lab ? { labError: true, cause: cause.trim() } : { labError: false })}>Conclude phase I</button>
+      <button className="primary" disabled={lab === null || (lab && !cause.trim()) || (outside && (!file || !reportNo.trim()))}
+        onClick={async () => void onSave({ ...(lab ? { labError: true, cause: cause.trim() } : { labError: false }), ...(await report()) })}>Conclude phase I</button>
     </div>
   );
 }

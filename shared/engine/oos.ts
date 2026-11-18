@@ -47,11 +47,15 @@ export interface OosPayload {
   entry?: number;
   // retest: the analysis started.
   analysis?: number; analysisNo?: string;
+  // phase1_concluded of an outside result's OOS (LIMS-22): the contract lab's investigation report, named by its file.
+  report?: { reportNo: string; fileName: string; size: number; sha256: string };
 }
 export interface OosEvent { id: number; kind: OosEventKind; payload: OosPayload; person: number }
 export interface OosFacts {
   // Everyone who recorded, signed or checked a step of the analysis (the analyst first).
   analysisPeople: readonly number[];
+  // An OOS of an outside (contract) lab's result: its phase I is the contract lab's investigation report.
+  outside?: boolean;
 }
 
 export const OOS_STATUSES = ['phase I', 'phase I review', 'QA approval', 'phase II', 'confirmed', 'invalidated'] as const;
@@ -138,6 +142,7 @@ export function oosRefusal(action: OosAction, f: OosFacts, events: readonly OosE
   const status = oosStatus(events);
   if (oosClosed(status)) return `The OOS is concluded (${status === 'invalidated' ? 'invalidated' : 'OOS confirmed'}).`;
   const now = current(events);
+  if (f.outside && (action === 'checklist' || action === 'plan' || action === 'remeasure')) return 'Phase I of an outside lab\'s result is the contract lab\'s own investigation: record its report.';
   switch (action) {
     case 'checklist':
       return status === 'phase I' ? null : 'Phase I is concluded: the checklist is recorded again only after a return.';
@@ -154,6 +159,7 @@ export function oosRefusal(action: OosAction, f: OosFacts, events: readonly OosE
     }
     case 'conclude-phase1':
       if (status !== 'phase I') return 'Phase I is already concluded.';
+      if (f.outside) return input.report ? null : 'Attach the contract lab\'s investigation report with its number.';
       if (!now.some((e) => e.kind === 'checklist')) return 'Answer the phase Ia checklist first.';
       if (plans(events).some((x) => !x.result)) return 'Every planned re-measurement is recorded before phase I is concluded.';
       return null;

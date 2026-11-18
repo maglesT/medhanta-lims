@@ -4,7 +4,7 @@ import type { Content, TDocumentDefinitions } from 'pdfmake/interfaces.js';
 import { call, freshApp, login, proofFor, seedUser, type TestApp } from './helpers.js';
 import { small } from './engine-fixture.js';
 import { approvalProblems, type TestState } from '../shared/engine/sample.js';
-import { identityContainers, specSchema, testsForAnalysis, type SpecDoc } from '../shared/master/spec.js';
+import { identityContainers, sampledProblem, samplingPlan, specSchema, testsForAnalysis, type SpecDoc } from '../shared/master/spec.js';
 import { outsideCheckRefusal, outsideEntryRefusal, outsideFigure } from '../shared/engine/outside.js';
 import { formRefusal, formState } from '../shared/engine/forms.js';
 import { blankFormDoc, labelsDoc } from '../server/labels.js';
@@ -76,6 +76,20 @@ describe('the rules', () => {
     expect(approvalProblems({ registeredBy: 1, byHand: false }, received, [t([3])], 9)).toEqual(['Identity (IR): container 3 of 3 has no reviewed identity result; each container of a starting material is identified.']);
     expect(approvalProblems({ registeredBy: 1, byHand: false }, received, [t([], 0)], 9)).toEqual(['Identity (IR): the sample does not say how many containers were sampled; each container of a starting material is identified.']);
     expect(approvalProblems({ registeredBy: 1, byHand: false }, received, [t([])], 9)).toEqual([]);
+  });
+
+  it('LIMS-05 the sampling plan: 1 + √N of the containers received (template L19), every container for the identity of a starting material, none where the specification names none', () => {
+    const plan = { plan: 'square root' as const, storage: 'Amber glass, 2-8 °C' };
+    const withPlan = (identity: boolean) => { const d = specOf('Raw material', identity); d.header.sampling = plan; return d; };
+    expect(samplingPlan(withPlan(false), 'release', 20)).toEqual({ mode: 'square root', n: 6, line: 'sample 6 of 20 containers (1 + √20 = 5.47, rounded up = 6)' });
+    expect(samplingPlan(withPlan(false), 'release', 2)).toMatchObject({ n: 2 });
+    expect(samplingPlan(withPlan(true), 'release', 20)).toEqual({ mode: 'every container', n: 20, line: 'sample 20 of 20 containers (every container: 20) (each identified, LIMS-08)' });
+    expect(samplingPlan(specOf('Raw material', false), 'release', 20)).toBeNull();
+    expect(samplingPlan(withPlan(false), 'retest', 20)).toBeNull();
+    expect(sampledProblem([1, 5, 9, 13, 17, 20], 6, 20)).toBeNull();
+    expect(sampledProblem([1, 5, 9], 6, 20)).toBe('The plan samples 6 of 20 containers: give 6 container numbers (3 given).');
+    expect(sampledProblem([1, 1, 9, 13, 17, 20], 6, 20)).toBe('A container number is given twice.');
+    expect(sampledProblem([1, 5, 9, 13, 17, 21], 6, 20)).toBe('Container numbers are 1 to 20, the containers received.');
   });
 
   it('LIMS-09 no supplier certificate replaces a test: a specification has no reduced-testing option, and every test that applies needs its own reviewed result', () => {
@@ -151,10 +165,12 @@ let t: TestApp;
 const cookies: Record<string, string> = {};
 beforeAll(async () => {
   t = await freshApp();
-  t.master.materials_.push({ itemId: MAT, code: 'RM-080', name: 'Demolactose', version: 1, active: true, category: 'Excipient', unit: 'kg' });
+  t.master.materials_.push({ itemId: MAT, code: 'RM-080', name: 'Demolactose', version: 1, active: true, category: 'Excipient', unit: 'kg' },
+    { itemId: MAT2, code: 'RM-081', name: 'Demostarch', version: 1, active: true, category: 'Excipient', unit: 'kg' });
   const people = { author: ['lims.master.author'], checker: ['lims.master.check'], quality: ['lims.master.approve'], quality2: ['lims.master.approve'],
     sampler: ['lims.sample.register', 'lims.view'], sampler2: ['lims.sample.register'], analyst: ['lims.analysis.perform', 'lims.view'],
-    reviewer: ['lims.analysis.review', 'lims.view'], qcuser: ['lims.qc.approve', 'lims.view'], viewer: ['lims.view'] } as const;
+    reviewer: ['lims.analysis.review', 'lims.view'], revtwo: ['lims.analysis.review', 'lims.view'], qaoos: ['lims.oos.approve', 'lims.view'],
+    qcuser: ['lims.qc.approve', 'lims.view'], viewer: ['lims.view'] } as const;
   for (const [name, perms] of Object.entries(people)) {
     await seedUser(t.owner, name, [...perms]);
     cookies[name] = (await login(t.app, name)).cookie;
@@ -184,6 +200,15 @@ const method = (code: string) => {
 const ph = { id: 0, masterId: 0 };
 const ir = { id: 0, masterId: 0 };
 let specId = 0;
+let planSpecId = 0;
+const MAT2 = '00000000-0000-0000-0000-0000000000a9';
+// A starting material without an identity test, with a 1 + √N sampling plan and its details (LIMS-05).
+const planSpec = () => specSchema.parse({
+  header: { of: 'material', itemId: MAT2, code: 'RM-081', name: 'Demostarch', type: 'Raw material', number: 'SPEC-RM-081', pharmacopoeia: 'Ph. Int.',
+    sampling: { plan: 'square root', method: 'Sampling thief, top, middle and bottom', equipment: 'Stainless steel thief', amount: '20 g per container',
+      subdivision: 'Test 60 g, reserve 60 g', precautions: 'Sample under LAF, gowned', storage: 'Closed amber jar, below 25 °C' } },
+  tests: [{ key: 'ph', name: 'pH', method: { masterId: ph.masterId, code: 'PH', name: 'PH method' }, result: 's0/ph/readingCheck', limitType: 'range', limit: { low: '5.0', high: '7.0', unit: '' } }],
+});
 const spec = () => specSchema.parse({
   header: { of: 'material', itemId: MAT, code: 'RM-080', name: 'Demolactose', type: 'Raw material', number: 'SPEC-RM-080', pharmacopoeia: 'Ph. Int.' },
   tests: [
@@ -192,9 +217,11 @@ const spec = () => specSchema.parse({
   ],
 });
 
-async function sampleOf(containers?: number) {
-  const r = await as('sampler', 'POST', '/api/samples', { source: 'mms', lotNumber: `L8-${Math.random().toString(36).slice(2, 8)}`, byHand: true, itemId: MAT,
-    specVersionId: specId, quantity: '50 g', purpose: 'release', ...(containers ? { containers } : {}) });
+// The sampler gives the containers received; an identity of a starting material samples every one (LIMS-05, LIMS-08).
+async function sampleOf(containers?: number, other?: { specId: number; itemId: string; sampled: number[] }) {
+  const r = await as('sampler', 'POST', '/api/samples', { source: 'mms', lotNumber: `L8-${Math.random().toString(36).slice(2, 8)}`, byHand: true, itemId: other?.itemId ?? MAT,
+    specVersionId: other?.specId ?? specId, quantity: '50 g', purpose: 'release',
+    ...(containers ? { received: containers, sampled: other?.sampled ?? Array.from({ length: containers }, (_, i) => i + 1) } : {}) });
   if (!containers) return r;
   expect(r.statusCode, r.body).toBe(200);
   const { id } = r.json() as { id: number };
@@ -226,12 +253,78 @@ describe('on the server', () => {
     Object.assign(ph, await effective('method', method('PH')));
     Object.assign(ir, await effective('method', method('IR')));
     specId = (await effective('spec', spec())).id;
+    planSpecId = (await effective('spec', planSpec())).id;
+  });
+
+  it('LIMS-05 a release sample is taken by the specification\'s sampling plan: the containers received give those to sample, the sampler confirms their numbers, recorded with the plan; the labels name each one', async () => {
+    const plan = { specId: planSpecId, itemId: MAT2 };
+    const refused = async (sampled: number[], received = 20) => {
+      const r = await as('sampler', 'POST', '/api/samples', { source: 'mms', lotNumber: 'L5-X', byHand: true, itemId: MAT2, specVersionId: planSpecId, quantity: '120 g', received, sampled });
+      expect(r.statusCode).toBe(400);
+      return r.json().problems[0] as string;
+    };
+    expect(await refused([1, 2, 3])).toBe('The plan samples 6 of 20 containers: give 6 container numbers (3 given).');
+    expect(await refused([1, 2, 3, 4, 5, 25])).toBe('Container numbers are 1 to 20, the containers received.');
+    const none = await as('sampler', 'POST', '/api/samples', { source: 'mms', lotNumber: 'L5-Y', byHand: true, itemId: MAT2, specVersionId: planSpecId, quantity: '120 g' });
+    expect(none.json().problems[0]).toMatch(/^Containers received: give their number\. The specification's sampling plan says how many of them are sampled\.$/);
+    const sid = await sampleOf(20, { ...plan, sampled: [20, 1, 5, 9, 13, 17] }) as number;
+    const s = (await loadSampleRow(t.sql, sid))!;
+    expect(s.containers).toBe(6);
+    expect(s.sampling).toEqual({ received: 20, plan: 'square root', line: 'sample 6 of 20 containers (1 + √20 = 5.47, rounded up = 6)', numbers: [1, 5, 9, 13, 17, 20],
+      details: { method: 'Sampling thief, top, middle and bottom', equipment: 'Stainless steel thief', amount: '20 g per container', subdivision: 'Test 60 g, reserve 60 g',
+        precautions: 'Sample under LAF, gowned', storage: 'Closed amber jar, below 25 °C' } });
+    const text = pdfText(labelsDoc(s, { number: 'SPEC-RM-081', versionNo: 1 }, 'VIEWER'));
+    expect(text).toContain('Containers: 6 sampled of 20 received: 1, 5, 9, 13, 17, 20');
+    expect(text).toContain('Storage: Closed amber jar, below 25 °C');
+    for (const k of [1, 5, 9, 13, 17, 20]) expect(text).toContain(`SAMPLED · container ${k} of 20`);
+    expect(text).not.toContain('SAMPLED · container 2 of 20');
+  });
+
+  it('LIMS-22 LIMS-23 LIMS-24 an outside lab\'s result out of its limit opens an OOS when checked; phase I is the contract lab\'s report, reviewed by a second person; only QA invalidates it', async () => {
+    const sid = await sampleOf(4, { specId: planSpecId, itemId: MAT2, sampled: [1, 2, 4] }) as number;
+    const r = await as('analyst', 'POST', `/api/samples/${sid}/outside`, { test: 'ph', lab: 'Demo Analytical Services', reportNo: 'DAS-2026-300',
+      file: { name: 'DAS-2026-300.pdf', content: report.toString('base64') }, value: '7.4', unit: '' });
+    expect(r.statusCode, r.body).toBe(200);
+    const rid = (r.json() as { id: number }).id;
+    const checked = await as('reviewer', 'POST', `/api/samples/${sid}/outside/${rid}/check`);
+    expect(checked.json().oosNo).toMatch(/^OOS\d{6}$/);
+    const [o] = await t.owner<{ id: number; analysis_id: number | null }[]>`select id::int, analysis_id from oos where outside_result_id = ${rid}`;
+    expect(o!.analysis_id).toBeNull();
+    expect((await detail(sid)).approvalProblems[0]).toMatch(/^OOS\d{6} \(pH\) is open/);
+    const oos = async (who = 'qaoos') => (await as(who, 'GET', `/api/oos/${o!.id}`)).json() as { status: string; contentHash: string; oos: { analysisNo: string }; original: { status: string } | null; refusals: Record<string, string | null> };
+    expect((await oos()).oos.analysisNo).toBe('DAS-2026-300');
+    expect((await oos('analyst')).refusals.checklist).toBe('Phase I of an outside lab\'s result is the contract lab\'s own investigation: record its report.');
+    expect((await as('analyst', 'POST', `/api/oos/${o!.id}/conclude-phase1`, { labError: true, cause: 'Wrong buffer' })).json().problems).toEqual(['Attach the contract lab\'s investigation report with its number.']);
+    const inv = Buffer.from('%PDF-1.4 contract lab investigation');
+    const c = await as('analyst', 'POST', `/api/oos/${o!.id}/conclude-phase1`, { labError: true, cause: 'The contract lab calibrated the pH meter with an expired buffer',
+      report: { reportNo: 'DAS-INV-26-012', file: { name: 'DAS-INV-26-012.pdf', content: inv.toString('base64') } } });
+    expect(c.statusCode, c.body).toBe(200);
+    const [ev] = await t.owner<{ payload: { report: object } }[]>`select payload from oos_events where oos_id = ${o!.id} and kind = 'phase1_concluded'`;
+    expect(ev!.payload.report).toEqual({ reportNo: 'DAS-INV-26-012', fileName: 'DAS-INV-26-012.pdf', size: inv.length, sha256: createHash('sha256').update(inv).digest('hex') });
+    // The person who checked the outside result does not review its phase I; another does (e-signature "reviewed").
+    expect((await as('reviewer', 'POST', `/api/oos/${o!.id}/review`, { proof: proofFor('reviewer'), contentHash: (await oos('reviewer')).contentHash })).statusCode).toBe(403);
+    expect((await as('revtwo', 'POST', `/api/oos/${o!.id}/review`, { proof: proofFor('revtwo'), contentHash: (await oos('revtwo')).contentHash })).statusCode).toBe(200);
+    // Only QA (lims.oos.approve) invalidates.
+    const body = { outcome: 'invalidated', reason: 'Assignable laboratory error at the contract lab', retests: 1 };
+    expect([401, 403]).toContain((await as('revtwo', 'POST', `/api/oos/${o!.id}/conclude`, { ...body, proof: proofFor('revtwo'), contentHash: (await oos('revtwo')).contentHash })).statusCode);
+    const q = await as('qaoos', 'POST', `/api/oos/${o!.id}/conclude`, { ...body, proof: proofFor('qaoos'), contentHash: (await oos()).contentHash });
+    expect(q.statusCode, q.body).toBe(200);
+    expect((await oos()).status).toBe('invalidated');
+    expect((await oos()).original!.status).toBe('invalidated');
+    // The invalidated result stays, marked, and no longer counts; a new result is needed.
+    const d = await detail(sid);
+    expect(d.spec.tests.find((x) => x.key === 'ph')!.analyses).toMatchObject([{ analysisNo: 'DAS-2026-300', status: 'invalidated' }]);
+    expect(d.approvalProblems).toEqual(['pH: no reviewed result yet.']);
+    const [row] = await t.owner.unsafe(`select analysis_number, outside_lab, status from ${t.schema}_report.oos_v1 where oos_number = '${checked.json().oosNo}'`);
+    expect(row).toEqual({ analysis_number: 'DAS-2026-300', outside_lab: 'Demo Analytical Services', status: 'INVALIDATED' });
+    await analysed(sid, ph, '6.2');
+    expect((await detail(sid)).approvalProblems).toEqual([]);
   });
 
   it('LIMS-08 a starting material\'s release sample needs its number of containers; each is identified before QC approves', async () => {
     const no = await sampleOf();
     expect((no as { statusCode: number }).statusCode).toBe(400);
-    expect((no as { json: () => { problems: string[] } }).json().problems[0]).toMatch(/^Containers sampled: give their number\. The identity of a starting material is tested on each container/);
+    expect((no as { json: () => { problems: string[] } }).json().problems[0]).toMatch(/^Containers received: give their number\. The specification's sampling plan says how many of them are sampled \(every container: the identity of a starting material is tested on each\)/);
     const sid = await sampleOf(3) as number;
     expect((await detail(sid)).identityContainers).toBe(3);
     // The identity method needs its container; the pH method takes none.
@@ -317,7 +410,7 @@ describe('on the server', () => {
     expect(text).toContain(`QC SAMPLE ${s.sampleNo}`);
     expect(text).toContain('Material: RM-080 · Demolactose');
     expect(text).toContain(`Lot: ${s.lotNo}`);
-    expect(text).toContain('Containers: 2 (sampled from containers 1 to 2)');
+    expect(text).toContain('Containers: 2 sampled of 2 received: 1, 2');
     expect(text).toContain('Sampled by: SAMPLER');
     expect(text).toMatch(/Date: \d{1,2} \w{3} 20\d\d/);
     expect(text).toContain('SAMPLED · container 1 of 2');

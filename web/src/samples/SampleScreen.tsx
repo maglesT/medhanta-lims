@@ -10,6 +10,7 @@ import type { SampleAction } from '../../../shared/engine/sample.js';
 import { ReservePanel } from './Reserve.js';
 import { PURPOSE_LABEL, STATUS_CHIP, STATUS_LABEL, answerOot, coaLink, decide, getSample, labelsLink, sampleEntry, type SampleDetail, type SampleEntry } from './api-samples.js';
 import { FormsPanel, OutsideDialog, OutsideLine } from './Paper.js';
+import { SAMPLING_DETAILS } from '../../../shared/master/spec.js';
 
 // What a sample's lot number is: a material's lot, a product's batch, an EM or water sample's point.
 const LOT_WORD = { material: 'Lot', product: 'Batch', room: 'Point', water: 'Point' } as const;
@@ -57,6 +58,8 @@ export function SampleScreen({ me, id, onBack, onOpenReserve }: { me: Me; id: nu
           <dt>Source</dt><dd>{sourceWords(s.source)}</dd>
           <dt>Quantity</dt><dd>{s.quantity}{s.containers ? ` from ${s.containers} container${s.containers === 1 ? '' : 's'}` : ''}</dd>
           <dt>Purpose</dt><dd>{PURPOSE_LABEL[s.purpose]}</dd>
+          {s.sampling && <><dt>Sampling plan</dt><dd>{s.sampling.line} · containers sampled: {s.sampling.numbers.join(', ')}
+            {SAMPLING_DETAILS.filter(([k]) => s.sampling!.details[k]).map(([k, label]) => <span key={k} className="cell-sub">{label}: {s.sampling!.details[k]}</span>)}</dd></>}
           {s.stability && <><dt>Stability study</dt><dd>{s.stability.studyNo}, {s.stability.label}, {s.stability.month} months</dd></>}
           {s.monitoring && <><dt>Monitoring</dt><dd>Plan {s.monitoring.planNumber} version {s.monitoring.planVersionNo} · point {s.monitoring.pointCode} {s.monitoring.pointName} · {s.monitoring.kind}
             {s.monitoring.state ? `, ${s.monitoring.state}` : ''}{s.monitoring.grade ? ` · grade ${s.monitoring.grade}` : ''} · taken {s.monitoring.takenOn}{s.monitoring.shift ? `, shift ${s.monitoring.shift}` : ''}
