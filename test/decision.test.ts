@@ -3,6 +3,8 @@ import { call, freshApp, login, proofFor, seedUser, type TestApp } from './helpe
 import { small } from './engine-fixture.js';
 import { approvalProblems, sampleDecision, type SampleEvent, type TestState } from '../shared/engine/sample.js';
 import { limitText, specSchema, type SpecDoc } from '../shared/master/spec.js';
+import { reportedFigure } from '../server/routes/samples.js';
+import { resultFigure } from '../server/coa.js';
 
 // QC's decision on a sample (LIMS-20) and its certificate of analysis (LIMS-21): approval only when every test that
 // applies has a reviewed result within its limit, by a person who did no part of the analyses (LIMS-41); rejection at
@@ -134,6 +136,8 @@ describe('QC decision on the server', () => {
     const [coa] = await t.owner.unsafe(`select coa_number, decision, item_code, decided_by, spec_number from ${t.schema}_report.coa_v1 where coa_number = '${coaNo}'`);
     expect(coa).toMatchObject({ coa_number: coaNo, decision: 'APPROVED', item_code: 'RM-030', decided_by: 'QCUSER', spec_number: 'SPEC-RM-030' });
     const rows = await t.owner.unsafe(`select test_key, value::text, passed, limit_text, analysis_number from ${t.schema}_report.result_v1 where coa_number = '${coaNo}'`);
+    const [rep] = await t.owner.unsafe(`select reported from ${t.schema}_report.result_v1 where coa_number = '${coaNo}'`);
+    expect(rep).toEqual({ reported: '6.2' });
     const [a] = await t.owner<{ analysis_no: string }[]>`select analysis_no from analyses where id = ${aid}`;
     expect(rows).toEqual([{ test_key: 'ph', value: '6.2', passed: true, limit_text: '5.0 to 7.0', analysis_number: a!.analysis_no }]);
     // Once decided: no second decision.
@@ -186,6 +190,17 @@ describe('QC decision on the server', () => {
     const sid = await sampleOf();
     expect((await as('sampler', 'POST', `/api/samples/${sid}/approve`, { proof: proofFor('sampler'), contentHash: 'x'.repeat(64) })).statusCode).toBe(403);
     expect((await detail(sid, 'viewer')).approvalProblems).toEqual(['QC approval needs the QC approval permission.']);
+  });
+
+  it('LIMS-21 the certificate shows the result as reported: rounded as the limit is written, never the full-precision value', () => {
+    expect(reportedFigure('0.32960447463044346783859368757491', '%', { high: '0.5' })).toBe('0.3 %');
+    expect(reportedFigure('99.649', '%', { low: '98.0', high: '102.00' })).toBe('99.65 %');
+    expect(reportedFigure('6.25', '', { low: '5.0', high: '7.0' })).toBe('6.3');
+    expect(reportedFigure('12.3456', 'ppm', undefined)).toBe('12.3456 ppm');
+    // A decision kept before `reported` existed: the figure is read from the end of the worked line.
+    const shown = 'Loss on drying = (31.1262 g − 31.1229 g) ÷ (31.1262 g − 30.1250 g) × 100 = 0.3296… %; 0.3296… % rounded to 1 decimal (as the limit is written) = 0.3 %; limit not more than 0.5 %';
+    expect(resultFigure(shown, '0.3296044746304434678', '%')).toBe('0.3 %');
+    expect(resultFigure(shown, '0.3296', '%', '0.3 %')).toBe('0.3 %');
   });
 
   it('limitText says each limit type plainly', () => {

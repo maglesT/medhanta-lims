@@ -6,12 +6,13 @@ import { parseId, requirePermission } from '../auth.js';
 import { usableItem } from '../master.js';
 import { LOT_USABLE, LOT_WAITING, batchWaiting, type BatchRead, type LotRead } from '../links.js';
 import { SignError, authenticateSigner, contentHash, sign, signBody } from '../signatures.js';
-import { limitText, limitWords, outOfTrend, purposeLimits, type SpecDoc } from '../../shared/master/spec.js';
+import { limitFor, limitText, limitWords, outOfTrend, purposeLimits, type SpecDoc } from '../../shared/master/spec.js';
 import { OOT_ANSWERS, approvalProblems, ootRefusal, rejectionRefusal, sampleDecision, type TestState } from '../../shared/engine/sample.js';
 import { oosOfSample } from './oos.js';
 import { loadReserves, openRetestSample, reserveNeed } from './reserve.js';
 import { coaDoc } from '../coa.js';
 import { render, sendPdf } from '../pdf.js';
+import { Dec, roundHalfUp, writtenDecimals } from '../../shared/templates/index.js';
 import { sampleTestResults, type TestResult } from './analyses.js';
 import { stabilityTrend } from './stability-evaluation.js';
 import {
@@ -113,6 +114,13 @@ const ACTION_BODIES: Record<SampleAction, z.ZodTypeAny> = {
  * The tests QC decides on (LIMS-11): each test of the sample's specification, whether it applies to the sample's
  * purpose, and its latest reviewed analysis with its result.
  */
+/** The result as reported (CoA, result_v1): rounded half up to the decimals the limit is written with (the finer bound). */
+export function reportedFigure(value: string, unit: string, limit: { low?: string; high?: string } | undefined): string {
+  const d = limit ? Math.max(limit.low !== undefined ? writtenDecimals(limit.low) : 0, limit.high !== undefined ? writtenDecimals(limit.high) : 0) : undefined;
+  const v = d === undefined ? value : roundHalfUp(new Dec(value), d).toFixed(d);
+  return `${v}${unit ? ` ${unit}` : ''}`;
+}
+
 export function testStates(spec: SpecDoc, purpose: string, results: Record<string, TestResult[]>, trend: Record<string, string> = {}): (TestState & { decided: Record<string, unknown> | null })[] {
   const on = purposeLimits(purpose);
   return spec.tests.map((t) => {
@@ -128,7 +136,7 @@ export function testStates(spec: SpecDoc, purpose: string, results: Record<strin
         people: r.people, openDeviations: r.openDeviations,
         ...(oot ? { outOfTrend: oot } : {}) } : null,
       // The result as it goes on the certificate and into result_v1.
-      decided: r?.result ? { key: t.key, name: t.name, value: r.result.value, unit: r.result.unit, shown: r.result.shown, ...(r.result.pass !== undefined ? { pass: r.result.pass } : {}),
+      decided: r?.result ? { key: t.key, name: t.name, value: r.result.value, unit: r.result.unit, shown: r.result.shown, reported: reportedFigure(r.result.value, r.result.unit, limitFor(t, on)), ...(r.result.pass !== undefined ? { pass: r.result.pass } : {}),
         limit: limitText(t, on), method: r.method, analysisNo: r.analysisNo, reviewedAt: r.reviewedAt } : null,
     };
   });

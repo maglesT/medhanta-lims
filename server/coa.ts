@@ -7,7 +7,7 @@ import { isHand } from '../shared/engine/links.js';
 import type { EventRow, SampleRow } from './routes/samples.js';
 import { pageFrame, plant, runs } from './pdf.js';
 
-interface Decided { key: string; name: string; value: string; unit: string; shown: string; pass?: boolean; limit: string; method: string; analysisNo: string; reviewedAt?: string | null }
+interface Decided { key: string; name: string; value: string; unit: string; shown: string; reported?: string; pass?: boolean; limit: string; method: string; analysisNo: string; reviewedAt?: string | null }
 export interface CoaInput { sample: SampleRow; spec: SpecDoc; specVersion: number; decision: EventRow }
 
 const small = (text: string, extra: Record<string, unknown> = {}): Content => ({ text: runs(text), fontSize: 8, ...extra }) as Content;
@@ -18,15 +18,19 @@ const RED = '#b3261e';
  * A result's figure as decided: the worked line's end ("… = 99.6 %"), or a reading as written ("99.0 %; limit …"), else
  * value and unit (CoA, CTD tables).
  */
-export const resultFigure = (shown: string, value: string, unit: string) =>
-  /=\s*([^=;]+)$/.exec(shown.replace(/:\s*(PASS|FAIL)$/i, ''))?.[1]?.trim() ?? /^\s*([-+]?\d[\d.]*(?:\s*[^\s;]+)?)\s*;/.exec(shown)?.[1]?.trim() ?? `${value} ${unit}`.trim();
+// The figure as reported: the value rounded as the limit is written (kept with the decision as `reported`), else the end
+// of the worked line ("… rounded to 1 decimal (as the limit is written) = 0.3 %; limit not more than 0.5 %" → "0.3 %"),
+// else the value as written.
+export const resultFigure = (shown: string, value: string, unit: string, reported?: string) => reported
+  ?? /=\s*([^=;]+?)\s*(?:;\s*limit\b[^=]*)?$/.exec(shown.replace(/:\s*(PASS|FAIL)$/i, '').trim())?.[1]?.trim()
+  ?? /^\s*([-+]?\d[\d.]*(?:\s*[^\s;]+)?)\s*;/.exec(shown)?.[1]?.trim() ?? `${value} ${unit}`.trim();
 
 export function coaDoc(c: CoaInput, by: string, printedAt = new Date(), demo = false): TDocumentDefinitions {
   const s = c.sample;
   const h = c.spec.header;
   const p = c.decision.payload as { coaNo?: string; results?: Decided[] };
   const results = p.results ?? [];
-  const figure = (r: Decided) => resultFigure(r.shown, r.value, r.unit);
+  const figure = (r: Decided) => resultFigure(r.shown, r.value, r.unit, r.reported);
   const content: Content[] = [
     { text: runs(`Certificate of analysis ${p.coaNo ?? ''}`), fontSize: 16, bold: true },
     { text: runs(`${s.item.code} · ${s.item.name}`), fontSize: 11, margin: [0, 2, 0, 8] },
