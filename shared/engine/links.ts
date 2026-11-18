@@ -15,10 +15,11 @@ export const PROVIDER_NAME: Record<Provider, string> = { deviations: 'Deviations
 
 /**
  * Pulled through a link (with what was read, PL-07), or typed by hand while the link was absent or down; or taken from
- * this product's own lab inventory (a standard's potency, a VS factor: shared/engine/items.ts), never typed.
+ * this product's own lab inventory (a standard's potency, a VS factor: shared/engine/items.ts), never typed; or taken
+ * from an approved monitoring plan (a room of master data or a water system, shared/master/monitoring.ts).
  */
 export type Source = { from: 'hand'; link: HandLink; state: 'absent' | 'down' }
-  | { from: Provider | 'inventory' | 'instrument' | 'cds'; asOf: string | null; shown: string; capture?: Captured; cds?: Imported };
+  | { from: Provider | 'inventory' | 'instrument' | 'cds' | 'plan'; asOf: string | null; shown: string; capture?: Captured; cds?: Imported };
 /**
  * Read from an instrument over its serial port (LIMS-32, shared/capture/serial.ts): the machine, the protocol, the raw
  * lines it sent (the server parsed them itself) and when the browser read them.
@@ -33,7 +34,7 @@ export type Imported = { file: string; size: number; hash: string; format: strin
 /** Typed by hand: a link absent or down, or a value an instrument or the CDS gives when it is read (typed instead). */
 export type HandLink = Provider | 'instrument' | 'cds';
 /** Where a pulled value came from, in words. */
-export const SOURCE_NAME: Record<Provider | 'inventory' | 'instrument' | 'cds', string> = { ...PROVIDER_NAME, inventory: 'the LIMS inventory', instrument: 'the instrument', cds: 'the CDS result file' };
+export const SOURCE_NAME: Record<Provider | 'inventory' | 'instrument' | 'cds' | 'plan', string> = { ...PROVIDER_NAME, inventory: 'the LIMS inventory', instrument: 'the instrument', cds: 'the CDS result file', plan: 'the monitoring plan' };
 export const isHand = (s: Source | undefined): s is Extract<Source, { from: 'hand' }> => s?.from === 'hand';
 /** Why a value was typed by hand, in a few words ("MMS link down", "not read from the instrument"). */
 export const handWords = (s: { link: HandLink; state: 'absent' | 'down' }) => (s.link === 'instrument' ? 'not read from the instrument'

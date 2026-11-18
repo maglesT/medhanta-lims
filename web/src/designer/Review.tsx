@@ -6,7 +6,7 @@ import { ApiError, can, plantTime, type Me } from '../api.js';
 import { addComment, getReview, loadMasterData, reviewAction, STATE_LABEL, type MasterEvent, type ReviewAction, type ReviewData, type Version } from '../api-designer.js';
 import { SignDialog } from '../components/SignDialog.js';
 import { useLinked } from '../api-floor.js';
-import { describeMaster, diffMasters, type AnyDoc, type DiffSection, type Units } from './describe.js';
+import { describeMaster, diffMasters, docTitle, type AnyDoc, type DiffSection, type Units } from './describe.js';
 import { placeLabel } from './model.js';
 
 const EVENT_TEXT: Record<MasterEvent['kind'], string> = { submitted: 'Sent for review', passed: 'Checked (passed)', returned: 'Returned to the author', approved: 'Approved by QA', effective: 'Made effective', retired: 'Retired' };
@@ -109,7 +109,7 @@ export function Review({ me, version, doc, blocked, onChanged, onGo }: {
             await done();
           }}>
           <div className="signbox">
-            <p><b>{'tests' in doc ? `${doc.header.number} · ${doc.header.code} ${doc.header.name}` : `${doc.header.code} ${doc.header.name}`}</b>, version {version.versionNo}</p>
+            <p><b>{docTitle(doc)}</b>, version {version.versionNo}</p>
             {doing === 'approve' && <p>Change control number: <b>{cc}</b></p>}
           </div>
         </SignDialog>
@@ -154,7 +154,8 @@ function Comments({ me, doc, data, versionId, onAdded, onGo }: { me: Me; doc: An
   const [path, setPath] = useState('');
   const may = ['master.author', 'master.check', 'master.approve'].some((p) => can(me, p));
   const about = [['header', 'Header'],
-    ...('conditions' in doc ? doc.conditions.map((_, i) => [`conditions[${i}]`, placeLabel(doc, `conditions[${i}]`)])
+    ...('points' in doc ? doc.points.map((_, i) => [`points[${i}]`, placeLabel(doc, `points[${i}]`)])
+      : 'conditions' in doc ? doc.conditions.map((_, i) => [`conditions[${i}]`, placeLabel(doc, `conditions[${i}]`)])
       : 'tests' in doc ? doc.tests.map((t, i) => [`tests[${i}]`, `Test › ${t.name}`])
       : doc.stages.flatMap((s, i) => [[`stages[${i}]`, s.name], ...s.steps.map((_, j) => [`stages[${i}].steps[${j}]`, placeLabel(doc, `stages[${i}].steps[${j}]`)])]))];
   return (

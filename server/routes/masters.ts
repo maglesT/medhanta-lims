@@ -9,6 +9,8 @@ import { BLOCKS } from '../../shared/blocks/index.js';
 import { blocking, masterChecks, type Problem } from '../../shared/master/checks.js';
 import { specChecks, specSchema, type SpecDoc } from '../../shared/master/spec.js';
 import { protocolChecks, protocolSchema, type ProtocolDoc } from '../../shared/master/protocol.js';
+import { monitoringChecks, monitoringSchema, type MonitoringDoc } from '../../shared/master/monitoring.js';
+import { limitText } from '../../shared/master/spec.js';
 import { masterSchema, type MasterDoc, type MasterState } from '../../shared/master/schema.js';
 import { isHand, type Source } from '../../shared/engine/links.js';
 import { CHANGE_STEPS, approvedChange, namesProduct } from '../links.js';
@@ -16,11 +18,12 @@ import { CHANGE_STEPS, approvedChange, namesProduct } from '../links.js';
 // Master versions: the model, the table, the draft routes, and the review and approval workflow (LIMS-01). A version
 // leaves draft only through that workflow (or, in tests, the database owner).
 
-// A version of a method, a specification or a stability protocol (kind): the same table, review and approval (LIMS-01,
-// LIMS-26).
+// A version of a method, a specification, a stability protocol or a monitoring plan (kind): the same table, review and
+// approval (LIMS-01, LIMS-26, LIMS-36).
 interface VersionBase { id: number; masterId: number; versionNo: number; state: MasterState; createdBy: number; createdAt: Date }
-export type VersionRow = VersionBase & ({ kind: 'method'; doc: MasterDoc } | { kind: 'spec'; doc: SpecDoc } | { kind: 'protocol'; doc: ProtocolDoc });
-type AnyDoc = MasterDoc | SpecDoc | ProtocolDoc;
+export type VersionRow = VersionBase & ({ kind: 'method'; doc: MasterDoc } | { kind: 'spec'; doc: SpecDoc } | { kind: 'protocol'; doc: ProtocolDoc }
+  | { kind: 'monitoring'; doc: MonitoringDoc });
+type AnyDoc = MasterDoc | SpecDoc | ProtocolDoc | MonitoringDoc;
 export type Kind = VersionRow['kind'];
 
 export async function masterVersion(q: Sql | Tx, id: number, lock = false): Promise<VersionRow | undefined> {
@@ -37,6 +40,7 @@ export async function masterVersion(q: Sql | Tx, id: number, lock = false): Prom
 // protocol's specification version: its number and version are read from it (pull, don't type).
 async function withMasterData(master: Master, kind: Kind, doc: AnyDoc, q: Sql | Tx): Promise<AnyDoc> {
   if (kind === 'method') return doc;
+  if (kind === 'monitoring') return withPlanData(master, doc as MonitoringDoc, q);
   const s = doc as SpecDoc | ProtocolDoc;
   const item = s.header.of === 'product' ? usableItem(await master.products(), s.header.itemId, 'product') : usableItem(await master.materials(), s.header.itemId, 'material');
   const out = { ...s, header: { ...s.header, code: item.code, name: item.name } } as AnyDoc;
@@ -47,15 +51,45 @@ async function withMasterData(master: Master, kind: Kind, doc: AnyDoc, q: Sql | 
     select doc->'header'->>'number' as number, version_no as "versionNo" from master_versions where id = ${p.spec.versionId} and kind = 'spec'`;
   return { ...p, spec: v ? { versionId: p.spec.versionId, number: v.number, versionNo: v.versionNo } : p.spec };
 }
-const schemaOf = (kind: Kind) => (kind === 'spec' ? specSchema : kind === 'protocol' ? protocolSchema : masterSchema);
-const kindOf = (k: unknown): Kind => (k === 'spec' || k === 'protocol' ? k : 'method');
+const schemaOf = (kind: Kind) => (kind === 'spec' ? specSchema : kind === 'protocol' ? protocolSchema : kind === 'monitoring' ? monitoringSchema : masterSchema);
+const kindOf = (k: unknown): Kind => (k === 'spec' || k === 'protocol' || k === 'monitoring' ? k : 'method');
+
+/** The latest approved or effective version of each of these specifications (a plan's tests, LIMS-36). */
+export async function planSpecs(q: Sql | Tx, masterIds: number[]) {
+  const ids = [...new Set(masterIds)];
+  return ids.length ? [...await q<{ masterId: number; id: number; versionNo: number; state: string; doc: SpecDoc }[]>`
+    select distinct on (master_id) master_id::int as "masterId", id::int, version_no as "versionNo", state, doc from master_versions
+    where kind = 'spec' and master_id = any(${ids}) and state in ('approved', 'effective') order by master_id, (state = 'effective') desc, version_no desc`] : [];
+}
+
+// A monitoring plan's rooms are read from master data (code, name and grade, PL-08); its specification tests' number,
+// name, method and limit from their latest approved or effective version (pull, don't type).
+async function withPlanData(master: Master, doc: MonitoringDoc, q: Sql | Tx): Promise<MonitoringDoc> {
+  const rooms = doc.points.some((p) => p.room) ? await master.rooms() : [];
+  const specs = await planSpecs(q, doc.points.flatMap((p) => p.samplings.flatMap((s) => (s.spec ? [s.spec.masterId] : []))));
+  return { ...doc, points: doc.points.map((p) => {
+    const r = p.room && usableItem(rooms, p.room.itemId, 'room');
+    return { ...p, ...(r ? { room: { itemId: r.itemId, code: r.code, name: r.name, grade: (r.grade ?? '').trim().toUpperCase() } } : {}),
+      samplings: p.samplings.map((s) => {
+        const v = s.spec && specs.find((x) => x.masterId === s.spec!.masterId);
+        const t = v && v.doc.tests.find((x) => x.key === s.spec!.testKey);
+        return v && s.spec ? { ...s, spec: { ...s.spec, number: v.doc.header.number, testName: t?.name ?? '', method: t ? `${t.method.code} ${t.method.name}` : '', limit: t ? limitText(t) : '' } } : s;
+      }) };
+  }) };
+}
 
 /**
  * The problems that stop a version going for review or approval: a method's own checks, or a specification's against
  * its methods as they stand now (each method's latest approved or effective version, LIMS-01).
  */
-export async function docProblems(q: Sql | Tx, v: { kind: 'method'; doc: MasterDoc } | { kind: 'spec'; doc: SpecDoc } | { kind: 'protocol'; doc: ProtocolDoc }): Promise<Problem[]> {
+export async function docProblems(q: Sql | Tx, v: { kind: 'method'; doc: MasterDoc } | { kind: 'spec'; doc: SpecDoc } | { kind: 'protocol'; doc: ProtocolDoc }
+  | { kind: 'monitoring'; doc: MonitoringDoc }): Promise<Problem[]> {
   if (v.kind === 'method') return masterChecks(v.doc);
+  if (v.kind === 'monitoring') {
+    // LIMS-36, LIMS-37: the plan against its specifications as they stand now.
+    const specs = await planSpecs(q, v.doc.points.flatMap((p) => p.samplings.flatMap((s) => (s.spec ? [s.spec.masterId] : []))));
+    return monitoringChecks(v.doc, (id) => specs.find((x) => x.masterId === id) ?? null);
+  }
   if (v.kind === 'protocol') {
     // LIMS-26: the protocol against the specification version it names; its design by template L25 (ICH Q1D).
     const [spec] = v.doc.spec ? await q<{ state: string; doc: SpecDoc }[]>`select state, doc from master_versions where id = ${v.doc.spec.versionId} and kind = 'spec'` : [];
@@ -86,7 +120,7 @@ export function masterRoutes(app: FastifyInstance, sql: Sql) {
   // A new method or specification: version 1, a draft.
   app.post('/api/masters', author, async (req, reply) => {
     const kind = kindOf((req.body as { kind?: string } | null)?.kind);
-    const b = z.object({ kind: z.enum(['method', 'spec', 'protocol']).optional(), doc: schemaOf(kind) }).safeParse(req.body);
+    const b = z.object({ kind: z.enum(['method', 'spec', 'protocol', 'monitoring']).optional(), doc: schemaOf(kind) }).safeParse(req.body);
     if (!b.success) return invalid(reply, b.error.issues);
     const doc = await withMasterData(app.master, kind, b.data.doc, sql);
     return sql.begin(async (tx) => {

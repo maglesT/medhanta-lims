@@ -11,7 +11,8 @@ export interface SampleRequest {
   shown: string; asOf: string | null; stock: string | null; specs: SpecChoice[]; noSpec: string | null; sampleNo: string | null;
 }
 export interface Requests { links: Record<From, LinkState>; requests: SampleRequest[] }
-export interface SampleItem { of: 'material' | 'product'; itemId: string; code: string; name: string }
+// A monitoring sample is of a room (master data) or a water system (server/routes/em.ts).
+export interface SampleItem { of: 'material' | 'product' | 'room' | 'water'; itemId: string; code: string; name: string }
 export interface SampleListRow {
   id: number; sampleNo: string; purpose: SamplePurpose; lotNo: string; item: SampleItem; byHand: boolean; quantity: string; containers: number | null;
   registeredByName: string; registeredAt: string; specNumber: string; specVersionNo: number; status: SampleStatus;
@@ -25,7 +26,10 @@ export interface SampleDetail {
   sample: { id: number; sampleNo: string; purpose: SamplePurpose; lotNo: string; item: SampleItem; source: Source; quantity: string; containers: number | null;
     registeredByName: string; registeredAt: string;
     // A stability sample: its study and time point.
-    stability?: { studyId: number; studyNo: string; condition: string; label: string; month: number } | null };
+    stability?: { studyId: number; studyNo: string; condition: string; label: string; month: number } | null;
+    // An EM or water sample: the plan, point and sampling it was taken for (LIMS-36, LIMS-37).
+    monitoring?: { planNumber: string; planVersionNo: number; pointCode: string; pointName: string; kind: string; frequency: string; state: string | null; grade: string | null;
+      takenOn: string; shift: number | null; batch: string | null; person: string | null } | null };
   status: SampleStatus; events: SampleEntry[];
   spec: { id: number; versionNo: number; state: string; header: SpecDoc['header']; tests: (SpecTest & { applies: boolean; analyses: TestResult[] })[] } | null;
   methods: { versionId: number; masterId: number; versionNo: number; code: string; name: string }[];
@@ -64,4 +68,4 @@ export const STATUS_LABEL: Record<SampleStatus, string> = {
   'waiting for check': 'Waiting for check', registered: 'Registered', received: 'Received', stored: 'Stored', 'handed over': 'Handed over',
   disposed: 'Disposed of', approved: 'Approved', rejected: 'Rejected',
 };
-export const PURPOSE_LABEL: Record<SamplePurpose, string> = { release: 'Release', retest: 'Retest', stability: 'Stability', investigation: 'Investigation' };
+export const PURPOSE_LABEL: Record<SamplePurpose, string> = { release: 'Release', retest: 'Retest', stability: 'Stability', investigation: 'Investigation', monitoring: 'EM and water' };

@@ -1,0 +1,5 @@
+/* The EM map: one card per point, its edge coloured by the worst latest level (alert amber, action red). */
+.em-map { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+.em-point { display: flex; flex-direction: column; gap: 4px; text-align: left; cursor: pointer; border-left: 6px solid var(--ok); }
+.em-point.em-alert { border-left-color: var(--brand-amber); background: var(--warn-soft); }
+.em-point.em-action { border-left-color: var(--bad); background: var(--bad-soft); }

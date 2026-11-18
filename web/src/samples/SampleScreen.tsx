@@ -10,6 +10,8 @@ import type { SampleAction } from '../../../shared/engine/sample.js';
 import { ReservePanel } from './Reserve.js';
 import { PURPOSE_LABEL, STATUS_CHIP, STATUS_LABEL, answerOot, coaLink, decide, getSample, sampleEntry, type SampleDetail, type SampleEntry } from './api-samples.js';
 
+// What a sample's lot number is: a material's lot, a product's batch, an EM or water sample's point.
+const LOT_WORD = { material: 'Lot', product: 'Batch', room: 'Point', water: 'Point' } as const;
 const ENTRY_WORDS: Record<SampleEntry['kind'], string> = {
   checked: 'Checked by a second person', received: 'Received in QC', stored: 'Stored', handed_over: 'Handed over', disposed: 'Disposed of', note: 'Note', approved: 'QC approved', rejected: 'QC rejected', oot_answered: 'Out-of-trend flag answered by QC',
 };
@@ -44,17 +46,20 @@ export function SampleScreen({ me, id, onBack, onOpenReserve }: { me: Me; id: nu
       <div className="home-head">
         <div>
           <h1>{s.sampleNo} <span className={STATUS_CHIP[d.status]}>{STATUS_LABEL[d.status]}</span></h1>
-          <p className="greeting"><b>{s.item.code}</b> {s.item.name} · {s.item.of === 'material' ? 'lot' : 'batch'} {s.lotNo}</p>
+          <p className="greeting"><b>{s.item.code}</b> {s.item.name} · {LOT_WORD[s.item.of].toLowerCase()} {s.lotNo}</p>
         </div>
       </div>
       {error && <p className="notice" role="alert">{error}</p>}
       <section className="dash-panel samples-waiting" aria-label="The sample">
         <dl className="details">
-          <dt>{s.item.of === 'material' ? 'Lot' : 'Batch'}</dt><dd>{s.lotNo}</dd>
+          <dt>{LOT_WORD[s.item.of]}</dt><dd>{s.lotNo}</dd>
           <dt>Source</dt><dd>{sourceWords(s.source)}</dd>
           <dt>Quantity</dt><dd>{s.quantity}{s.containers ? ` from ${s.containers} container${s.containers === 1 ? '' : 's'}` : ''}</dd>
           <dt>Purpose</dt><dd>{PURPOSE_LABEL[s.purpose]}</dd>
           {s.stability && <><dt>Stability study</dt><dd>{s.stability.studyNo}, {s.stability.label}, {s.stability.month} months</dd></>}
+          {s.monitoring && <><dt>Monitoring</dt><dd>Plan {s.monitoring.planNumber} version {s.monitoring.planVersionNo} · point {s.monitoring.pointCode} {s.monitoring.pointName} · {s.monitoring.kind}
+            {s.monitoring.state ? `, ${s.monitoring.state}` : ''}{s.monitoring.grade ? ` · grade ${s.monitoring.grade}` : ''} · taken {s.monitoring.takenOn}{s.monitoring.shift ? `, shift ${s.monitoring.shift}` : ''}
+            {s.monitoring.batch ? ` · batch ${s.monitoring.batch}` : ''}{s.monitoring.person ? ` · ${s.monitoring.person}` : ''}</dd></>}
           <dt>Registered</dt><dd>{s.registeredByName}, {plantTime(s.registeredAt)}</dd>
           {d.spec && (<><dt>Specification</dt><dd>{d.spec.header.number}, version {d.spec.versionNo} · {d.spec.header.pharmacopoeia}{d.spec.header.edition ? ` ${d.spec.header.edition}` : ''}{d.spec.state !== 'effective' ? ` (now ${d.spec.state})` : ''}</dd></>)}
         </dl>

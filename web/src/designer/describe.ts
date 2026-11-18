@@ -5,6 +5,7 @@ import { masterChecks } from '../../../shared/master/checks.js';
 import type { Limit, MasterDoc, Stage, Step } from '../../../shared/master/schema.js';
 import type { SpecDoc, SpecTest } from '../../../shared/master/spec.js';
 import { conditionLabel, PURPOSE_WORDS, type ProtocolDoc } from '../../../shared/master/protocol.js';
+import { pointWhere, type MonitoringDoc } from '../../../shared/master/monitoring.js';
 import { stepTitle } from '../../../shared/engine/analysis.js';
 import { neededText } from '../../../shared/engine/training.js';
 import { placeLabel } from './model.js';
@@ -49,9 +50,25 @@ export function stepText(doc: MasterDoc, t: Step, j: number, _units?: Units): st
 }
 
 /** A method, a specification or a stability protocol (the review and changes views show each). */
-export type AnyDoc = MasterDoc | SpecDoc | ProtocolDoc;
+export type AnyDoc = MasterDoc | SpecDoc | ProtocolDoc | MonitoringDoc;
 export const isSpec = (doc: AnyDoc): doc is SpecDoc => 'tests' in doc;
 export const isProtocol = (doc: AnyDoc): doc is ProtocolDoc => 'conditions' in doc;
+export const isMonitoring = (doc: AnyDoc): doc is MonitoringDoc => 'points' in doc;
+/** The title a version is signed under: "EMP-001 · Sterile block", "SPEC-RM-012 · RM-012 Demolol", "M-001 Assay". */
+export const docTitle = (doc: AnyDoc) => (isMonitoring(doc) ? `${doc.header.number} · ${doc.header.name}`
+  : isSpec(doc) ? `${doc.header.number} · ${doc.header.code} ${doc.header.name}` : `${doc.header.code} ${doc.header.name}`);
+
+/** A monitoring plan in plain words (LIMS-36, LIMS-37): each point, where it is, and what is sampled there. */
+function describeMonitoring(doc: MonitoringDoc): Section[] {
+  return [
+    { key: 'header', title: 'Plan', lines: [{ key: 'what', text: `Monitoring plan ${doc.header.number}: ${doc.header.name || '(no name)'}. ${doc.header.shifts} shift${doc.header.shifts === 1 ? '' : 's'} a day.` }] },
+    ...doc.points.map((p) => ({ key: `point:${p.key}`, title: `Point ${p.code}`, lines: [
+      { key: 'where', text: `${p.code}, ${p.name || '(no description)'}: ${pointWhere(p)}${p.critical ? ', a critical location' : ''}.` },
+      ...p.samplings.map((s) => ({ key: s.key, text: `${s.kind[0]!.toUpperCase()}${s.kind.slice(1)}, ${s.frequency}${s.state ? `, ${s.state}` : ''}, ${s.quantity}: ${s.spec
+        ? `specification ${s.spec.number}, ${s.spec.testName} (${s.spec.limit || 'no limit'}), method ${s.spec.method}` : '(no specification test)'}. Isolates identified: ${s.identify}.` })),
+    ] })),
+  ];
+}
 
 const limitWords = (l: Limit) => [l.low !== undefined ? `${l.lowStrict ? 'more than' : 'not less than'} ${l.low}` : '', l.high !== undefined ? `${l.highStrict ? 'less than' : 'not more than'} ${l.high}` : '']
   .filter(Boolean).join(' and ') + (l.unit ? ` ${l.unit}` : '') + (l.alertLow !== undefined || l.alertHigh !== undefined ? ` (alert ${[l.alertLow && `below ${l.alertLow}`, l.alertHigh && `above ${l.alertHigh}`].filter(Boolean).join(', ')})` : '');
@@ -98,6 +115,7 @@ function describeProtocol(doc: ProtocolDoc): Section[] {
 export function describeMaster(doc: AnyDoc, units?: Units): Section[] {
   if (isSpec(doc)) return describeSpec(doc);
   if (isProtocol(doc)) return describeProtocol(doc);
+  if (isMonitoring(doc)) return describeMonitoring(doc);
   const h = doc.header;
   const top: Section[] = [
     { key: 'header', title: 'Header', lines: [

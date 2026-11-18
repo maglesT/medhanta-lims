@@ -31,14 +31,22 @@ const PLANT_TZ = process.env.DISPLAY_TZ ?? 'Asia/Kolkata';
 export const SAMPLE_PREFIX = 'LS';
 
 type Of = 'material' | 'product';
+// A monitoring sample (server/routes/em.ts) is of a room of master data or a water system (its itemId 'water:PW').
 type From = 'mms' | 'truebatch';
 const OF: Record<From, Of> = { mms: 'material', truebatch: 'product' };
-export interface SampleItem { of: Of; itemId: string; code: string; name: string }
+export interface SampleItem { of: Of | 'room' | 'water'; itemId: string; code: string; name: string }
+/** A monitoring sample: the plan version, point and sampling it was taken for, as taken (server/routes/em.ts). */
+export interface MonitoringTaken {
+  planVersionId: number; planMasterId: number; planNumber: string; planVersionNo: number; point: string; pointCode: string; pointName: string;
+  sampling: string; kind: string; frequency: string; state: string | null; grade: string | null; critical: boolean; identify: string;
+  testKey: string; limit: import('../../shared/master/schema.js').Limit | null; takenOn: string; shift: number | null; batch: string | null; person: string | null;
+}
 export interface SampleRow {
   id: number; sampleNo: string; specVersionId: number; purpose: SamplePurpose; lotNo: string; item: SampleItem; source: Source;
   quantity: string; containers: number | null; registeredBy: number; registeredByName: string; registeredAt: Date;
   // A stability sample: its study and time point (server/routes/stability.ts).
   stability?: { studyId: number; studyNo: string; condition: string; label: string; month: number } | null;
+  monitoring?: MonitoringTaken | null;
 }
 export type EventRow = SampleEvent & { id: number; personName: string; at: Date; signature: { printedName: string; signedAt: Date } | null };
 
@@ -69,7 +77,7 @@ export const batchShown = (b: BatchRead) => `TrueBatch batch ${b.batchNumber}: $
 async function loadSample(q: Sql | Tx, id: number): Promise<{ s: SampleRow; events: EventRow[] } | null> {
   const [s] = await q<SampleRow[]>`
     select s.id::int, s.sample_no as "sampleNo", s.spec_version_id::int as "specVersionId", s.purpose, s.lot_no as "lotNo", s.item, s.source,
-      s.quantity, s.containers, s.registered_by::int as "registeredBy", u.full_name as "registeredByName", s.registered_at as "registeredAt", s.stability
+      s.quantity, s.containers, s.registered_by::int as "registeredBy", u.full_name as "registeredByName", s.registered_at as "registeredAt", s.stability, s.monitoring
     from samples s join users u on u.id = s.registered_by where s.id = ${id}`;
   if (!s) return null;
   const events = await q<EventRow[]>`
@@ -99,7 +107,8 @@ const registerBody = z.object({
   specVersionId: z.number().int().positive(),
   quantity: text(60).regex(/^\d+(\.\d+)?\s*\S.*$/, 'give the quantity with its unit, e.g. 120 g'),
   containers: z.number().int().min(1).max(100000).optional(),
-  purpose: z.enum(SAMPLE_PURPOSES).default('release'),
+  // A monitoring sample is taken from its plan (server/routes/em.ts), not registered.
+  purpose: z.enum(SAMPLE_PURPOSES).default('release').refine((p) => p !== 'monitoring', 'an EM or water sample is taken from its monitoring plan'),
 }).strict();
 const ACTION_BODIES: Record<SampleAction, z.ZodTypeAny> = {
   check: z.object({}),
@@ -121,7 +130,7 @@ export function reportedFigure(value: string, unit: string, limit: { low?: strin
   return `${v}${unit ? ` ${unit}` : ''}`;
 }
 
-export function testStates(spec: SpecDoc, purpose: string, results: Record<string, TestResult[]>, trend: Record<string, string> = {}): (TestState & { decided: Record<string, unknown> | null })[] {
+export function testStates(spec: SpecDoc, purpose: string, results: Record<string, TestResult[]>, trend: Record<string, string> = {}, only?: string): (TestState & { decided: Record<string, unknown> | null })[] {
   const on = purposeLimits(purpose);
   return spec.tests.map((t) => {
     const r = (results[t.key] ?? []).filter((a) => a.status === 'reviewed').at(-1);
@@ -131,7 +140,8 @@ export function testStates(spec: SpecDoc, purpose: string, results: Record<strin
     const oot = r?.result && r.result.pass !== false
       ? [t.trendLimit && outOfTrend(t, r.result.value, r.result.unit) ? `trend limit ${limitWords(t.trendLimit)}` : '', trend[t.key] ?? ''].filter(Boolean).join('; ') : '';
     return {
-      key: t.key, name: t.name, applies: t.use === 'release and stability' || t.use === on,
+      // A monitoring sample is of one test of its specification: the one its plan's sampling names (LIMS-36).
+      key: t.key, name: t.name, applies: (t.use === 'release and stability' || t.use === on) && (only === undefined || t.key === only),
       reviewed: r ? { analysisNo: r.analysisNo, hasResult: !!r.result, ...(r.result?.pass !== undefined ? { pass: r.result.pass } : {}), ...(shown ? { shown } : {}),
         people: r.people, openDeviations: r.openDeviations,
         ...(oot ? { outOfTrend: oot } : {}) } : null,
@@ -144,19 +154,20 @@ export function testStates(spec: SpecDoc, purpose: string, results: Record<strin
 
 /**
  * A new sample row with the next number of the plant year (never reused), audited: the one way a sample is made, by
- * registration and by a stability pull (server/routes/stability.ts, which names the study and time point).
+ * registration, by a stability pull (server/routes/stability.ts, which names the study and time point) and by a
+ * sampling of a monitoring plan (server/routes/em.ts, which names the plan, point and sampling).
  */
 export async function newSample(tx: Tx, person: number, row: { specVersionId: number; purpose: SamplePurpose; lotNo: string; item: SampleItem; source: Source;
-  quantity: string; containers: number | null; stability?: { studyId: number; studyNo: string; condition: string; label: string; month: number } }): Promise<{ id: number; sampleNo: string }> {
+  quantity: string; containers: number | null; stability?: { studyId: number; studyNo: string; condition: string; label: string; month: number }; monitoring?: MonitoringTaken }): Promise<{ id: number; sampleNo: string }> {
   const [c] = await tx<{ n: number; yy: string }[]>`
     insert into sample_counters (year, last_no) values (extract(year from now() at time zone ${PLANT_TZ})::int, 1)
     on conflict (year) do update set last_no = sample_counters.last_no + 1
     returning last_no as n, right(year::text, 2) as yy`;
   const sampleNo = `${SAMPLE_PREFIX}${c!.yy}${String(c!.n).padStart(5, '0')}`;
   const [s] = await tx<{ id: number }[]>`
-    insert into samples (sample_no, spec_version_id, purpose, lot_no, item, source, quantity, containers, registered_by, stability)
+    insert into samples (sample_no, spec_version_id, purpose, lot_no, item, source, quantity, containers, registered_by, stability, monitoring)
     values (${sampleNo}, ${row.specVersionId}, ${row.purpose}, ${row.lotNo}, ${tx.json(row.item as never)}, ${tx.json(row.source as never)}, ${row.quantity}, ${row.containers},
-      ${person}, ${row.stability ? tx.json(row.stability as never) : null})
+      ${person}, ${row.stability ? tx.json(row.stability as never) : null}, ${row.monitoring ? tx.json(row.monitoring as never) : null})
     returning id::int`;
   await audit(tx, { actorId: person, action: 'sample.registered', objectType: 'sample', objectId: s!.id, new: { sampleNo, ...row } });
   return { id: s!.id, sampleNo };
@@ -211,7 +222,7 @@ export function sampleRoutes(app: FastifyInstance, sql: Sql) {
       if (!lotNo) throw new SampleError(400, 'invalid', [`Give the ${what} number.`]);
       // 1. the lot or batch, read now through its link
       const read = b.source === 'mms' ? await app.links.mms.lot(lotNo) : await app.links.truebatch.batch(lotNo);
-      let item: SampleItem;
+      let item: SampleItem & { of: Of };
       let source: Source;
       if (b.byHand) {
         if (read.state === 'ok') throw new SampleError(409, 'link_ok', [`${name} answers: register the ${what} from the list of those waiting to be sampled.`]);
@@ -303,18 +314,19 @@ export function sampleRoutes(app: FastifyInstance, sql: Sql) {
       sample: l.s, status: sampleStatus(facts(l.s), l.events), events: l.events,
       spec: v ? { id: v.id, masterId: v.masterId, versionNo: v.versionNo, state: v.state, header: v.doc.header,
         // Each test with whether it applies to this sample's purpose, and its analyses with their results (LIMS-11).
-        tests: v.doc.tests.map((t) => ({ ...t, applies: (t.use === 'release and stability' || t.use === purposeLimits(l.s.purpose)), analyses: results[t.key] ?? [] })) } : null,
+        tests: v.doc.tests.map((t) => ({ ...t, applies: (t.use === 'release and stability' || t.use === purposeLimits(l.s.purpose)) && (!l.s.monitoring || t.key === l.s.monitoring.testKey),
+          analyses: results[t.key] ?? [] })) } : null,
       // The methods this sample's tests are done by: their effective versions, to start an analysis from.
       methods,
       actions: SAMPLE_ACTION_NAMES.filter((a) => refusals[a] === null), refusals, contentHash: sampleHash(l.s, l.events),
       // QC's decision (LIMS-20): made, or what stands in the way of approval for this person.
       // LIMS-23, LIMS-25: the OOS of the sample, and the tests whose reviewed result is out of trend (answered or not).
-      oos, oot: v ? testStates(v.doc, l.s.purpose, results, trend).flatMap((t) => (t.reviewed?.outOfTrend ? [{ key: t.key, name: t.name, analysisNo: t.reviewed.analysisNo, shown: t.reviewed.shown ?? '',
+      oos, oot: v ? testStates(v.doc, l.s.purpose, results, trend, l.s.monitoring?.testKey).flatMap((t) => (t.reviewed?.outOfTrend ? [{ key: t.key, name: t.name, analysisNo: t.reviewed.analysisNo, shown: t.reviewed.shown ?? '',
         trend: t.reviewed.outOfTrend, answer: l.events.find((e) => e.kind === 'oot_answered' && e.payload.test === t.key && e.payload.analysisNo === t.reviewed!.analysisNo) ?? null }] : [])) : [],
       ootRefusal: user.permissions.includes('lims.qc.approve') ? null : 'Answering an out-of-trend flag needs the QC approval permission.',
-      decision: sampleDecision(l.events), decisionHash: v ? decisionHash(l.s, l.events, testStates(v.doc, l.s.purpose, results, trend)) : null,
+      decision: sampleDecision(l.events), decisionHash: v ? decisionHash(l.s, l.events, testStates(v.doc, l.s.purpose, results, trend, l.s.monitoring?.testKey)) : null,
       approvalProblems: !v ? ['The sample has no specification.'] : !user.permissions.includes('lims.qc.approve') ? ['QC approval needs the QC approval permission.']
-        : approvalProblems(facts(l.s), l.events, testStates(v.doc, l.s.purpose, results, trend), user.id, oos, need),
+        : approvalProblems(facts(l.s), l.events, testStates(v.doc, l.s.purpose, results, trend, l.s.monitoring?.testKey), user.id, oos, need),
       // LIMS-30: the reserve sample (null: none logged), and what the decision says when the specification names no quantity.
       reserve: reserve ? { id: reserve.row.id, amount: reserve.row.amount, unit: reserve.row.unit, location: reserve.row.location, keptUntil: reserve.row.keptUntil, state: reserve.state } : null,
       reserveRequired: v?.doc.header.reserveQuantity ?? null,
@@ -378,7 +390,7 @@ export function sampleRoutes(app: FastifyInstance, sql: Sql) {
           const l = await loadSample(tx, id);
           if (!l) throw new SampleError(404, 'not_found');
           const [v] = await tx<{ doc: SpecDoc }[]>`select doc from master_versions where id = ${l.s.specVersionId}`;
-          const tests = testStates(v!.doc, l.s.purpose, await sampleTestResults(tx, id, app), await stabilityTrend(tx, l.s));
+          const tests = testStates(v!.doc, l.s.purpose, await sampleTestResults(tx, id, app), await stabilityTrend(tx, l.s), l.s.monitoring?.testKey);
           const need = l.s.purpose === 'release' ? await reserveNeed(tx, id, v!.doc) : undefined;
           const problems = decision === 'approve' ? approvalProblems(facts(l.s), l.events, tests, user.id, await oosOfSample(tx, id), need) : [rejectionRefusal(l.events)].filter((x): x is string => !!x);
           if (problems.length) throw new SampleError(problems.some((p) => p.includes('another person approves')) ? 403 : 409, 'not_ready', problems);
@@ -419,7 +431,7 @@ export function sampleRoutes(app: FastifyInstance, sql: Sql) {
         const l = await loadSample(tx, id);
         if (!l) throw new SampleError(404, 'not_found');
         const [v] = await tx<{ doc: SpecDoc }[]>`select doc from master_versions where id = ${l.s.specVersionId}`;
-        const tests = testStates(v!.doc, l.s.purpose, await sampleTestResults(tx, id, app), await stabilityTrend(tx, l.s));
+        const tests = testStates(v!.doc, l.s.purpose, await sampleTestResults(tx, id, app), await stabilityTrend(tx, l.s), l.s.monitoring?.testKey);
         const no = ootRefusal(l.events, tests, body.data.test);
         if (no) throw new SampleError(409, 'not_allowed_now', [no]);
         const payload = { test: body.data.test, analysisNo: tests.find((t) => t.key === body.data.test)!.reviewed!.analysisNo, answer: body.data.answer, reason: body.data.reason };

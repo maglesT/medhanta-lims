@@ -42,7 +42,7 @@ export function StudyScreen({ me, id, onBack, onProduct }: { me: Me; id: number;
           <h1>{s.studyNo}</h1>
           <p className="greeting"><b>{s.item.code}</b> {s.item.name} · {s.item.of === 'material' ? 'lot' : 'batch'} {s.lotNo} · placed {plantDate(s.t0)}</p>
         </div>
-        {onProduct && <div><button onClick={() => onProduct({ of: s.item.of, itemId: s.item.itemId })}>Product evaluation</button></div>}
+        {onProduct && <div><button onClick={() => onProduct({ of: s.item.of === 'material' ? 'material' : 'product', itemId: s.item.itemId })}>Product evaluation</button></div>}
       </div>
       {error && <p className="notice" role="alert">{error}</p>}
       {done && <p className="notice" role="status">{done}</p>}

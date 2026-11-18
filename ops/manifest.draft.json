@@ -55,7 +55,8 @@
     "result_v1",
     "oos_v1",
     "instrument_use_v1",
-    "stability_v1"
+    "stability_v1",
+    "em_v1"
   ],
   "reads": {
     "master_data": [
