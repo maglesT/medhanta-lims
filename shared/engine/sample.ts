@@ -86,6 +86,8 @@ export interface TestState {
   reviewed: { analysisNo: string; hasResult: boolean; pass?: boolean; shown?: string; people: number[]; openDeviations: number;
     // LIMS-25: within the limit but outside the spec's trend limit, or a stability result outside its prediction interval (in words).
     outOfTrend?: string } | null;
+  // LIMS-08: an identity test done on each container of a starting material: their number and those without a reviewed result.
+  containers?: { of: number; missing: number[] };
 }
 
 // ---- OOS and OOT (LIMS-23, LIMS-24, LIMS-25) ----
@@ -117,6 +119,12 @@ export function approvalProblems(s: SampleFacts, events: readonly SampleEvent[],
     if (o.status === 'confirmed') out.push(`${o.oosNo} (${o.testName}) is a confirmed OOS: the sample can only be rejected.`);
   }
   for (const t of tests.filter((x) => x.applies)) {
+    const c = t.containers;
+    if (c && !c.of) { out.push(`${t.name}: the sample does not say how many containers were sampled; each container of a starting material is identified.`); continue; }
+    if (c?.missing.length) {
+      out.push(`${t.name}: container${c.missing.length === 1 ? '' : 's'} ${c.missing.join(', ')} of ${c.of} ${c.missing.length === 1 ? 'has' : 'have'} no reviewed identity result; each container of a starting material is identified.`);
+      continue;
+    }
     const r = t.reviewed;
     if (!r) { out.push(`${t.name}: no reviewed result yet.`); continue; }
     if (!r.hasResult) out.push(`${t.name}: analysis ${r.analysisNo} has no result.`);

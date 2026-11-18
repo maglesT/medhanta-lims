@@ -42,6 +42,9 @@ export const specTestSchema = z.object({
   // The other values the method asks the specification for, by name (label claim, average weight …).
   values: z.record(z.string().regex(/^[a-z][a-zA-Z0-9]{0,39}$/), z.union([text(), limitSchema])).default({}),
   use: z.enum(TEST_USES).default('release and stability'),
+  // LIMS-08: an identity test. For a starting material (raw material, active substance) it is done on each container
+  // sampled for release (every container of the lot); the decision waits for a result of each.
+  identity: z.boolean().optional(),
 }).strict();
 
 export const specHeaderSchema = z.object({
@@ -178,6 +181,17 @@ export function specChecks(doc: SpecDoc, methods: (masterId: number) => { doc: M
   return out;
 }
 
+/** The specification types of starting materials (LIMS-08): their identity is tested on each container. */
+export const STARTING_MATERIALS: readonly string[] = ['Raw material', 'Active substance'];
+/**
+ * LIMS-08: the number of containers each identity test of this sample is done on, or null when it is done once. A release
+ * sample of a starting material is identified container by container. A validated reduced identity (fewer containers)
+ * needs the supplier's qualification and whether it is a broker, which no linked system publishes: it is not offered.
+ */
+export function identityContainers(doc: SpecDoc, purpose: string, containers: number | null): number | null {
+  return purpose === 'release' && STARTING_MATERIALS.includes(doc.header.type) && doc.tests.some((t) => t.identity) ? containers ?? 0 : null;
+}
+
 /** Which limits a sample's purpose is tested against: stability samples the shelf-life ones, the others release. */
 export const purposeLimits = (purpose: string): 'release' | 'stability' => (purpose === 'stability' ? 'stability' : 'release');
 
@@ -185,6 +199,24 @@ export const purposeLimits = (purpose: string): 'release' | 'stability' => (purp
 export function testsFor(doc: SpecDoc, methodMasterId: number, purpose: string): SpecTest[] {
   const on = purposeLimits(purpose);
   return doc.tests.filter((t) => t.method.masterId === methodMasterId && (t.use === 'release and stability' || t.use === on));
+}
+
+/**
+ * LIMS-08: the tests an analysis by this method covers for a sample whose identity is tested per container
+ * (perContainer: identityContainers), or why it cannot start. An analysis for a container covers the identity tests
+ * only, for that container; one without a container covers the method's other tests.
+ */
+export function testsForAnalysis(doc: SpecDoc, methodMasterId: number, purpose: string, perContainer: number | null, container?: number): { tests: SpecTest[] } | { problem: string } {
+  const all = testsFor(doc, methodMasterId, purpose);
+  if (perContainer === null) return container === undefined ? { tests: all } : { problem: 'This sample is not identified container by container: start the analysis without a container.' };
+  const ids = all.filter((t) => t.identity);
+  const others = all.filter((t) => !t.identity);
+  if (container === undefined) {
+    return others.length || !ids.length ? { tests: others } : { problem: `Pick the container this identity test is done on (1 to ${perContainer}): each container of a starting material is identified.` };
+  }
+  if (!ids.length) return { problem: 'This method does no identity test of the sample: start it without a container.' };
+  if (container > perContainer) return { problem: `The sample was taken from ${perContainer} container${perContainer === 1 ? '' : 's'}: pick 1 to ${perContainer}.` };
+  return { tests: ids };
 }
 
 /** A test's limit in words, as the certificate and the published results show it ("98.0 to 102.0 %", "NMT 0.5 %"). */

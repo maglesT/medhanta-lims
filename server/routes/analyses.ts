@@ -9,13 +9,14 @@ import { handProblem, pullItem, pullLabItem, pullLot, pullQualification, pulledW
 import { itemFills } from '../../shared/engine/items.js';
 import { SignError, authenticateSigner, contentHash, sign, signBody } from '../signatures.js';
 import { masterVersion } from './masters.js';
+import { outsideResults } from './outside.js';
 import { analysisRecordDoc, type RecordInput, type Signature } from '../analysis-record.js';
 import { linkRetest, oosOfAnalysis, openOos } from './oos.js';
 import { render, sendPdf } from '../pdf.js';
 import { findBlock, type Block, type BlockField } from '../../shared/blocks/index.js';
 import { blocking, masterChecks } from '../../shared/master/checks.js';
 import type { MasterDoc, Step } from '../../shared/master/schema.js';
-import { applySpec, purposeLimits, testsFor, type SpecDoc, type SpecTest } from '../../shared/master/spec.js';
+import { applySpec, identityContainers, limitFor, purposeLimits, testsFor, testsForAnalysis, type SpecDoc, type SpecTest } from '../../shared/master/spec.js';
 import { sampleStatus, type SampleEvent } from '../../shared/engine/sample.js';
 import { isHand as sourceByHand } from '../../shared/engine/links.js';
 import { createHash } from 'node:crypto';
@@ -42,7 +43,8 @@ function send(reply: FastifyReply, e: unknown) {
 export interface AnalysisSample { id: number; sampleNo: string; lotNo: string; purpose: string; item: { code: string; name: string };
   spec: { id: number; number: string; versionNo: number }; tests: SpecTest[] }
 export interface LoadedAnalysis {
-  analysis: { id: number; analysisNo: string; masterVersionId: number; issuedBy: number; issuedAt: Date; sampleId: number | null; tests: string[] };
+  // container: the container of a starting material an identity analysis tested (LIMS-08), else null.
+  analysis: { id: number; analysisNo: string; masterVersionId: number; issuedBy: number; issuedAt: Date; sampleId: number | null; tests: string[]; container?: number | null };
   sample: AnalysisSample | null;
   doc: MasterDoc;
   events: (StepEvent & { personName: string | null })[];
@@ -58,7 +60,7 @@ export interface LoadedAnalysis {
 export async function loadAnalysis(q: Sql | Tx, id: number): Promise<LoadedAnalysis | null> {
   const [b] = await q<(LoadedAnalysis['analysis'] & { doc: MasterDoc; now: Date })[]>`
     select b.id::int, b.analysis_no as "analysisNo", b.master_version_id::int as "masterVersionId", b.issued_by::int as "issuedBy",
-      b.issued_at as "issuedAt", b.sample_id::int as "sampleId", b.tests, v.doc, now() as now
+      b.issued_at as "issuedAt", b.sample_id::int as "sampleId", b.tests, b.container, v.doc, now() as now
     from analyses b join master_versions v on v.id = b.master_version_id where b.id = ${id}`;
   if (!b) return null;
   let sample: AnalysisSample | null = null;
@@ -354,12 +356,16 @@ async function recordClosedStages(tx: Tx, id: number, before: readonly StageView
 // A spec test's result in an analysis: the method's result step (stage/step/name), from its last signed round.
 export interface TestResult { analysisId: number; analysisNo: string; status: string; result: { shown: string; value: string; unit: string; pass?: boolean } | null;
   // Who recorded, signed or checked its steps, and its open deviations (read from Deviations while linked).
-  people: number[]; openDeviations: number; reviewedAt: Date | null; method: string }
+  people: number[]; openDeviations: number; reviewedAt: Date | null; method: string;
+  // LIMS-08: the container an identity analysis tested. LIMS-22: a result of an outside lab (analysisNo: its report number).
+  container?: number | null; outside?: OutsideFacts }
+/** An outside (contract) lab's result as typed from its report (LIMS-22), and its second person's check. */
+export interface OutsideFacts { id: number; lab: string; reportNo: string; fileName: string; size: number; sha256: string; enteredBy: string; enteredAt: Date; checkedBy: string | null; checkedAt: Date | null }
 /** The analyses of a sample, per spec test they cover, oldest first, each with its status and its result once worked out. */
 export async function sampleTestResults(q: Sql | Tx, sampleId: number, app?: FastifyInstance): Promise<Record<string, TestResult[]>> {
-  const ids = await q<{ id: number }[]>`select id::int from analyses where sample_id = ${sampleId} order by id`;
+  const ids = await q<{ id: number; container: number | null }[]>`select id::int, container from analyses where sample_id = ${sampleId} order by id`;
   const out: Record<string, TestResult[]> = {};
-  for (const { id } of ids) {
+  for (const { id, container } of ids) {
     const l = (await loadAnalysis(q, id))!;
     const { steps } = openSteps(l.doc, l.events, l.now);
     const v = analysisView(l.doc, l.events, l.analysisEvents, l.now, app ? (await deviationsRead(app, l)).read : undefined);
@@ -370,10 +376,12 @@ export async function sampleTestResults(q: Sql | Tx, sampleId: number, app?: Fas
       const at = steps.filter((x) => x.stageKey === sk && x.stepKey === tk && ['done', 'checked'].includes(x.state)).at(-1);
       const r = at?.results[name];
       (out[t.key] ??= []).push({ analysisId: id, analysisNo: l.analysis.analysisNo, status, people: v.people, openDeviations: v.deviations.filter((d) => d.open).length,
-        reviewedAt, method: l.doc.header.code,
+        reviewedAt, method: l.doc.header.code, ...(container ? { container } : {}),
         result: r?.ok ? { shown: r.shown, value: r.value, unit: r.unit, ...(r.check ? { pass: r.check.pass } : {}) } : null });
     }
   }
+  // LIMS-22: the results of outside labs, after the lab's own (the latest counts); a result counts once a second person checked it.
+  for (const o of await outsideResults(q, sampleId)) (out[o.testKey] ??= []).push(o.result);
   return out;
 }
 
@@ -386,7 +394,9 @@ export function analysisRoutes(app: FastifyInstance, sql: Sql) {
   // specification that this method does for the sample's purpose; their limits and values go into the method.
   app.post('/api/analyses', { preHandler: requirePermission('lims.analysis.perform') }, async (req, reply) => {
     // oosId: a retest of an OOS whose result QA invalidated (LIMS-24), linked to it.
-    const b = z.object({ masterVersionId: z.number().int().positive(), sampleId: z.number().int().positive().optional(), oosId: z.number().int().positive().optional(), proof: z.string().min(1).max(2000) }).safeParse(req.body);
+    // container: LIMS-08, the container of a starting material an identity analysis is done on.
+    const b = z.object({ masterVersionId: z.number().int().positive(), sampleId: z.number().int().positive().optional(), oosId: z.number().int().positive().optional(),
+      container: z.number().int().min(1).max(100000).optional(), proof: z.string().min(1).max(2000) }).safeParse(req.body);
     if (!b.success) return reply.code(400).send({ error: 'invalid' });
     const user = req.user!;
     try {
@@ -400,15 +410,17 @@ export function analysisRoutes(app: FastifyInstance, sql: Sql) {
         let sample: { id: number; sampleNo: string; tests: string[] } | null = null;
         if (b.data.sampleId !== undefined) {
           await tx`select pg_advisory_xact_lock(${-b.data.sampleId}::bigint)`;
-          const [x] = await tx<{ id: number; sampleNo: string; purpose: string; registeredBy: number; source: Source; spec: SpecDoc }[]>`
-            select s.id::int, s.sample_no as "sampleNo", s.purpose, s.registered_by::int as "registeredBy", s.source, v.doc as spec
+          const [x] = await tx<{ id: number; sampleNo: string; purpose: string; registeredBy: number; source: Source; spec: SpecDoc; containers: number | null }[]>`
+            select s.id::int, s.sample_no as "sampleNo", s.purpose, s.registered_by::int as "registeredBy", s.source, v.doc as spec, s.containers
             from samples s join master_versions v on v.id = s.spec_version_id where s.id = ${b.data.sampleId}`;
           if (!x) throw new StepError(404, 'no_such_sample', ['There is no such sample.']);
           const events = await tx<SampleEvent[]>`select kind, payload, person_id::int as person from sample_events where sample_id = ${x.id} order by id`;
           const status = sampleStatus({ registeredBy: x.registeredBy, byHand: sourceByHand(x.source) }, events);
           // LIMS-07: a sample is tested once QC has received it; never after it is disposed of.
           if (!['received', 'stored', 'handed over'].includes(status)) throw new StepError(409, 'sample_not_in_qc', [`Sample ${x.sampleNo} is ${status}: it is tested once QC has received it.`]);
-          const tests = testsFor(x.spec, v.masterId, x.purpose);
+          const covers = testsForAnalysis(x.spec, v.masterId, x.purpose, identityContainers(x.spec, x.purpose, x.containers), b.data.container);
+          if ('problem' in covers) throw new StepError(409, 'container', [covers.problem]);
+          const tests = covers.tests;
           if (!tests.length) throw new StepError(409, 'method_not_in_spec', [`The specification of sample ${x.sampleNo} has no ${x.purpose === 'stability' ? 'stability' : 'release'} test done by method ${v.doc.header.code}.`]);
           sample = { id: x.id, sampleNo: x.sampleNo, tests: tests.map((t) => t.key) };
         }
@@ -418,10 +430,10 @@ export function analysisRoutes(app: FastifyInstance, sql: Sql) {
           returning last_no as n, right(year::text, 2) as yy`;
         const analysisNo = `${app.analysisPrefix}${c!.yy}${String(c!.n).padStart(5, '0')}`;
         const [row] = await tx<{ id: number }[]>`
-          insert into analyses (analysis_no, master_version_id, issued_by, sample_id, tests)
-          values (${analysisNo}, ${v.id}, ${user.id}, ${sample?.id ?? null}, ${sample?.tests ?? []}) returning id::int`;
+          insert into analyses (analysis_no, master_version_id, issued_by, sample_id, tests, container)
+          values (${analysisNo}, ${v.id}, ${user.id}, ${sample?.id ?? null}, ${sample?.tests ?? []}, ${sample ? b.data.container ?? null : null}) returning id::int`;
         const content = { analysisNo, masterVersionId: v.id, masterId: v.masterId, versionNo: v.versionNo, method: v.doc.header.code,
-          ...(sample ? { sample: sample.sampleNo, tests: sample.tests } : {}) };
+          ...(sample ? { sample: sample.sampleNo, tests: sample.tests, ...(b.data.container ? { container: b.data.container } : {}) } : {}) };
         await sign(tx, { signer, objectType: 'analysis', objectId: row!.id, meaning: 'issued', content, shownHash: contentHash('analysis', row!.id, content) });
         await audit(tx, { actorId: user.id, action: 'analysis.issued', objectType: 'analysis', objectId: row!.id, new: content });
         if (b.data.oosId !== undefined) {

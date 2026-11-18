@@ -334,6 +334,18 @@ describe('corrections: checked by a second person, the original kept', () => {
     expect(text).toMatch(/Generated .* IST by VIEWER · true copy of the electronic record · page 1 of 3$/);
   });
 
+  it('LIMS-10 the worksheet record holds complete data: method and version, each weight with its unit, the worked calculation with its limit and verdict, the balance used, who did and checked each step, when', async () => {
+    const text = await recordText(id);
+    expect(text).toMatch(/Method \| M · M \| Analysis no\. \| LA\d{7}/);
+    expect(text).toMatch(/Method version \| \d+/);
+    expect(text).toMatch(/Issued \| ISSUER, \d+ \w+ 2026, \d\d:\d\d IST/);
+    expect(text).toContain('Net mass: 48.00 mg');
+    expect(text).toContain('50.30 mg is +5 % from 48.00 mg (target); limit ± 2 %\nFAIL: out of limits');
+    expect(text).toContain('Balance: BAL-01 · Analytical balance');
+    expect(text).toMatch(/Signed as done: ASHA, \d+ \w+ 2026, \d\d:\d\d IST · signed "Performed"/);
+    expect(text).toMatch(/Checked: RAVI, \d+ \w+ 2026, \d\d:\d\d IST · signed "Verified \(second person\)"/);
+  });
+
   it('GET /api/analyses/:id shows each step\'s last events only', async () => {
     const b = (await as('viewer', 'GET', `/api/analyses/${id}`)).json() as { steps: { id: string; events: unknown[] }[] };
     const all = (await as('viewer', 'GET', `/api/analyses/${id}/steps/0.1.0.1/events`)).json() as { events: unknown[] };

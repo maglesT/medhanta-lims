@@ -10,6 +10,7 @@ import { PURPOSE_LABEL, STATUS_CHIP, STATUS_LABEL, listSamples, sampleRequests, 
 import { RegisterDialog } from './RegisterDialog.js';
 import { SampleScreen } from './SampleScreen.js';
 import { ReserveList, ReserveScreen, RetestDueList } from './Reserve.js';
+import { FormsNotBack } from './Paper.js';
 import type { SamplePurpose } from '../../../shared/engine/sample.js';
 import '../designer/designer.css';
 import '../floor/floor.css';
@@ -109,6 +110,7 @@ export function Samples({ me }: { me: Me }) {
           </table>
         </div>
       )}
+      <FormsNotBack onOpenSample={setOpen} />
       <ReserveList onOpen={setReserve} />
       {registering && <RegisterDialog from={registering} purpose={purpose} onCancel={() => setRegistering(null)} onDone={(id) => { setRegistering(null); setOpen(id); }} />}
     </>

@@ -47,5 +47,8 @@ export const USERS: Record<string, Permission[]> = {
   smp2: ['lims.sample.register'],
   qaoos1: ['lims.oos.approve'],
   qc1: ['lims.qc.approve', 'lims.view'],
+  // The paper journey (LIMS-06, LIMS-22, LIMS-54): an analyst and a reviewer who open samples.
+  lab1: ['lims.analysis.perform', 'lims.view'],
+  lab2: ['lims.analysis.review', 'lims.view'],
   norole: [],
 };

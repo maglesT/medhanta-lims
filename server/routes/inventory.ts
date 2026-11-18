@@ -75,7 +75,7 @@ const factsBody = z.object({
   name: text(200), storage: text().optional(), source: text(100).optional(), lot: text(60).optional(), supplier: text(100).optional(),
   potency: z.string().trim().max(12).optional(), basis: z.enum(BASES).optional(), expiry: date.optional(), retestOn: date.optional(),
   useDays: z.number().int().optional(), procedure: text().optional(), molarity: z.string().trim().max(20).optional(), serial: text(60).optional(),
-  columnType: text().optional(), sterilisation: text().optional(), organism: text(100).optional(), strain: text(60).optional(),
+  columnType: text().optional(), sterilisation: text().optional(), organism: text(100).optional(), strain: text(60).optional(), tag: text(60).optional(),
 }).strict();
 const registerBody = z.object({ kind: z.enum(ITEM_KINDS), facts: factsBody, parentIds: z.array(z.number().int().positive()).max(20).default([]) }).strict();
 const ACTION_BODIES: Record<ItemAction, z.ZodTypeAny> = {

@@ -162,6 +162,9 @@ function TestCard({ t, n, methods, problems, onChange, onRemove }: {
             {TEST_USES.map((u) => <option key={u} value={u}>{u === 'release and stability' ? 'at release and on stability' : u === 'release' ? 'at release only' : 'on stability only'}</option>)}
           </select>
         </label>
+        {/* LIMS-08: an identity test of a starting material is done on each container sampled. */}
+        <label className="check"><input type="checkbox" aria-label={`Test ${n + 1} is an identity test`} checked={!!t.identity}
+          onChange={(e) => set({ identity: e.target.checked || undefined })} /> Identity test (each container of a starting material)</label>
         <label>Limit type
           <select aria-label={`Test ${n + 1} limit type`} value={t.limitType} onChange={(e) => {
             const limitType = e.target.value as SpecTest['limitType'];

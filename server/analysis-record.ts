@@ -79,7 +79,7 @@ export function analysisRecordDoc(r: RecordInput, by: string, printedAt = new Da
     { text: runs(`${h.code} · ${h.name}`), fontSize: 11, margin: [0, 2, 0, 8] },
     { table: { widths: [90, '*', 90, '*', 90, '*'], body: [
       [th('Method'), small(`${h.code} · ${h.name}`), th('Analysis no.'), small(r.analysis.analysisNo, { bold: true }), th('Status'), small(statusWords(view.status, true), { bold: true })],
-      [th('Sample'), small(r.sample ? `${r.sample.sampleNo} · ${r.sample.item.code} ${r.sample.item.name} · ${r.sample.lotNo}` : 'none (trial analysis)'), th('Specification'), small(r.sample ? `${r.sample.spec.number} version ${r.sample.spec.versionNo}: ${r.sample.tests.map((t) => t.name).join(', ')}` : '—'), th('Purpose'), small(r.sample?.purpose ?? '—')],
+      [th('Sample'), small(r.sample ? `${r.sample.sampleNo} · ${r.sample.item.code} ${r.sample.item.name} · ${r.sample.lotNo}${r.analysis.container ? ` · container ${r.analysis.container}` : ''}` : 'none (trial analysis)'), th('Specification'), small(r.sample ? `${r.sample.spec.number} version ${r.sample.spec.versionNo}: ${r.sample.tests.map((t) => t.name).join(', ')}` : '—'), th('Purpose'), small(r.sample?.purpose ?? '—')],
       [th('Technique'), small(h.technique), th('Reference'), small([h.reference, h.edition].filter(Boolean).join(', ') || '—'), th('Method version'), small(String(r.versionNo))],
       [th('Issued'), small(`${r.issuedByName}, ${plant(r.analysis.issuedAt)}`), th('Times'), small('plant time (IST)'), th('Changed values'), small('marked CHANGED; the original is struck through, with the reason', { color: RED })],
     ] }, layout: 'lightHorizontalLines' },

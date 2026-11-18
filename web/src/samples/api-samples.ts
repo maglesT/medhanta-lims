@@ -42,9 +42,17 @@ export interface SampleDetail {
   // LIMS-30: a release sample's reserve sample (null: none logged), the specification's reserve quantity, and the decision's word when it names none.
   reserve: { id: number; amount: string; unit: string; location: string; keptUntil: string; state: ReserveState } | null;
   reserveRequired: string | null; reserveNote: string | null;
+  // LIMS-08: the containers each identity test is done on (null: once); LIMS-54: the blank worksheets issued for the sample.
+  identityContainers: number | null; forms: FormRow[];
 }
+// LIMS-54: a blank worksheet issued for paper and its state.
+export interface FormRow { id: number; formNo: string; sampleId: number; sampleNo: string; methodCode: string; methodName: string; versionNo: number; reason: string;
+  issuedByName: string; issuedAt: string; state: 'issued' | 'used' | 'unused' | 'voided'; entry: { kind: string; payload: { outcome?: string; analysisNo?: string; reason?: string }; personName: string; at: string } | null }
+// LIMS-22: an outside lab's result, as typed from its report.
+export interface OutsideFacts { id: number; lab: string; reportNo: string; fileName: string; size: number; sha256: string; enteredBy: string; enteredAt: string; checkedBy: string | null; checkedAt: string | null }
 // A spec test's analysis: its status and, once worked out, its result (pass or fail against the test's limit).
-export interface TestResult { analysisId: number; analysisNo: string; status: string; result: { shown: string; value: string; unit: string; pass?: boolean } | null }
+export interface TestResult { analysisId: number; analysisNo: string; status: string; result: { shown: string; value: string; unit: string; pass?: boolean } | null;
+  container?: number | null; outside?: OutsideFacts }
 export interface RegisterInput {
   source: From; lotNumber?: string; batchNumber?: string; byHand?: boolean; itemId?: string; specVersionId: number;
   quantity: string; containers?: number; purpose: SamplePurpose;
@@ -69,3 +77,11 @@ export const STATUS_LABEL: Record<SampleStatus, string> = {
   disposed: 'Disposed of', approved: 'Approved', rejected: 'Rejected',
 };
 export const PURPOSE_LABEL: Record<SamplePurpose, string> = { release: 'Release', retest: 'Retest', stability: 'Stability', investigation: 'Investigation', monitoring: 'EM and water' };
+
+export const labelsLink = (id: number) => `/api/samples/${id}/labels`;
+export const enterOutside = (id: number, body: object) => api<{ ok: true; sha256: string }>('POST', `/api/samples/${id}/outside`, body);
+export const checkOutside = (id: number, rid: number) => api<{ ok: true }>('POST', `/api/samples/${id}/outside/${rid}/check`, {});
+export const issueForm = (id: number, body: { masterVersionId: number; reason: string }) => api<{ ok: true; id: number; formNo: string }>('POST', `/api/samples/${id}/forms`, body);
+export const listForms = (open = false) => api<FormRow[]>('GET', `/api/forms${open ? '?open=1' : ''}`);
+export const formLink = (id: number) => `/api/forms/${id}/pdf`;
+export const formEntry = (id: number, action: 'return' | 'void', body: object) => api<{ ok: true }>('POST', `/api/forms/${id}/${action}`, body);

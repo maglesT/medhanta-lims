@@ -6,14 +6,16 @@
  */
 import type { Block, BlockField } from '../blocks/format.js';
 
-export const ITEM_KINDS = ['reference', 'working', 'reagent', 'solution', 'vs', 'column', 'medium', 'culture'] as const;
+// animal (LIMS-39): a lab animal where a site uses them: identified, kept suitable (blocked when not), its health checks
+// and uses written as entries.
+export const ITEM_KINDS = ['reference', 'working', 'reagent', 'solution', 'vs', 'column', 'medium', 'culture', 'animal'] as const;
 export type ItemKind = (typeof ITEM_KINDS)[number];
 export const ITEM_KIND_NAME: Record<ItemKind, string> = {
   reference: 'Reference standard', working: 'Working standard', reagent: 'Reagent', solution: 'Prepared or test solution', vs: 'Volumetric solution',
-  column: 'Column', medium: 'Culture medium', culture: 'Culture',
+  column: 'Column', medium: 'Culture medium', culture: 'Culture', animal: 'Lab animal',
 };
 /** The number of an item: its kind's prefix, the plant year and a counter per kind and year (RS260001). */
-export const ITEM_PREFIX: Record<ItemKind, string> = { reference: 'RS', working: 'WS', reagent: 'RG', solution: 'SO', vs: 'VS', column: 'CO', medium: 'MD', culture: 'CU' };
+export const ITEM_PREFIX: Record<ItemKind, string> = { reference: 'RS', working: 'WS', reagent: 'RG', solution: 'SO', vs: 'VS', column: 'CO', medium: 'MD', culture: 'CU', animal: 'AN' };
 export const BASES = ['as is', 'dried', 'anhydrous'] as const;
 /** Ph. Eur. 5.1.4 / USP <61>: a test culture is not more than 5 passages from the reference culture. */
 export const MAX_PASSAGE = 5;
@@ -46,6 +48,8 @@ export interface ItemFacts {
   organism?: string;
   strain?: string;
   passage?: number;
+  // lab animal: its own identification (ear tag, tattoo); the species and strain are its organism and strain.
+  tag?: string;
 }
 export type FactName = Exclude<keyof ItemFacts, 'name' | 'passage'>;
 /** The facts asked for at registration, per kind: required, or optional (?). */
@@ -58,12 +62,13 @@ export const KIND_FACTS: Record<ItemKind, { need: FactName[]; may: FactName[]; p
   column: { need: ['columnType', 'serial'], may: ['supplier'], parents: 'none' },
   medium: { need: ['lot', 'sterilisation', 'expiry'], may: ['supplier', 'storage'], parents: 'none' },
   culture: { need: ['organism', 'strain', 'expiry'], may: ['storage'], parents: 'culture' },
+  animal: { need: ['organism', 'tag', 'supplier'], may: ['strain', 'storage'], parents: 'none' },
 };
 export const FACT_LABEL: Record<FactName, string> = {
   storage: 'Storage', source: 'Issued by (pharmacopoeia or primary source)', lot: 'Lot or batch', supplier: 'Supplier', potency: 'Potency (%)', basis: 'Basis of the potency',
   expiry: 'Expiry or use-by date', retestOn: 'Retest date', useDays: 'Use period after opening (days)', procedure: 'Prepared by procedure (SOP or method)',
   molarity: 'Stated molarity', serial: 'Serial number', columnType: 'Column (type and dimensions)', sterilisation: 'Sterilisation (autoclave cycle)',
-  organism: 'Organism', strain: 'Strain (reference culture collection number)',
+  organism: 'Organism', strain: 'Strain (reference culture collection number)', tag: 'Animal identification (ear tag or tattoo)',
 };
 
 export const ITEM_EVENT_KINDS = ['opened', 'standardised', 'qualified', 'growth_promotion', 'checked', 'retest', 'blocked', 'unblocked', 'disposed', 'note'] as const;
@@ -166,6 +171,7 @@ export function itemStatus(item: Item, events: readonly ItemEvent[], today: stri
       break;
     case 'solution':
     case 'column':
+    case 'animal':
       break;
   }
   return { usable: why.length === 0, why, values, due: dues.sort()[0] ?? null, ...(item.kind === 'culture' ? { passage: f.passage ?? 0 } : {}) };

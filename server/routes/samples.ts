@@ -6,7 +6,7 @@ import { parseId, requirePermission } from '../auth.js';
 import { usableItem } from '../master.js';
 import { LOT_USABLE, LOT_WAITING, batchWaiting, type BatchRead, type LotRead } from '../links.js';
 import { SignError, authenticateSigner, contentHash, sign, signBody } from '../signatures.js';
-import { limitFor, limitText, limitWords, outOfTrend, purposeLimits, type SpecDoc } from '../../shared/master/spec.js';
+import { identityContainers, limitFor, limitText, limitWords, outOfTrend, purposeLimits, type SpecDoc } from '../../shared/master/spec.js';
 import { OOT_ANSWERS, approvalProblems, ootRefusal, rejectionRefusal, sampleDecision, type TestState } from '../../shared/engine/sample.js';
 import { oosOfSample } from './oos.js';
 import { loadReserves, openRetestSample, reserveNeed } from './reserve.js';
@@ -15,6 +15,7 @@ import { render, sendPdf } from '../pdf.js';
 import { Dec, roundHalfUp, writtenDecimals } from '../../shared/templates/index.js';
 import { sampleTestResults, type TestResult } from './analyses.js';
 import { sampleTrend } from './trends.js';
+import { loadForms } from './forms.js';
 import {
   PROVIDER_NAME, SAMPLE_ACTIONS, SAMPLE_ACTION_NAMES, SAMPLE_PURPOSES, isHand, sampleRefusal, sampleStatus,
   type LinkState, type SampleAction, type SampleEvent, type SamplePurpose, type Source,
@@ -86,6 +87,8 @@ async function loadSample(q: Sql | Tx, id: number): Promise<{ s: SampleRow; even
     from sample_events e join users u on u.id = e.person_id where e.sample_id = ${id} order by e.id`;
   return { s, events: [...events] };
 }
+/** A sample's row as registered (labels, blank worksheets: server/routes/forms.ts). */
+export const loadSampleRow = async (q: Sql | Tx, id: number) => (await loadSample(q, id))?.s ?? null;
 const facts = (s: SampleRow) => ({ registeredBy: s.registeredBy, byHand: isHand(s.source) });
 // What the signer of a disposal is shown: the sample as it stands, by its last entry (refused if anything was added since).
 const sampleContent = (s: SampleRow, events: EventRow[]) => ({ sample: s.id, sampleNo: s.sampleNo, lotNo: s.lotNo, item: s.item.code, status: sampleStatus(facts(s), events), lastEvent: events.at(-1)?.id ?? 0 });
@@ -130,10 +133,20 @@ export function reportedFigure(value: string, unit: string, limit: { low?: strin
   return `${v}${unit ? ` ${unit}` : ''}`;
 }
 
-export function testStates(spec: SpecDoc, purpose: string, results: Record<string, TestResult[]>, trend: Record<string, string> = {}, only?: string): (TestState & { decided: Record<string, unknown> | null })[] {
+export function testStates(spec: SpecDoc, purpose: string, results: Record<string, TestResult[]>, trend: Record<string, string> = {}, only?: string,
+  containers: number | null = null): (TestState & { decided: Record<string, unknown> | null })[] {
   const on = purposeLimits(purpose);
+  // LIMS-08: a starting material's identity, container by container (identityContainers).
+  const perContainer = identityContainers(spec, purpose, containers);
   return spec.tests.map((t) => {
-    const r = (results[t.key] ?? []).filter((a) => a.status === 'reviewed').at(-1);
+    const reviewed = (results[t.key] ?? []).filter((a) => a.status === 'reviewed');
+    const each = perContainer !== null && t.identity
+      ? Array.from({ length: perContainer }, (_, i) => reviewed.filter((a) => a.container === i + 1).at(-1)) : null;
+    // Per container: the first that fails, else the last; the people and open deviations of all of them.
+    const used = each?.filter((a): a is TestResult => !!a);
+    const r0 = each ? used!.find((a) => a.result?.pass === false) ?? used!.at(-1) : reviewed.at(-1);
+    const r = r0 && used?.length ? { ...r0, analysisNo: used.map((a) => a.analysisNo).join(', '), people: [...new Set(used.flatMap((a) => a.people))],
+      openDeviations: used.reduce((n, a) => n + a.openDeviations, 0) } : r0;
     const shown = r?.result ? `${r.result.value} ${r.result.unit}`.trim() : undefined;
     // LIMS-25: within the limit but outside the spec's trend limit, or (a stability result, plan 2b-3) outside the
     // prediction interval of the earlier results (template L22), or breaking a Nelson rule on the control chart of the
@@ -143,12 +156,14 @@ export function testStates(spec: SpecDoc, purpose: string, results: Record<strin
     return {
       // A monitoring sample is of one test of its specification: the one its plan's sampling names (LIMS-36).
       key: t.key, name: t.name, applies: (t.use === 'release and stability' || t.use === on) && (only === undefined || t.key === only),
+      ...(each ? { containers: { of: perContainer!, missing: each.flatMap((a, i) => (a ? [] : [i + 1])) } } : {}),
       reviewed: r ? { analysisNo: r.analysisNo, hasResult: !!r.result, ...(r.result?.pass !== undefined ? { pass: r.result.pass } : {}), ...(shown ? { shown } : {}),
         people: r.people, openDeviations: r.openDeviations,
         ...(oot ? { outOfTrend: oot } : {}) } : null,
       // The result as it goes on the certificate and into result_v1.
       decided: r?.result ? { key: t.key, name: t.name, value: r.result.value, unit: r.result.unit, shown: r.result.shown, reported: reportedFigure(r.result.value, r.result.unit, limitFor(t, on)), ...(r.result.pass !== undefined ? { pass: r.result.pass } : {}),
-        limit: limitText(t, on), method: r.method, analysisNo: r.analysisNo, reviewedAt: r.reviewedAt } : null,
+        limit: limitText(t, on), method: r.method, analysisNo: r.analysisNo, reviewedAt: r.reviewedAt,
+        ...(each ? { containers: perContainer } : {}), ...(r.outside ? { outsideLab: r.outside.lab, report: { file: r.outside.fileName, sha256: r.outside.sha256 } } : {}) } : null,
     };
   });
 }
@@ -268,6 +283,10 @@ export function sampleRoutes(app: FastifyInstance, sql: Sql) {
         // LIMS-31: one retest sample of a lot at a time, until QC decides on it
         const retest = b.purpose === 'retest' && of === 'material' ? await openRetestSample(tx, lotNo) : null;
         if (retest) throw new SampleError(409, 'already_sampled', [`Lot ${lotNo} already has its retest sample ${retest}, waiting for QC's decision.`]);
+        // LIMS-08: a starting material's identity is tested on each container sampled: their number is needed.
+        const spec = await tx<{ doc: SpecDoc }[]>`select doc from master_versions where id = ${b.specVersionId}`;
+        if (identityContainers(spec[0]!.doc, b.purpose, b.containers ?? null) === 0) throw new SampleError(400, 'containers_needed',
+          ['Containers sampled: give their number. The identity of a starting material is tested on each container (one sample from every container of the lot).']);
         // 4. the number and the row (5. audit)
         return newSample(tx, user.id, { specVersionId: b.specVersionId, purpose: b.purpose, lotNo, item, source, quantity: b.quantity, containers: b.containers ?? null });
       });
@@ -322,15 +341,18 @@ export function sampleRoutes(app: FastifyInstance, sql: Sql) {
       actions: SAMPLE_ACTION_NAMES.filter((a) => refusals[a] === null), refusals, contentHash: sampleHash(l.s, l.events),
       // QC's decision (LIMS-20): made, or what stands in the way of approval for this person.
       // LIMS-23, LIMS-25: the OOS of the sample, and the tests whose reviewed result is out of trend (answered or not).
-      oos, oot: v ? testStates(v.doc, l.s.purpose, results, trend, l.s.monitoring?.testKey).flatMap((t) => (t.reviewed?.outOfTrend ? [{ key: t.key, name: t.name, analysisNo: t.reviewed.analysisNo, shown: t.reviewed.shown ?? '',
+      oos, oot: v ? testStates(v.doc, l.s.purpose, results, trend, l.s.monitoring?.testKey, l.s.containers).flatMap((t) => (t.reviewed?.outOfTrend ? [{ key: t.key, name: t.name, analysisNo: t.reviewed.analysisNo, shown: t.reviewed.shown ?? '',
         trend: t.reviewed.outOfTrend, answer: l.events.find((e) => e.kind === 'oot_answered' && e.payload.test === t.key && e.payload.analysisNo === t.reviewed!.analysisNo) ?? null }] : [])) : [],
       ootRefusal: user.permissions.includes('lims.qc.approve') ? null : 'Answering an out-of-trend flag needs the QC approval permission.',
-      decision: sampleDecision(l.events), decisionHash: v ? decisionHash(l.s, l.events, testStates(v.doc, l.s.purpose, results, trend, l.s.monitoring?.testKey)) : null,
+      decision: sampleDecision(l.events), decisionHash: v ? decisionHash(l.s, l.events, testStates(v.doc, l.s.purpose, results, trend, l.s.monitoring?.testKey, l.s.containers)) : null,
       approvalProblems: !v ? ['The sample has no specification.'] : !user.permissions.includes('lims.qc.approve') ? ['QC approval needs the QC approval permission.']
-        : approvalProblems(facts(l.s), l.events, testStates(v.doc, l.s.purpose, results, trend, l.s.monitoring?.testKey), user.id, oos, need),
+        : approvalProblems(facts(l.s), l.events, testStates(v.doc, l.s.purpose, results, trend, l.s.monitoring?.testKey, l.s.containers), user.id, oos, need),
       // LIMS-30: the reserve sample (null: none logged), and what the decision says when the specification names no quantity.
       reserve: reserve ? { id: reserve.row.id, amount: reserve.row.amount, unit: reserve.row.unit, location: reserve.row.location, keptUntil: reserve.row.keptUntil, state: reserve.state } : null,
       reserveRequired: v?.doc.header.reserveQuantity ?? null,
+      // LIMS-08: the containers each identity test is done on (null: once); LIMS-54: the blank worksheets issued for it.
+      identityContainers: v ? identityContainers(v.doc, l.s.purpose, l.s.containers) : null,
+      forms: await loadForms(sql, { sampleId: l.s.id }),
       reserveNote: release && v && !need?.required ? 'The specification names no reserve quantity: the reserve sample is not checked at approval.' : null,
       rejectionRefusal: user.permissions.includes('lims.qc.approve') ? rejectionRefusal(l.events) : 'Rejection needs the QC approval permission.',
     };
@@ -392,7 +414,7 @@ export function sampleRoutes(app: FastifyInstance, sql: Sql) {
           if (!l) throw new SampleError(404, 'not_found');
           const [v] = await tx<{ doc: SpecDoc }[]>`select doc from master_versions where id = ${l.s.specVersionId}`;
           const sampleResults = await sampleTestResults(tx, id, app);
-          const tests = testStates(v!.doc, l.s.purpose, sampleResults, await sampleTrend(tx, l.s, v!.doc, sampleResults), l.s.monitoring?.testKey);
+          const tests = testStates(v!.doc, l.s.purpose, sampleResults, await sampleTrend(tx, l.s, v!.doc, sampleResults), l.s.monitoring?.testKey, l.s.containers);
           const need = l.s.purpose === 'release' ? await reserveNeed(tx, id, v!.doc) : undefined;
           const problems = decision === 'approve' ? approvalProblems(facts(l.s), l.events, tests, user.id, await oosOfSample(tx, id), need) : [rejectionRefusal(l.events)].filter((x): x is string => !!x);
           if (problems.length) throw new SampleError(problems.some((p) => p.includes('another person approves')) ? 403 : 409, 'not_ready', problems);
@@ -434,7 +456,7 @@ export function sampleRoutes(app: FastifyInstance, sql: Sql) {
         if (!l) throw new SampleError(404, 'not_found');
         const [v] = await tx<{ doc: SpecDoc }[]>`select doc from master_versions where id = ${l.s.specVersionId}`;
         const results = await sampleTestResults(tx, id, app);
-        const tests = testStates(v!.doc, l.s.purpose, results, await sampleTrend(tx, l.s, v!.doc, results), l.s.monitoring?.testKey);
+        const tests = testStates(v!.doc, l.s.purpose, results, await sampleTrend(tx, l.s, v!.doc, results), l.s.monitoring?.testKey, l.s.containers);
         const no = ootRefusal(l.events, tests, body.data.test);
         if (no) throw new SampleError(409, 'not_allowed_now', [no]);
         const payload = { test: body.data.test, analysisNo: tests.find((t) => t.key === body.data.test)!.reviewed!.analysisNo, answer: body.data.answer, reason: body.data.reason };

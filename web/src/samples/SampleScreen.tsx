@@ -8,7 +8,8 @@ import { SignDialog } from '../components/SignDialog.js';
 import { testText } from '../designer/describe.js';
 import type { SampleAction } from '../../../shared/engine/sample.js';
 import { ReservePanel } from './Reserve.js';
-import { PURPOSE_LABEL, STATUS_CHIP, STATUS_LABEL, answerOot, coaLink, decide, getSample, sampleEntry, type SampleDetail, type SampleEntry } from './api-samples.js';
+import { PURPOSE_LABEL, STATUS_CHIP, STATUS_LABEL, answerOot, coaLink, decide, getSample, labelsLink, sampleEntry, type SampleDetail, type SampleEntry } from './api-samples.js';
+import { FormsPanel, OutsideDialog, OutsideLine } from './Paper.js';
 
 // What a sample's lot number is: a material's lot, a product's batch, an EM or water sample's point.
 const LOT_WORD = { material: 'Lot', product: 'Batch', room: 'Point', water: 'Point' } as const;
@@ -63,8 +64,11 @@ export function SampleScreen({ me, id, onBack, onOpenReserve }: { me: Me; id: nu
           <dt>Registered</dt><dd>{s.registeredByName}, {plantTime(s.registeredAt)}</dd>
           {d.spec && (<><dt>Specification</dt><dd>{d.spec.header.number}, version {d.spec.versionNo} · {d.spec.header.pharmacopoeia}{d.spec.header.edition ? ` ${d.spec.header.edition}` : ''}{d.spec.state !== 'effective' ? ` (now ${d.spec.state})` : ''}</dd></>)}
         </dl>
+        {/* LIMS-06: the sample's label and a label for each container sampled, printed from the record. */}
+        <div className="actions-row"><a className="button" href={labelsLink(s.id)} download>Print labels (PDF)</a></div>
       </section>
-      {d.spec && <Tests d={d} me={me} />}
+      {d.spec && <Tests d={d} me={me} reload={load} />}
+      {d.spec && <FormsPanel d={d} me={me} reload={load} />}
       <ReservePanel d={d} me={me} reload={load} onOpen={(r) => onOpenReserve?.(r)} />
       {d.spec && <Decision d={d} me={me} reload={load} />}
       <section className="dash-panel samples-waiting" aria-label="Chain of custody">
@@ -141,8 +145,12 @@ function EntryForm({ action, sampleNo, onSubmit, onCancel }: { action: SampleAct
  * result once worked out, pass or fail against the limit), and the methods to start an analysis by, once the sample is
  * in QC.
  */
-function Tests({ d, me }: { d: SampleDetail; me: Me }) {
+function Tests({ d, me, reload }: { d: SampleDetail; me: Me; reload: () => Promise<void> }) {
   const [starting, setStarting] = useState<SampleDetail['methods'][number] | null>(null);
+  const [outside, setOutside] = useState(false);
+  // LIMS-08: a starting material's identity is tested on each container: the container is picked when its analysis starts.
+  const [container, setContainer] = useState<number | undefined>(undefined);
+  const n = d.identityContainers;
   const inQc = ['received', 'stored', 'handed over'].includes(d.status);
   const may = can(me, 'analysis.perform');
   return (
@@ -155,8 +163,9 @@ function Tests({ d, me }: { d: SampleDetail; me: Me }) {
             {d.spec!.tests.map((t, i) => (
               <tr key={t.key} className={t.applies ? '' : 'muted'}>
                 <td><b>{t.name}</b><span className="cell-sub">{testText(t, i).replace(/^\d+\. [^:]*: /, '')}{t.applies ? '' : ' · not for this sample'}</span></td>
-                <td>{t.analyses.length ? t.analyses.map((a) => (
-                  <div key={a.analysisId}><a href={analysisLink(a.analysisId)}>{a.analysisNo}</a> · {a.status}
+                <td>{n !== null && t.identity && t.applies && <span className="cell-sub">On each of {n} containers: {Array.from({ length: n }, (_, k) => k + 1).map((c) => `${c} ${t.analyses.some((a) => a.container === c && a.status === 'reviewed') ? '✓' : '·'}`).join('  ')}</span>}
+                  {t.analyses.length ? t.analyses.map((a) => a.outside ? <OutsideLine key={`o${a.outside.id}`} d={d} a={a} me={me} reload={reload} /> : (
+                  <div key={a.analysisId}><a href={analysisLink(a.analysisId)}>{a.analysisNo}</a>{a.container ? ` · container ${a.container}` : ''} · {a.status}
                     {a.result && <> · <b>{a.result.value} {a.result.unit}</b>{a.result.pass !== undefined && <span className={`chip ${a.result.pass ? 'chip-ok' : 'chip-bad'}`}>{a.result.pass ? 'within limits' : 'out of limits'}</span>}</>}
                     {d.oot.some((x) => x.key === t.key && x.analysisNo === a.analysisNo) && <span className="chip chip-warn">out of trend</span>}
                     {d.oos.filter((o) => o.testKey === t.key && o.analysisNo === a.analysisNo).map((o) => <a key={o.id} className="chip chip-bad" href={oosLink(o.id)}>{o.oosNo} · {o.status}</a>)}
@@ -170,9 +179,13 @@ function Tests({ d, me }: { d: SampleDetail; me: Me }) {
         <div className="actions-row">
           {inQc ? d.methods.map((m) => <button key={m.masterId} onClick={() => setStarting(m)}>Start {m.code} {m.name}</button>)
             : <p className="muted small">Analyses start once QC has received the sample.</p>}
+          {inQc && !d.decision && <button onClick={() => setOutside(true)}>Outside lab result</button>}
+          {inQc && n !== null && <label className="small">Identity of container<select aria-label="Identity of container" value={container ?? ''} onChange={(e) => setContainer(e.target.value ? Number(e.target.value) : undefined)}>
+            <option value="">— (other tests)</option>{Array.from({ length: n }, (_, k) => <option key={k} value={k + 1}>{k + 1}</option>)}</select></label>}
         </div>
       )}
-      {starting && <IssueDialog row={{ id: starting.versionId, versionNo: starting.versionNo, header: { code: starting.code, name: starting.name } }} sampleId={d.sample.id} sampleNo={d.sample.sampleNo} onCancel={() => setStarting(null)} />}
+      {starting && <IssueDialog row={{ id: starting.versionId, versionNo: starting.versionNo, header: { code: starting.code, name: starting.name } }} sampleId={d.sample.id} sampleNo={d.sample.sampleNo} container={container} onCancel={() => setStarting(null)} />}
+      {outside && <OutsideDialog d={d} onCancel={() => setOutside(false)} onDone={() => { setOutside(false); void reload(); }} />}
     </section>
   );
 }
