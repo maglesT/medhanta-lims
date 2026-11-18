@@ -70,11 +70,20 @@ type CcRow = { number: string; status: string; title: string | null; products: s
 const cc = (r: CcRow): ChangeRead => ({ number: r.number, status: r.status, title: r.title, products: r.products, qaApprovedAt: r.qa_approved_at });
 export const approvedChange = (c: ChangeRead) => c.qaApprovedAt !== null && CHANGE_STEPS.includes(c.status);
 const word = (x: string) => new RegExp(`(^|[^a-z0-9])${x.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}($|[^a-z0-9])`);
-/** Whether a change control's products name this product, by its code or its name (case-insensitive); 'none' when it names no product. */
+// What QMS writes when a change control names no product ("None" ticked on its form).
+const NO_PRODUCT = ['none', 'n/a', 'na', 'nil', '-', '—'];
+/**
+ * Whether a change control's products name this product or material: by its code (a whole word, case-insensitive) or
+ * by its whole name as one entry of the list ("Atorvastatin calcium" does not match "… Atorvastatin calcium tablets");
+ * 'none' when it names no product (empty, or QMS's "none").
+ */
 export function namesProduct(c: ChangeRead, product: { productCode: string; productName: string }): 'yes' | 'no' | 'none' {
   const p = c.products?.trim().toLowerCase();
-  if (!p) return 'none';
-  return [product.productCode, product.productName].some((x) => x.trim() && word(x.trim()).test(p)) ? 'yes' : 'no';
+  if (!p || NO_PRODUCT.includes(p)) return 'none';
+  const code = product.productCode.trim().toLowerCase();
+  const name = product.productName.trim().toLowerCase();
+  const entries = p.split(/[,;\n]/).map((x) => x.trim()).filter(Boolean);
+  return (code && word(code).test(p)) || (name && entries.some((x) => x === name || x === `${code} ${name}`)) ? 'yes' : 'no';
 }
 export const qmsClient = (l: Link) => ({
   change: (number: string) => l.read(async (q, v) => {

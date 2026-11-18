@@ -119,7 +119,7 @@ export function Review({ me, version, doc, blocked, onChanged, onGo }: {
           <label>Change control number<input autoFocus value={cc} onChange={(e) => setCc(e.target.value)} list="cc-picks" placeholder={changes.length ? 'Pick the change control from QMS' : 'e.g. CC-2026-014'} /></label>
           {changes.length > 0 && <datalist id="cc-picks">{changes.map((c) => <option key={c.number} value={c.number}>{c.title}</option>)}</datalist>}
           <p className="muted small">The QA-approved change control under which this version is introduced.{!changes.some((c) => c.number === cc.trim())
-            && ' Without the QMS link it is typed, and another person makes the version effective.'}</p>
+            && (changes.length ? ' This number is not among the QA-approved change controls QMS lists for this version.' : ' Without the QMS link it is typed, and another person makes the version effective.')}</p>
         </Dialog>
       )}
       {doing === 'return' && (

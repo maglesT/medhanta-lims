@@ -360,6 +360,11 @@ describe('LIMS-01 QMS: a new master version needs a QA-approved change control',
     const c = (products: string | null) => ({ number: 'CC', status: 'closed', title: null, qaApprovedAt: 'x', products });
     const prd = { productCode: 'FG-ATV20', productName: 'Atorvastatin calcium tablets 20 mg' };
     expect([c('fg-atv20, FG-ATV40'), c('ATORVASTATIN CALCIUM TABLETS 20 MG'), c('FG-ATV200'), c(' '), c(null)].map((x) => namesProduct(x, prd))).toEqual(['yes', 'yes', 'no', 'none', 'none']);
+    // QMS writes "none" when no product is ticked: names no product. A material's name inside a product's name is not it.
+    expect([c('none'), c('None'), c('n/a')].map((x) => namesProduct(x, prd))).toEqual(['none', 'none', 'none']);
+    const api = { productCode: 'API-ATV', productName: 'Atorvastatin calcium' };
+    expect([c('FG-ATV20 Atorvastatin calcium film-coated tablets 20 mg'), c('Atorvastatin calcium'), c('API-ATV Atorvastatin calcium'), c('API-ATV, FG-ATV20')].map((x) => namesProduct(x, api)))
+      .toEqual(['no', 'yes', 'yes', 'yes']);
   });
 
   it('LIMS-01 QMS down: the number is typed, and another person makes the version effective', async () => {
