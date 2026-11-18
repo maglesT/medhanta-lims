@@ -34,6 +34,9 @@ export const specTestSchema = z.object({
   limit: limitSchema.optional(),
   // "release and shelf life": the wider limit that applies on stability.
   shelfLifeLimit: limitSchema.optional(),
+  // LIMS-25: an optional trend limit, inside the limit: a result within the limit but outside it is out of trend (flagged
+  // on the sample; QC answers the flag before approval).
+  trendLimit: limitSchema.optional(),
   // conforms: what the result must show, as written ("The IR spectrum matches the reference spectrum").
   conforms: text(500).optional(),
   // The other values the method asks the specification for, by name (label claim, average weight …).
@@ -143,7 +146,8 @@ export function specChecks(doc: SpecDoc, methods: (masterId: number) => { doc: M
       case 'alert and action': need((low || high) && (t.limit?.alertLow !== undefined || t.limit?.alertHigh !== undefined), 'give the action limit and the alert limit'); break;
       case 'release and shelf life': need((low || high) && !!t.shelfLifeLimit, 'give the release limit and the shelf-life limit'); break;
     }
-    for (const [name, l] of [['limit', t.limit], ['shelfLifeLimit', t.shelfLifeLimit]] as const) {
+    if (t.trendLimit && t.limitType === 'conforms') error(`${p}.trendLimit`, `${t.name}: a conforms test has no number to trend`, 'LIMS-25');
+    for (const [name, l] of [['limit', t.limit], ['shelfLifeLimit', t.shelfLifeLimit], ['trendLimit', t.trendLimit]] as const) {
       if (!l) continue;
       const r = c1WithinLimits({ value: { value: '0', unit: l.unit }, limit: l });
       if (!r.ok) error(`${p}.${name}`, `${t.name}: ${r.message}`);
@@ -184,9 +188,20 @@ export function limitText(t: SpecTest, purpose: 'release' | 'stability' = 'relea
   if (t.limitType === 'conforms') return `Conforms: ${t.conforms ?? ''}`.trim();
   if (t.limitType === 'report only') return 'Report';
   const l = limitFor(t, purpose);
-  if (!l) return '';
+  return l ? limitWords(l) : '';
+}
+
+/** A limit in words: "98.0 to 102.0 %", "NMT 0.5 %", "NLT 80 %". */
+export function limitWords(l: Limit): string {
   const u = l.unit ? ` ${l.unit}` : '';
   const main = l.low !== undefined && l.high !== undefined ? `${l.low} to ${l.high}${u}` : l.high !== undefined ? `NMT ${l.high}${u}` : `NLT ${l.low}${u}`;
   const alert = l.alertLow !== undefined || l.alertHigh !== undefined ? ` (alert ${[l.alertLow && `below ${l.alertLow}`, l.alertHigh && `above ${l.alertHigh}`].filter(Boolean).join(', ')})` : '';
   return main + alert;
+}
+
+/** LIMS-25: a result within its limit but outside the test's trend limit is out of trend; false without a trend limit. */
+export function outOfTrend(t: SpecTest, value: string, unit: string): boolean {
+  if (!t.trendLimit) return false;
+  const r = c1WithinLimits({ value: { value, unit }, limit: t.trendLimit });
+  return r.ok && r.check?.pass === false;
 }

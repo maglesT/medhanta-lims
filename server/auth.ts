@@ -14,6 +14,7 @@ export const PERMISSIONS = {
   'lims.analysis.check': 'Check steps performed by another person (second person)',
   'lims.analysis.review': 'Review a complete analysis with its audit trail, or stop one',
   'lims.qc.approve': 'QC decision on a sample (approve or reject) and its certificate of analysis',
+  'lims.oos.approve': 'QA approval of OOS conclusions and invalidations',
   'lims.view': 'View samples, analyses, methods and specifications',
   'lims.demo.skip': 'Skip a running wait (demo installations only)',
 } as const;

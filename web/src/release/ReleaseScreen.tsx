@@ -35,7 +35,7 @@ interface Review {
   notApplicable: FloorEvent[];
   // Demo installations only: the waits ended at once (server/demo.ts).
   demoSkips: FloorEvent[];
-  analysisEvents: { id: number; kind: string; payload: { reason?: string }; personName: string; at: string }[];
+  analysisEvents: { id: number; kind: string; payload: { reason?: string; oosNo?: string }; personName: string; at: string }[];
   signatures: { objectType: string; printedName: string; meaning: string; signedAt: string; step: string | null }[];
 }
 type Signing = { meaning: 'reviewed'; action: 'review' };
@@ -72,7 +72,7 @@ export function ReleaseScreen({ me, id }: { me: Me; id: number }) {
   // Server messages name steps by their position; people see the step's name.
   const plain = (t: string) => words(t.replace(/(?:step|Step) \S+ \((\d+\.\d+\.\d+\.\d+)\)|\(step (\d+\.\d+\.\d+\.\d+)\)/g, (m, a, b) => (a ? `step ${name(a)}` : `(${name(b)})`)));
   const fieldLabel = (step: string, field: string) => fieldOf(d, blocks, step, field);
-  const decided = d.analysis.status === 'reviewed' || d.analysis.status === 'stopped';
+  const decided = d.analysis.status === 'reviewed' || d.analysis.status === 'stopped' || d.analysis.status === 'invalidated';
   const openDevs = r.deviations.filter((x) => x.open);
   const turn = d.analysis.status === 'complete';
   const handLabel = (step: string, field: string) => field === 'reference' ? 'deviation number' : fieldLabel(step, field);
@@ -149,8 +149,9 @@ export function ReleaseScreen({ me, id }: { me: Me; id: number }) {
           <a className="button" href={pdfLink(id)} download>Analysis record (PDF)</a></div>
         {notice && <p className="notice info" role="status">{notice}</p>}
         {r.analysisEvents.filter((b) => b.kind !== 'deviation_closed').map((b) => (
-          <p key={b.id} className={b.kind === 'stopped' ? 'notice bad' : 'all-good'}><span aria-hidden="true">{b.kind === 'stopped' ? '✕' : '✓'}</span>
-            {b.kind === 'stopped' ? stoppedText(b, plainClock) : <>{MEANING_LABEL[b.kind] ?? b.kind} by {b.personName}, {plainClock(b.at)}</>}</p>))}
+          <p key={b.id} className={b.kind === 'stopped' || b.kind === 'invalidated' ? 'notice bad' : 'all-good'}><span aria-hidden="true">{b.kind === 'stopped' || b.kind === 'invalidated' ? '✕' : '✓'}</span>
+            {b.kind === 'stopped' ? stoppedText(b, plainClock) : b.kind === 'invalidated' ? <>Invalidated by QA in {b.payload.oosNo} ({b.personName}, {plainClock(b.at)}): {b.payload.reason}</>
+              : <>{MEANING_LABEL[b.kind] ?? b.kind} by {b.personName}, {plainClock(b.at)}</>}</p>))}
         {turn && (d.analysis.actions.includes('review') ? (
           <div className="decide">
             <p className="why">Your signature means: you reviewed the original record and its audit trail above ({count(r.corrections.length, 'correction')}, {count(r.sentBack.length, 'step')} sent back,

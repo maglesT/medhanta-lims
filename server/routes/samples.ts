@@ -6,8 +6,9 @@ import { parseId, requirePermission } from '../auth.js';
 import { usableItem } from '../master.js';
 import { LOT_WAITING, batchWaiting, type BatchRead, type LotRead } from '../links.js';
 import { SignError, authenticateSigner, contentHash, sign, signBody } from '../signatures.js';
-import { limitText, purposeLimits, type SpecDoc } from '../../shared/master/spec.js';
-import { approvalProblems, rejectionRefusal, sampleDecision, type TestState } from '../../shared/engine/sample.js';
+import { limitText, limitWords, outOfTrend, purposeLimits, type SpecDoc } from '../../shared/master/spec.js';
+import { OOT_ANSWERS, approvalProblems, ootRefusal, rejectionRefusal, sampleDecision, type TestState } from '../../shared/engine/sample.js';
+import { oosOfSample } from './oos.js';
 import { coaDoc } from '../coa.js';
 import { render, sendPdf } from '../pdf.js';
 import { sampleTestResults, type TestResult } from './analyses.js';
@@ -115,7 +116,9 @@ export function testStates(spec: SpecDoc, purpose: string, results: Record<strin
     return {
       key: t.key, name: t.name, applies: t.use === 'release and stability' || t.use === on,
       reviewed: r ? { analysisNo: r.analysisNo, hasResult: !!r.result, ...(r.result?.pass !== undefined ? { pass: r.result.pass } : {}), ...(shown ? { shown } : {}),
-        people: r.people, openDeviations: r.openDeviations } : null,
+        people: r.people, openDeviations: r.openDeviations,
+        // LIMS-25: within the limit but outside the trend limit: flagged.
+        ...(r.result && r.result.pass !== false && t.trendLimit && outOfTrend(t, r.result.value, r.result.unit) ? { outOfTrend: limitWords(t.trendLimit) } : {}) } : null,
       // The result as it goes on the certificate and into result_v1.
       decided: r?.result ? { key: t.key, name: t.name, value: r.result.value, unit: r.result.unit, shown: r.result.shown, ...(r.result.pass !== undefined ? { pass: r.result.pass } : {}),
         limit: limitText(t, on), method: r.method, analysisNo: r.analysisNo, reviewedAt: r.reviewedAt } : null,
@@ -253,6 +256,7 @@ export function sampleRoutes(app: FastifyInstance, sql: Sql) {
     const [v] = await sql<{ id: number; masterId: number; versionNo: number; state: string; doc: SpecDoc }[]>`
       select id::int, master_id::int as "masterId", version_no as "versionNo", state, doc from master_versions where id = ${l.s.specVersionId}`;
     const results = await sampleTestResults(sql, l.s.id, app);
+    const oos = await oosOfSample(sql, l.s.id);
     const methodIds = [...new Set((v?.doc.tests ?? []).filter((t) => t.use === 'release and stability' || t.use === purposeLimits(l.s.purpose)).map((t) => t.method.masterId))];
     const methods = methodIds.length ? await sql<{ versionId: number; masterId: number; versionNo: number; code: string; name: string }[]>`
       select id::int as "versionId", master_id::int as "masterId", version_no as "versionNo", doc->'header'->>'code' as code, doc->'header'->>'name' as name
@@ -269,9 +273,13 @@ export function sampleRoutes(app: FastifyInstance, sql: Sql) {
       methods,
       actions: SAMPLE_ACTION_NAMES.filter((a) => refusals[a] === null), refusals, contentHash: sampleHash(l.s, l.events),
       // QC's decision (LIMS-20): made, or what stands in the way of approval for this person.
+      // LIMS-23, LIMS-25: the OOS of the sample, and the tests whose reviewed result is out of trend (answered or not).
+      oos, oot: v ? testStates(v.doc, l.s.purpose, results).flatMap((t) => (t.reviewed?.outOfTrend ? [{ key: t.key, name: t.name, analysisNo: t.reviewed.analysisNo, shown: t.reviewed.shown ?? '',
+        trend: t.reviewed.outOfTrend, answer: l.events.find((e) => e.kind === 'oot_answered' && e.payload.test === t.key && e.payload.analysisNo === t.reviewed!.analysisNo) ?? null }] : [])) : [],
+      ootRefusal: user.permissions.includes('lims.qc.approve') ? null : 'Answering an out-of-trend flag needs the QC approval permission.',
       decision: sampleDecision(l.events), decisionHash: v ? decisionHash(l.s, l.events, testStates(v.doc, l.s.purpose, results)) : null,
       approvalProblems: !v ? ['The sample has no specification.'] : !user.permissions.includes('lims.qc.approve') ? ['QC approval needs the QC approval permission.']
-        : approvalProblems(facts(l.s), l.events, testStates(v.doc, l.s.purpose, results), user.id),
+        : approvalProblems(facts(l.s), l.events, testStates(v.doc, l.s.purpose, results), user.id, oos),
       rejectionRefusal: user.permissions.includes('lims.qc.approve') ? rejectionRefusal(l.events) : 'Rejection needs the QC approval permission.',
     };
   });
@@ -332,7 +340,7 @@ export function sampleRoutes(app: FastifyInstance, sql: Sql) {
           if (!l) throw new SampleError(404, 'not_found');
           const [v] = await tx<{ doc: SpecDoc }[]>`select doc from master_versions where id = ${l.s.specVersionId}`;
           const tests = testStates(v!.doc, l.s.purpose, await sampleTestResults(tx, id, app));
-          const problems = decision === 'approve' ? approvalProblems(facts(l.s), l.events, tests, user.id) : [rejectionRefusal(l.events)].filter((x): x is string => !!x);
+          const problems = decision === 'approve' ? approvalProblems(facts(l.s), l.events, tests, user.id, await oosOfSample(tx, id)) : [rejectionRefusal(l.events)].filter((x): x is string => !!x);
           if (problems.length) throw new SampleError(problems.some((p) => p.includes('another person approves')) ? 403 : 409, 'not_ready', problems);
           if (b.contentHash !== decisionHash(l.s, l.events, tests)) throw new SampleError(409, 'content_changed', ['The sample or its results changed since you opened it.']);
           let coaNo: string | undefined;
@@ -358,6 +366,33 @@ export function sampleRoutes(app: FastifyInstance, sql: Sql) {
       }
     });
   }
+
+  // LIMS-25: QC answers the out-of-trend flag of a test's reviewed result: no action, or an investigation, with the reason.
+  app.post<{ Params: { id: string } }>('/api/samples/:id/oot', { preHandler: requirePermission('lims.qc.approve') }, async (req, reply) => {
+    const id = parseId(req.params.id);
+    const body = z.object({ test: z.string().min(1).max(60), answer: z.enum(OOT_ANSWERS), reason: text(1000) }).strict().safeParse(req.body);
+    if (id === null || !body.success) return reply.code(400).send({ error: 'invalid', problems: body.error?.issues.map((i) => `${i.path.join('.')}: ${i.message}`) ?? [] });
+    const user = req.user!;
+    try {
+      return await sql.begin(async (tx) => {
+        await tx`select pg_advisory_xact_lock(hashtext(${`sample-entry:${id}`}))`;
+        const l = await loadSample(tx, id);
+        if (!l) throw new SampleError(404, 'not_found');
+        const [v] = await tx<{ doc: SpecDoc }[]>`select doc from master_versions where id = ${l.s.specVersionId}`;
+        const tests = testStates(v!.doc, l.s.purpose, await sampleTestResults(tx, id, app));
+        const no = ootRefusal(l.events, tests, body.data.test);
+        if (no) throw new SampleError(409, 'not_allowed_now', [no]);
+        const payload = { test: body.data.test, analysisNo: tests.find((t) => t.key === body.data.test)!.reviewed!.analysisNo, answer: body.data.answer, reason: body.data.reason };
+        const [ev] = await tx<{ id: number }[]>`
+          insert into sample_events (sample_id, kind, payload, person_id) values (${id}, 'oot_answered', ${tx.json(payload)}, ${user.id}) returning id::int`;
+        await audit(tx, { actorId: user.id, action: 'sample.oot_answered', objectType: 'sample', objectId: id, new: { event: ev!.id, ...payload }, reason: payload.reason });
+        return { ok: true, eventId: ev!.id };
+      });
+    } catch (e) {
+      if (e instanceof SampleError) return reply.code(e.status).send({ error: e.code, problems: e.problems, message: e.problems[0] });
+      throw e;
+    }
+  });
 
   // LIMS-21: the certificate of analysis of an approved sample, as a PDF: only the reviewed results decided on.
   app.get<{ Params: { id: string } }>('/api/samples/:id/coa', reader, async (req, reply) => {

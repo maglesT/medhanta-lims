@@ -58,8 +58,9 @@ export function testText(t: SpecTest, n: number): string {
   const limit = t.limitType === 'conforms' ? `Conforms: ${t.conforms ?? '(not said)'}` : t.limitType === 'report only' ? 'Reported only, no limit'
     : t.limitType === 'release and shelf life' ? `Release ${t.limit ? limitWords(t.limit) : '(not set)'}; shelf life ${t.shelfLifeLimit ? limitWords(t.shelfLifeLimit) : '(not set)'}`
     : t.limit ? `${t.limitType === 'alert and action' ? 'Action limit' : 'Limit'} ${limitWords(t.limit)}` : 'Limit (not set)';
+  const trend = t.trendLimit ? `; trend limit ${limitWords(t.trendLimit)}` : '';
   const values = Object.entries(t.values).map(([k, v]) => `${k} ${typeof v === 'string' ? v : limitWords(v)}`).join('; ');
-  return `${n + 1}. ${t.name}: ${limit}. Method ${t.method.code} ${t.method.name}, result ${t.result}. Applies ${t.use === 'release and stability' ? 'at release and on stability' : t.use === 'release' ? 'at release' : 'on stability'}.${values ? ` Gives the method: ${values}.` : ''}`;
+  return `${n + 1}. ${t.name}: ${limit}${trend}. Method ${t.method.code} ${t.method.name}, result ${t.result}. Applies ${t.use === 'release and stability' ? 'at release and on stability' : t.use === 'release' ? 'at release' : 'on stability'}.${values ? ` Gives the method: ${values}.` : ''}`;
 }
 function describeSpec(doc: SpecDoc): Section[] {
   const h = doc.header;

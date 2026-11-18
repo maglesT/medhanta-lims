@@ -232,7 +232,7 @@ masses and dilution factors refer to the weigh and dilute steps before it, and a
 method sets but whose result is missing. All production blocks and the tablet formula, dispensing, stock and yield
 parts are removed.
 
-Permissions (`lims.*`): master.author, master.check, master.approve (methods and specs), sample.register,
+Permissions (`lims.*`): master.author, master.check, master.approve (methods and specs), sample.register, oos.approve (step 4),
 analysis.perform, analysis.check, analysis.review, qc.approve, view, demo.skip.
 
 ## Step 4: lab inventory (build step 4, 18 Nov 2026)
@@ -270,3 +270,20 @@ and shown in the inventory and at the worksheet step.
   `lims.analysis.perform`; the second person's check `lims.analysis.review`; reading also `lims.view`. No new code.
 - Not in this round: printed labels, stability chambers (with stability, step 6) and instruments with the Logbook and
   Qualification links (step 4, instruments).
+
+## Step 4: OOS and OOT (18 Nov 2026)
+Built the Logbook way, like samples: a row and insert-only entries, the status computed by a pure function
+(`shared/engine/oos.ts`), no workflow engine. FDA guidance on OOS results (2022), paraphrased.
+
+| LIMS record | Copied from | How |
+|---|---|---|
+| **OOS** (`OOS26xxxx`, migration `0010`) | Sample + entries | Opened at once, in the transaction of the step signature that gave a spec test's result out of its limit (one per analysis and test; `server/routes/oos.ts` openOos, called from the step "done" route). The row keeps the result as recorded. Entries (`oos_events`): phase Ia checklist (8 fixed items, yes/no, a "no" with what was found), phase Ib plan and its re-measurement (only as planned first; each result checked against the limit and shown on its own, never averaged), phase I conclusion (laboratory error with cause, or none), its return or its review (e-signature `reviewed`, `lims.analysis.review`, not a person of the analysis or of phase I), phase II deviation number and its second-person check, QA's conclusion (e-signature `oos_approved`, new permission `lims.oos.approve`), and each retest. Status: phase I, phase I review, QA approval, phase II, confirmed, invalidated. |
+| **Invalidation** (LIMS-24, LIMS-48) | Analysis stop | Only after a reviewed phase I that found an assignable laboratory cause (or a phase II that found one, with the cause written): QA signs; the analysis gets an analysis event `invalidated` (status `invalidated`, it stays and is printed marked); QA authorises 1 to 3 retests; each retest is a new analysis of the sample started from the OOS (`oosId`), linked by an entry. |
+| **Phase II** | Analysis deviation notes | A deviation of Deviations' `deviation_v1`: picked from the deviations naming the analysis while linked (a number not there is refused); typed by hand while absent or down, then checked by a second person. QA concludes when Deviations has it closed (read live), or by hand when Deviations does not answer. |
+| **QC decision** | `approvalProblems` | Refused while an OOS of the sample is open; a confirmed OOS leaves only rejection; an invalidated analysis no longer counts (the latest reviewed, not invalidated, analysis per test counts). |
+| **OOT** (LIMS-25) | Spec limit | Optional `trendLimit` on a spec test (spec editor). A reviewed result within the limit but outside it is flagged on the sample; QC answers it (sample entry `oot_answered`: no action or investigation, with the reason) before approval. |
+| **View** | `coa_v1` | `report.oos_v1` (OOS number, sample, lot, item, test, result, status OPEN/CONFIRMED/INVALIDATED, phase_ii_needed, deviation number, opened/closed), ids `md5('lims:oos:'||id)`, for Deviations to file phase II from. |
+
+Screens: the OOS tab (open and concluded), the OOS screen (the result, phase Ia, Ib, conclusion and review, phase II,
+QA conclusion, retests, other lots of the item for the impact, history); the sample screen shows each OOS and OOT flag
+in the decision; the analysis screen links its OOS and says when it is invalidated.

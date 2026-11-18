@@ -10,12 +10,13 @@ import { failed } from './values.js';
 import { isHand, PROVIDER_NAME, type LinkState, type Source } from './links.js';
 import { trainingTyped } from './training.js';
 
-export const ANALYSIS_EVENT_KINDS = ['reviewed', 'stopped', 'deviation_closed'] as const;
+// 'invalidated': QA invalidated its result in an OOS investigation (LIMS-24); the record stays, marked (LIMS-48).
+export const ANALYSIS_EVENT_KINDS = ['reviewed', 'stopped', 'deviation_closed', 'invalidated'] as const;
 export type AnalysisEventKind = (typeof ANALYSIS_EVENT_KINDS)[number];
 // An analysis stopped before it is complete keeps its record (LIMS-48: aborted tests are kept), with the reason.
-export interface AnalysisEvent { id: number; kind: AnalysisEventKind; payload: { note?: number; reason?: string }; person: number; at: Date }
+export interface AnalysisEvent { id: number; kind: AnalysisEventKind; payload: { note?: number; reason?: string; oos?: number; oosNo?: string }; person: number; at: Date }
 
-export const ANALYSIS_STATUSES = ['in progress', 'complete', 'reviewed', 'stopped'] as const;
+export const ANALYSIS_STATUSES = ['in progress', 'complete', 'reviewed', 'stopped', 'invalidated'] as const;
 export type AnalysisStatus = (typeof ANALYSIS_STATUSES)[number];
 
 export type AnalysisAction = 'review' | 'stop' | 'close-deviation';
@@ -97,7 +98,7 @@ export function analysisView(doc: MasterDoc, events: readonly StepEvent[], analy
   const late = lateItems(doc, events, now).filter((l) => !l.notes.length).map((l) => `${l.timer.label} ran over: a deviation note is needed`);
   const devs = deviations(events, analysisEvents, read).map((d) => ({ ...d, where: stepLabel(doc, parseKey(d.step)!) }));
   const has = (k: AnalysisEventKind) => analysisEvents.some((e) => e.kind === k);
-  const status: AnalysisStatus = has('stopped') ? 'stopped' : has('reviewed') ? 'reviewed' : open.length ? 'in progress' : 'complete';
+  const status: AnalysisStatus = has('invalidated') ? 'invalidated' : has('stopped') ? 'stopped' : has('reviewed') ? 'reviewed' : open.length ? 'in progress' : 'complete';
   const people = [...new Set(events.filter((e) => e.person !== null && e.kind !== 'demo_wait_skipped').map((e) => e.person!))];
   return { status, open, late, deviations: devs, people };
 }
@@ -113,7 +114,7 @@ export function analysisRefusal(action: AnalysisAction, v: AnalysisView, user: {
   if (!user.permissions.includes(rule.permission)) return { status: 403, error: 'forbidden', problems: ['You do not have the permission for this action.'] };
   const no = (...problems: string[]) => (problems.length ? { status: 409 as const, error: 'not_ready', problems } : null);
   const words = statusWords(v.status);
-  if (v.status === 'reviewed' || v.status === 'stopped') return no(`The analysis is ${words}.`);
+  if (v.status === 'reviewed' || v.status === 'stopped' || v.status === 'invalidated') return no(`The analysis is ${words}.`);
   if (action === 'stop') return null;
   if (action === 'close-deviation') {
     const d = v.deviations.find((x) => x.note === note && x.open);

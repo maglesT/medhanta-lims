@@ -10,6 +10,7 @@ import { itemFills } from '../../shared/engine/items.js';
 import { SignError, authenticateSigner, contentHash, sign, signBody } from '../signatures.js';
 import { masterVersion } from './masters.js';
 import { analysisRecordDoc, type RecordInput, type Signature } from '../analysis-record.js';
+import { linkRetest, oosOfAnalysis, openOos } from './oos.js';
 import { render, sendPdf } from '../pdf.js';
 import { findBlock } from '../../shared/blocks/index.js';
 import { blocking, masterChecks } from '../../shared/master/checks.js';
@@ -310,7 +311,8 @@ export function analysisRoutes(app: FastifyInstance, sql: Sql) {
   // sample (sampleId): the sample is in QC (received, not disposed), and the analysis covers the tests of the sample's
   // specification that this method does for the sample's purpose; their limits and values go into the method.
   app.post('/api/analyses', { preHandler: requirePermission('lims.analysis.perform') }, async (req, reply) => {
-    const b = z.object({ masterVersionId: z.number().int().positive(), sampleId: z.number().int().positive().optional(), proof: z.string().min(1).max(2000) }).safeParse(req.body);
+    // oosId: a retest of an OOS whose result QA invalidated (LIMS-24), linked to it.
+    const b = z.object({ masterVersionId: z.number().int().positive(), sampleId: z.number().int().positive().optional(), oosId: z.number().int().positive().optional(), proof: z.string().min(1).max(2000) }).safeParse(req.body);
     if (!b.success) return reply.code(400).send({ error: 'invalid' });
     const user = req.user!;
     try {
@@ -348,6 +350,10 @@ export function analysisRoutes(app: FastifyInstance, sql: Sql) {
           ...(sample ? { sample: sample.sampleNo, tests: sample.tests } : {}) };
         await sign(tx, { signer, objectType: 'analysis', objectId: row!.id, meaning: 'issued', content, shownHash: contentHash('analysis', row!.id, content) });
         await audit(tx, { actorId: user.id, action: 'analysis.issued', objectType: 'analysis', objectId: row!.id, new: content });
+        if (b.data.oosId !== undefined) {
+          const no = await linkRetest(tx, b.data.oosId, { id: row!.id, analysisNo, sampleId: sample?.id ?? null, tests: sample?.tests ?? [] }, user.id);
+          if (no) throw new StepError(409, 'not_a_retest', [no]);
+        }
         return { id: row!.id, analysisNo };
       });
     } catch (e) {
@@ -359,7 +365,7 @@ export function analysisRoutes(app: FastifyInstance, sql: Sql) {
   app.get('/api/analyses', anyUser, async (req) => {
     const ids = await sql<{ id: number }[]>`
       select b.id::int from analyses b
-      where not exists (select 1 from analysis_events e where e.analysis_id = b.id and e.kind in ('reviewed', 'stopped'))
+      where not exists (select 1 from analysis_events e where e.analysis_id = b.id and e.kind in ('reviewed', 'stopped', 'invalidated'))
       order by b.issued_at desc limit 100`;
     const out = [];
     for (const { id } of ids) {
@@ -392,7 +398,7 @@ export function analysisRoutes(app: FastifyInstance, sql: Sql) {
   app.get('/api/analyses/to-review', { preHandler: requirePermission('lims.analysis.review') }, async (req) => {
     const ids = await sql<{ id: number }[]>`
       select b.id::int from analyses b
-      where not exists (select 1 from analysis_events e where e.analysis_id = b.id and e.kind in ('reviewed', 'stopped'))
+      where not exists (select 1 from analysis_events e where e.analysis_id = b.id and e.kind in ('reviewed', 'stopped', 'invalidated'))
       order by b.issued_at limit 200`;
     const out = [];
     for (const { id } of ids) {
@@ -417,11 +423,13 @@ export function analysisRoutes(app: FastifyInstance, sql: Sql) {
     const dv = await deviationsRead(app, l);
     const bv = view(l, dv.read);
     // A reviewed or stopped analysis takes no more step actions and runs no more timers.
-    const decided = bv.status === 'reviewed' || bv.status === 'stopped';
+    const decided = bv.status === 'reviewed' || bv.status === 'stopped' || bv.status === 'invalidated';
     return {
       sample: l.sample,
       analysis: { ...l.analysis, ...bv, deviationsLink: dv.link, contentHash: analysisHash(l), actions: ANALYSIS_NAMES.filter((a) => a !== 'close-deviation' && !analysisRefusal(a, bv, req.user!)),
-        stopped: l.analysisEvents.find((e) => e.kind === 'stopped') ?? null },
+        stopped: l.analysisEvents.find((e) => e.kind === 'stopped') ?? null, invalidated: l.analysisEvents.find((e) => e.kind === 'invalidated') ?? null },
+      // The OOS this analysis opened or is a retest of (LIMS-23, LIMS-24).
+      oos: await oosOfAnalysis(sql, l.analysis.id),
       // The server time: the screens count timers down on the server clock.
       now: l.now, master: { id: v!.id, masterId: v!.masterId, versionNo: v!.versionNo, doc: l.doc }, stages, timers: decided ? [] : timers(l.doc, l.events, l.now),
       steps: steps.map((s) => {
@@ -586,7 +594,7 @@ export function analysisRoutes(app: FastifyInstance, sql: Sql) {
           const v = before.steps.find((s) => s.id === req.params.key);
           if (!v) throw new StepError(404, 'no_such_step');
           // Once reviewed or stopped the record is closed to changes.
-          const decided = l.analysisEvents.find((e) => e.kind === 'reviewed' || e.kind === 'stopped');
+          const decided = l.analysisEvents.find((e) => e.kind === 'reviewed' || e.kind === 'stopped' || e.kind === 'invalidated');
           if (decided) throw new StepError(409, 'analysis_closed', [`The analysis is ${decided.kind}.`]);
           // 3. allowed?
           const no = refusal(action, context(l.doc, v, user));
@@ -635,6 +643,8 @@ export function analysisRoutes(app: FastifyInstance, sql: Sql) {
           // 5. audit
           await audit(tx, { actorId: user.id, action: `step.${rule.event}`, objectType: 'analysis', objectId: id, new: { step: v.id, event: ev!.id, ...payload }, reason: b.reason ?? null });
           await recordClosedStages(tx, id, before.stages, user.id);
+          // LIMS-23: a signed result of a spec test out of its limit opens an OOS at once.
+          if (action === 'done') await openOos(tx, id, user.id);
           return { ok: true, eventId: ev!.id };
         });
       } catch (e) {

@@ -1,0 +1,7 @@
+/* OOS: the phase Ia checklist and the yes/no choices. */
+.oos-checklist { display: grid; gap: 8px; }
+.oos-checklist fieldset, .decide fieldset { border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; margin: 0; display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; }
+.oos-checklist legend, .decide legend { font-weight: 600; padding: 0 4px; }
+.oos-checklist fieldset input:not([type='radio']) { flex: 1 1 280px; }
+.oos-checklist > button { justify-self: start; }
+label.inline { display: inline-flex; gap: 6px; align-items: center; font-weight: 500; }

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { api, type Me } from '../api.js';
 import { product } from '../product.js';
 import {
-  analysisLink, changed, go, headline, pdfLink, plainClock, plainError, stateLabel, STATUS_CHIP, statusText, stepLink, stepOf, stepTitle, timeLeft, tone, useBlocks, words, useServerNow,
+  analysisLink, changed, go, headline, oosLink, pdfLink, plainClock, plainError, stateLabel, STATUS_CHIP, statusText, stepLink, stepOf, stepTitle, timeLeft, tone, useBlocks, words, useServerNow,
   type AnalysisDetail, type Block, type StepRow,
 } from '../api-floor.js';
 import { StepScreen } from './StepScreen.js';
@@ -77,7 +77,7 @@ const finished = (s: StepRow) => ['done', 'checked', 'not_applicable'].includes(
 function Overview({ d, blocks, now, reload }: { d: AnalysisDetail; blocks: Block[]; now: number; reload: () => Promise<void> }) {
   const at = d.stages.find((s) => s.open && !s.closed) ?? d.stages.find((s) => !s.closed);
   // An analysis stopped or reviewed runs no more: no stage is "now"; one left unclosed says Stopped.
-  const ended = !!d.analysis.stopped || d.analysis.status === 'reviewed';
+  const ended = !!d.analysis.stopped || d.analysis.status === 'reviewed' || d.analysis.status === 'invalidated';
   const current = ended ? undefined : at;
   const [shown, setShown] = useState(at?.index ?? 0);
   const doc = d.master.doc;
@@ -88,6 +88,15 @@ function Overview({ d, blocks, now, reload }: { d: AnalysisDetail; blocks: Block
     <>
       <AnalysisHeader d={d} />
       {d.analysis.stopped && <p className="notice bad" role="note"><b>{stoppedText(d.analysis.stopped, plainClock)}</b></p>}
+      {d.analysis.invalidated && <p className="notice bad" role="note"><b>Invalidated by QA in {d.analysis.invalidated.payload.oosNo}</b> ({d.analysis.invalidated.personName}, {plainClock(d.analysis.invalidated.at)}): {d.analysis.invalidated.payload.reason}. The record stays; its result no longer counts for the sample.</p>}
+      {(d.oos ?? []).length > 0 && (
+        <div className="alerts" aria-label="OOS">
+          {d.oos!.map((o) => (
+            <a key={o.id} className={`fl-alert ${o.status === 'invalidated' ? 'info' : 'bad'}`} href={oosLink(o.id)}>
+              <span className="tag">{o.retest ? 'Retest of' : 'OOS'}</span><span>{o.oosNo} · {o.testName}<small>{o.status}</small></span><span />
+            </a>))}
+        </div>
+      )}
       <nav className="stagebar" aria-label="Stages">
         {d.stages.map((s) => (
           <button key={s.key} className={`${s.closed ? 'closed' : s === current ? 'current' : ''}${s.index === shown ? ' on' : ''}`} onClick={() => setShown(s.index)} aria-pressed={s.index === shown}>

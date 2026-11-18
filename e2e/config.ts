@@ -9,6 +9,8 @@ export const E2E_RECRUITMENT = `${E2E_SCHEMA}_rc`;
 export const E2E_MMS = `${E2E_SCHEMA}_mms`;
 // The material of the samples journey, as master data and MMS name it.
 export const E2E_MATERIAL_ID = '00000000-0000-4000-8000-000000000012';
+// The product of the OOS journey (TrueBatch is not linked: its batch is registered by hand).
+export const E2E_PRODUCT_ID = '00000000-0000-4000-8000-000000000101';
 // Invented test people and the Medhanta LIMS permissions core gives them.
 export const USERS: Record<string, Permission[]> = {
   op1: ['lims.analysis.perform'],
@@ -27,5 +29,9 @@ export const USERS: Record<string, Permission[]> = {
   mcheck1: ['lims.master.check'],
   // The samples journey: registers, receives and stores a sample.
   smp1: ['lims.sample.register'],
+  // The OOS journey: the second person who checks a sample typed by hand, QA who concludes an OOS, and QC who decides.
+  smp2: ['lims.sample.register'],
+  qaoos1: ['lims.oos.approve'],
+  qc1: ['lims.qc.approve', 'lims.view'],
   norole: [],
 };

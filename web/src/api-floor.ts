@@ -32,7 +32,11 @@ export interface AnalysisDetail {
   // The sample the analysis is for, and the spec tests it covers (null: trial or method work).
   sample: { id: number; sampleNo: string; lotNo: string; purpose: string; item: { code: string; name: string }; spec: { number: string; versionNo: number }; tests: { key: string; name: string }[] } | null;
   analysis: { id: number; analysisNo: string; issuedAt: string; status: string; open: string[]; late: string[]; deviations: Deviation[]; people: number[]; contentHash: string; actions: string[]; deviationsLink: string;
-    stopped: { personName: string; at: string; payload: { reason?: string } } | null };
+    stopped: { personName: string; at: string; payload: { reason?: string } } | null;
+    // LIMS-24, LIMS-48: invalidated by QA in an OOS investigation (the record stays, marked).
+    invalidated?: { personName: string; at: string; payload: { reason?: string; oosNo?: string; oos?: number } } | null };
+  // The OOS this analysis opened, or is a retest of (LIMS-23, LIMS-24).
+  oos?: { id: number; oosNo: string; testName: string; retest: boolean; status: string }[];
   master: { id: number; versionNo: number; doc: MasterDoc };
   stages: StageRow[]; timers: TimerRow[]; steps: StepRow[];
 }
@@ -77,10 +81,13 @@ export function useLogbookItems(on: boolean): string[] | null {
 }
 
 // ---- routes: #/ (My work), #/analysis/12, #/analysis/12/step/0.1.0.1, #/analysis/12/approve, #/release (To review), #/release/12 ----
-export interface Route { analysis?: number; step?: string; approve?: boolean; release?: number | 'list' }
+export interface Route { analysis?: number; step?: string; approve?: boolean; release?: number | 'list'; oos?: number | 'list' }
 export function parseRoute(hash: string): Route {
   const r = /^#\/release(?:\/(\d+))?$/.exec(hash);
   if (r) return { release: r[1] ? Number(r[1]) : 'list' };
+  // The OOS list and one OOS (LIMS-23): #/oos, #/oos/3.
+  const o = /^#\/oos(?:\/(\d+))?$/.exec(hash);
+  if (o) return { oos: o[1] ? Number(o[1]) : 'list' };
   const m = /^#\/analysis\/(\d+)(?:\/(?:step\/([\d.]+)|(approve)))?$/.exec(hash);
   return m ? { analysis: Number(m[1]), ...(m[2] ? { step: m[2] } : {}), ...(m[3] ? { approve: true } : {}) } : {};
 }
@@ -97,6 +104,7 @@ export const go = (to: string) => { window.location.hash = to; };
 export const analysisLink = (id: number) => `#/analysis/${id}`;
 export const stepLink = (id: number, step: string) => `#/analysis/${id}/step/${step}`;
 export const releaseLink = (id: number) => `#/release/${id}`;
+export const oosLink = (id: number) => `#/oos/${id}`;
 export const pdfLink = (id: number) => `/api/analyses/${id}/pdf`;
 
 // ---- the block library, read once ----
@@ -140,7 +148,7 @@ export function stateLabel(state: State, terminated: unknown): [string, string] 
 /** A analysis status in words; `capital` for a chip. */
 export const statusText = (status: string, capital = false) => statusWords(status, capital);
 export const STATUS_CHIP: Record<string, string> = {
-  'in progress': 'chip-info', complete: 'chip-warn', reviewed: 'chip-ok', stopped: 'chip-bad',
+  'in progress': 'chip-info', complete: 'chip-warn', reviewed: 'chip-ok', stopped: 'chip-bad', invalidated: 'chip-bad',
 };
 
 const isItem = (v: Value): v is { itemId: string; code: string; name: string; version: number } => typeof v === 'object' && !Array.isArray(v) && 'itemId' in v;

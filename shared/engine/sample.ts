@@ -6,7 +6,7 @@
 
 export const SAMPLE_PURPOSES = ['release', 'retest', 'stability', 'investigation'] as const;
 export type SamplePurpose = (typeof SAMPLE_PURPOSES)[number];
-export const SAMPLE_EVENT_KINDS = ['checked', 'received', 'stored', 'handed_over', 'disposed', 'note', 'approved', 'rejected'] as const;
+export const SAMPLE_EVENT_KINDS = ['checked', 'received', 'stored', 'handed_over', 'disposed', 'note', 'approved', 'rejected', 'oot_answered'] as const;
 export type SampleEventKind = (typeof SAMPLE_EVENT_KINDS)[number];
 
 // The custody status; QC's decision (approved or rejected) is told apart by sampleDecision.
@@ -15,7 +15,9 @@ export type SampleStatus = 'waiting for check' | 'registered' | 'received' | 'st
 export interface SampleEvent {
   kind: SampleEventKind;
   person: number;
-  payload: { condition?: string; where?: string; to?: string; reason?: string; method?: string; text?: string; coaNo?: string };
+  payload: { condition?: string; where?: string; to?: string; reason?: string; method?: string; text?: string; coaNo?: string;
+    // oot_answered (LIMS-25): the test and analysis whose out-of-trend result QC answered, and the answer.
+    test?: string; analysisNo?: string; answer?: OotAnswer };
 }
 export interface SampleFacts {
   registeredBy: number;
@@ -79,30 +81,57 @@ export const sampleDecision = (events: readonly SampleEvent[]): Decision | null 
 export interface TestState {
   key: string; name: string; applies: boolean;
   // A test whose limit type has no limit (report only, conforms) passes when it has a result.
-  reviewed: { analysisNo: string; hasResult: boolean; pass?: boolean; shown?: string; people: number[]; openDeviations: number } | null;
+  reviewed: { analysisNo: string; hasResult: boolean; pass?: boolean; shown?: string; people: number[]; openDeviations: number;
+    // LIMS-25: within the limit but outside the spec's trend limit (in words).
+    outOfTrend?: string } | null;
 }
+
+// ---- OOS and OOT (LIMS-23, LIMS-24, LIMS-25) ----
+/** An OOS of the sample as the decision sees it: open (phase I or II), or concluded. */
+export interface SampleOos { oosNo: string; testName: string; status: 'open' | 'confirmed' | 'invalidated' }
+export const OOT_ANSWERS = ['no action', 'investigation'] as const;
+export type OotAnswer = (typeof OOT_ANSWERS)[number];
+/** QC's answer to the out-of-trend flag of a test's result in an analysis, if given. */
+export const ootAnswer = (events: readonly SampleEvent[], test: string, analysisNo: string) =>
+  events.find((e) => e.kind === 'oot_answered' && e.payload.test === test && e.payload.analysisNo === analysisNo) ?? null;
 
 /**
  * Why QC may not approve the sample now (plain words, all at once); empty when it may. Approval needs the sample in QC,
- * a reviewed result for every test that applies (LIMS-11), every result within its limit (an out-of-limit result is
- * investigated, LIMS-23: the sample cannot be approved), no open deviation in those analyses, and an approver who did
- * no part of them (LIMS-41).
+ * a reviewed result for every test that applies (LIMS-11; an invalidated analysis no longer counts, LIMS-24), every
+ * result within its limit (an out-of-limit result is investigated, LIMS-23: the sample cannot be approved), no OOS of the
+ * sample open and none confirmed (then only rejection is left), every out-of-trend flag answered (LIMS-25), no open
+ * deviation in those analyses, and an approver who did no part of them (LIMS-41).
  */
-export function approvalProblems(s: SampleFacts, events: readonly SampleEvent[], tests: readonly TestState[], person: number): string[] {
+export function approvalProblems(s: SampleFacts, events: readonly SampleEvent[], tests: readonly TestState[], person: number, oos: readonly SampleOos[] = []): string[] {
   const d = sampleDecision(events);
   if (d) return [`The sample is already ${d}.`];
   const status = sampleStatus(s, events);
   if (status === 'waiting for check' || status === 'registered') return ['QC has not received the sample yet.'];
   const out: string[] = [];
+  for (const o of oos) {
+    if (o.status === 'open') out.push(`${o.oosNo} (${o.testName}) is open: the sample is approved only after the OOS is concluded.`);
+    if (o.status === 'confirmed') out.push(`${o.oosNo} (${o.testName}) is a confirmed OOS: the sample can only be rejected.`);
+  }
   for (const t of tests.filter((x) => x.applies)) {
     const r = t.reviewed;
     if (!r) { out.push(`${t.name}: no reviewed result yet.`); continue; }
     if (!r.hasResult) out.push(`${t.name}: analysis ${r.analysisNo} has no result.`);
     else if (r.pass === false) out.push(`${t.name}: ${r.shown ?? 'the result'} is out of limits (analysis ${r.analysisNo}): it is investigated as an OOS result; the sample cannot be approved.`);
+    else if (r.outOfTrend && !ootAnswer(events, t.key, r.analysisNo)) out.push(`${t.name}: ${r.shown ?? 'the result'} is out of trend (trend limit ${r.outOfTrend}, analysis ${r.analysisNo}): QC answers the flag first.`);
     if (r.openDeviations) out.push(`${t.name}: analysis ${r.analysisNo} has ${r.openDeviations} open deviation${r.openDeviations === 1 ? '' : 's'}.`);
     if (r.people.includes(person)) out.push(`${t.name}: you worked on analysis ${r.analysisNo}; another person approves the sample.`);
   }
   return out;
+}
+
+/** Why QC may not answer the out-of-trend flag of this test now; null when it may. */
+export function ootRefusal(events: readonly SampleEvent[], tests: readonly TestState[], test: string): string | null {
+  const d = sampleDecision(events);
+  if (d) return `The sample is already ${d}.`;
+  const r = tests.find((t) => t.key === test)?.reviewed;
+  if (!r?.outOfTrend || r.pass === false) return 'This test has no out-of-trend result to answer.';
+  if (ootAnswer(events, test, r.analysisNo)) return 'QC has already answered this flag.';
+  return null;
 }
 
 /** Why QC may not reject the sample now; null when it may (a rejection may come at any time, with its reason). */

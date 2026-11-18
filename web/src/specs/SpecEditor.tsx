@@ -164,6 +164,7 @@ function TestCard({ t, n, methods, problems, onChange, onRemove }: {
           <select aria-label={`Test ${n + 1} limit type`} value={t.limitType} onChange={(e) => {
             const limitType = e.target.value as SpecTest['limitType'];
             const { limit: _l, shelfLifeLimit: _s, conforms: _c, ...rest } = t;
+            if (limitType === 'conforms') delete rest.trendLimit;
             set({ ...rest, limitType, ...(['conforms', 'report only'].includes(limitType) ? {} : t.limit ? { limit: t.limit } : {}) } as SpecTest);
           }}>
             {LIMIT_TYPES.map((x) => <option key={x}>{x}</option>)}
@@ -175,6 +176,8 @@ function TestCard({ t, n, methods, problems, onChange, onRemove }: {
         alert={t.limitType === 'alert and action'} onChange={(limit) => onChange(limit ? { ...t, limit } : (({ limit: _, ...x }) => x as SpecTest)(t))} />}
       {t.limitType === 'release and shelf life' && <LimitInput label="Shelf-life limit" type="range" value={t.shelfLifeLimit}
         onChange={(shelfLifeLimit) => onChange(shelfLifeLimit ? { ...t, shelfLifeLimit } : (({ shelfLifeLimit: _, ...x }) => x as SpecTest)(t))} />}
+      {t.limitType !== 'conforms' && <LimitInput label="Trend limit (optional)" type="range" value={t.trendLimit}
+        onChange={(trendLimit) => onChange(trendLimit ? { ...t, trendLimit } : (({ trendLimit: _, ...x }) => x as SpecTest)(t))} />}
       {asks.length > 0 && (
         <div className="d-section">
           <h3>Values the method asks the specification for</h3>

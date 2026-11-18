@@ -12,7 +12,7 @@ export async function recordLate(sql: Sql): Promise<number> {
   let added = 0;
   // A released or rejected analysis is finished: nothing more runs late.
   for (const { id } of await sql<{ id: number }[]>`select b.id::int from analyses b where not exists
-      (select 1 from analysis_events e where e.analysis_id = b.id and e.kind in ('reviewed', 'stopped')) order by b.id`) {
+      (select 1 from analysis_events e where e.analysis_id = b.id and e.kind in ('reviewed', 'stopped', 'invalidated')) order by b.id`) {
     const l = await loadAnalysis(sql, id);
     if (!l) continue;
     for (const t of timers(l.doc, l.events, l.now)) {

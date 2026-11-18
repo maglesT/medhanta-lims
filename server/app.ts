@@ -13,6 +13,7 @@ import { masterRoutes } from './routes/masters.js';
 import { analysisRoutes } from './routes/analyses.js';
 import { sampleRoutes } from './routes/samples.js';
 import { inventoryRoutes } from './routes/inventory.js';
+import { oosRoutes } from './routes/oos.js';
 import { demoRoutes } from './demo.js';
 import type { SignOn } from './signon.js';
 import { ConnectionOff, NotUsable, type Master } from './master.js';
@@ -89,6 +90,7 @@ export async function buildApp({ sql, signOn, master, links = noLinks(), proofKe
   analysisRoutes(app, sql);
   sampleRoutes(app, sql);
   inventoryRoutes(app, sql);
+  oosRoutes(app, sql);
   demoRoutes(app, sql);
 
   // In production the built web UI is served from the same process.

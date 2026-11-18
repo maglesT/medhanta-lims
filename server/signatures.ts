@@ -6,7 +6,7 @@ import type { Permission, SessionUser } from './auth.js';
 import type { Identity } from './signon.js';
 
 // The meanings a LIMS signature can carry, and the permission code each one needs at core. The database checks
-// the same list (migrations 0002 and 0007).
+// the same list (migrations 0002, 0007 and 0010).
 export const MEANING_NEEDS = {
   prepared: 'lims.master.author',
   checked: 'lims.master.check',
@@ -19,6 +19,7 @@ export const MEANING_NEEDS = {
   qc_approved: 'lims.qc.approve',
   rejected: 'lims.qc.approve',
   disposed: 'lims.sample.register',
+  oos_approved: 'lims.oos.approve',
 } as const satisfies Record<string, Permission>;
 export type Meaning = keyof typeof MEANING_NEEDS;
 export const MEANINGS = Object.keys(MEANING_NEEDS) as Meaning[];

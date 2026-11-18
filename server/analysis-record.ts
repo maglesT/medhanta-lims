@@ -18,7 +18,9 @@ const unitName = (u: string, _stock?: string) => u;
 
 const MEANING: Record<string, string> = {
   issued: 'Issued', performed: 'Performed', verified: 'Verified (second person)', reviewed: 'Reviewed (second person)', stopped: 'Stopped',
-  qc_approved: 'QC approved', rejected: 'Rejected',
+  qc_approved: 'QC approved', rejected: 'Rejected', oos_approved: 'QA approved (OOS)',
+  // LIMS-24, LIMS-48: an analysis whose result QA invalidated in an OOS investigation is kept, marked.
+  invalidated: 'Invalidated by QA (OOS investigation)',
 };
 const EVENT: Record<EventKind, string> = {
   started: 'Started', value: 'Recorded', done: 'Signed as done', checked: 'Checked', sent_back: 'Sent back', corrected: 'Corrected',
@@ -154,8 +156,8 @@ export function analysisRecordDoc(r: RecordInput, by: string, printedAt = new Da
   content.push(heading('Review'));
   const decisions = analysisEvents.filter((b) => b.kind !== 'deviation_closed');
   content.push(decisions.length ? { stack: decisions.map((b) => small(b === ended ? endedText! :
-    `${MEANING[b.kind] ?? b.kind}: ${b.personName}, ${plant(b.at)}${b.payload.reason ? ` · reason: ${b.payload.reason}` : ''}`,
-    { fontSize: 9, bold: true, color: b.kind === 'stopped' ? RED : undefined, margin: [0, 0, 0, 2] })) }
+    `${MEANING[b.kind] ?? b.kind}${b.payload.oosNo ? ` ${b.payload.oosNo}` : ''}: ${b.personName}, ${plant(b.at)}${b.payload.reason ? ` · reason: ${b.payload.reason}` : ''}`,
+    { fontSize: 9, bold: true, color: b.kind === 'stopped' || b.kind === 'invalidated' ? RED : undefined, margin: [0, 0, 0, 2] })) }
     : { text: `Not reviewed yet: the analysis is ${statusWords(view.status)}.`, italics: true, fontSize: 9 });
   if (view.status !== 'reviewed') content.push(small(`This copy was made while the analysis is ${statusWords(view.status)}: it is not a reviewed record.`, { color: RED, margin: [0, 4, 0, 0] }));
 

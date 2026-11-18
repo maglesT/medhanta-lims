@@ -2,18 +2,18 @@
 // the next entries this person may add. Disposal is an e-signature with its reason and method.
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { can, plantTime, type Me } from '../api.js';
-import { analysisLink, plainError, sourceWords } from '../api-floor.js';
+import { analysisLink, oosLink, plainError, sourceWords } from '../api-floor.js';
 import { IssueDialog } from '../floor/IssueDialog.js';
 import { SignDialog } from '../components/SignDialog.js';
 import { testText } from '../designer/describe.js';
 import type { SampleAction } from '../../../shared/engine/sample.js';
-import { PURPOSE_LABEL, STATUS_CHIP, STATUS_LABEL, coaLink, decide, getSample, sampleEntry, type SampleDetail, type SampleEntry } from './api-samples.js';
+import { PURPOSE_LABEL, STATUS_CHIP, STATUS_LABEL, answerOot, coaLink, decide, getSample, sampleEntry, type SampleDetail, type SampleEntry } from './api-samples.js';
 
 const ENTRY_WORDS: Record<SampleEntry['kind'], string> = {
-  checked: 'Checked by a second person', received: 'Received in QC', stored: 'Stored', handed_over: 'Handed over', disposed: 'Disposed of', note: 'Note', approved: 'QC approved', rejected: 'QC rejected',
+  checked: 'Checked by a second person', received: 'Received in QC', stored: 'Stored', handed_over: 'Handed over', disposed: 'Disposed of', note: 'Note', approved: 'QC approved', rejected: 'QC rejected', oot_answered: 'Out-of-trend flag answered by QC',
 };
 const entryText = (e: SampleEntry) => [e.payload.condition && `Condition: ${e.payload.condition}`, e.payload.where && `Where: ${e.payload.where}`,
-  e.payload.to && `To: ${e.payload.to}`, e.payload.reason && `Reason: ${e.payload.reason}`, e.payload.method && `Method: ${e.payload.method}`, e.payload.coaNo && `Certificate ${e.payload.coaNo}`, e.payload.text].filter(Boolean).join(' · ');
+  e.payload.to && `To: ${e.payload.to}`, e.payload.reason && `Reason: ${e.payload.reason}`, e.payload.method && `Method: ${e.payload.method}`, e.payload.coaNo && `Certificate ${e.payload.coaNo}`, e.payload.test && `${e.payload.test}, analysis ${e.payload.analysisNo}: ${e.payload.answer}`, e.payload.text].filter(Boolean).join(' · ');
 
 // The entries asked for in a small form: their fields and button words.
 const FORMS: Partial<Record<SampleAction, { title: string; button: string; fields: { name: string; label: string; hint?: string }[] }>> = {
@@ -150,6 +150,8 @@ function Tests({ d, me }: { d: SampleDetail; me: Me }) {
                 <td>{t.analyses.length ? t.analyses.map((a) => (
                   <div key={a.analysisId}><a href={analysisLink(a.analysisId)}>{a.analysisNo}</a> · {a.status}
                     {a.result && <> · <b>{a.result.value} {a.result.unit}</b>{a.result.pass !== undefined && <span className={`chip ${a.result.pass ? 'chip-ok' : 'chip-bad'}`}>{a.result.pass ? 'within limits' : 'out of limits'}</span>}</>}
+                    {d.oot.some((x) => x.key === t.key && x.analysisNo === a.analysisNo) && <span className="chip chip-warn">out of trend</span>}
+                    {d.oos.filter((o) => o.testKey === t.key && o.analysisNo === a.analysisNo).map((o) => <a key={o.id} className="chip chip-bad" href={oosLink(o.id)}>{o.oosNo} · {o.status}</a>)}
                   </div>)) : <span className="muted">{t.applies ? 'not started' : '—'}</span>}</td>
               </tr>
             ))}
@@ -181,10 +183,12 @@ function Decision({ d, me, reload }: { d: SampleDetail; me: Me; reload: () => Pr
   return (
     <section className="dash-panel samples-waiting" aria-label="QC decision">
       <div className="panel-head"><h2>QC decision</h2>{d.decision === 'approved' && <a className="button" href={coaLink(d.sample.id)} download>Certificate of analysis (PDF)</a>}</div>
-      {decided ? (
+      {decided && (
         <p className={decided.kind === 'approved' ? 'all-good' : 'notice bad'}><span aria-hidden="true">{decided.kind === 'approved' ? '✓' : '✕'}</span>
           {decided.kind === 'approved' ? `Approved, certificate ${decided.payload.coaNo}` : `Rejected: ${decided.payload.reason}`} · {decided.signature?.printedName ?? decided.personName}, {plantTime(decided.signature?.signedAt ?? decided.at)}</p>
-      ) : !may ? <p className="muted">QC decides when every test has a reviewed result.</p> : (<>
+      )}
+      <OosBlocks d={d} reload={reload} />
+      {decided ? null : !may ? <p className="muted">QC decides when every test has a reviewed result.</p> : (<>
         {d.approvalProblems.length > 0 && <div className="notice" role="note"><p><b>Not ready for approval:</b></p><ul>{d.approvalProblems.map((p, i) => <li key={i}>{p}</li>)}</ul></div>}
         {error && <p className="notice bad" role="alert">{error}</p>}
         <div className="decide">
@@ -210,5 +214,41 @@ function Decision({ d, me, reload }: { d: SampleDetail; me: Me; reload: () => Pr
         </SignDialog>
       )}
     </section>
+  );
+}
+
+/**
+ * What stands in the decision's way from OOS and OOT (LIMS-23, LIMS-25): each OOS of the sample with its status (a link
+ * to it), and each out-of-trend result with QC's answer, or the form to answer it (no action, or investigation, with
+ * the reason).
+ */
+function OosBlocks({ d, reload }: { d: SampleDetail; reload: () => Promise<void> }) {
+  const [form, setForm] = useState<Record<string, { answer: 'no action' | 'investigation'; reason: string }>>({});
+  const [error, setError] = useState('');
+  if (!d.oos.length && !d.oot.length) return null;
+  return (
+    <div className="oos-blocks">
+      {d.oos.map((o) => (
+        <p key={o.id} className={o.status === 'invalidated' ? 'notice info' : 'notice bad'}>
+          <a href={oosLink(o.id)}><b>{o.oosNo}</b></a> · {o.testName}, analysis {o.analysisNo} · {o.status === 'open' ? `open (${o.detail})` : o.status === 'confirmed' ? 'OOS confirmed: the sample can only be rejected' : 'invalidated (laboratory error): the analysis no longer counts'}
+        </p>
+      ))}
+      {d.oot.map((t) => (
+        <div key={t.key} className={t.answer ? 'notice info' : 'notice'}>
+          <p><b>Out of trend:</b> {t.name} {t.shown} (trend limit {t.trend}), analysis {t.analysisNo}.</p>
+          {t.answer ? <p>QC answered: <b>{t.answer.payload.answer}</b> · {t.answer.payload.reason} · {t.answer.personName}, {plantTime(t.answer.at)}</p>
+            : d.decision ? null : d.ootRefusal ? <p className="muted small">{d.ootRefusal}</p> : (
+            <div className="decide">
+              <label>Answer<select aria-label={`Answer the out-of-trend flag of ${t.name}`} value={form[t.key]?.answer ?? 'no action'} onChange={(e) => setForm((f) => ({ ...f, [t.key]: { reason: f[t.key]?.reason ?? '', answer: e.target.value as 'no action' } }))}>
+                <option value="no action">No action</option><option value="investigation">Investigation</option></select></label>
+              <label>Reason<input aria-label={`Reason for the answer on ${t.name}`} value={form[t.key]?.reason ?? ''} onChange={(e) => setForm((f) => ({ ...f, [t.key]: { answer: f[t.key]?.answer ?? 'no action', reason: e.target.value } }))} /></label>
+              <button className="primary" disabled={!form[t.key]?.reason.trim()} onClick={async () => {
+                try { await answerOot(d.sample.id, { test: t.key, answer: form[t.key]!.answer, reason: form[t.key]!.reason.trim() }); setError(''); await reload(); } catch (e) { setError(plainError(e)); }
+              }}>Record the answer</button>
+            </div>)}
+        </div>
+      ))}
+      {error && <p className="notice bad" role="alert">{error}</p>}
+    </div>
   );
 }

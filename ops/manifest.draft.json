@@ -35,6 +35,10 @@
       "label": "QC decision on a sample (approve or reject) and its certificate of analysis"
     },
     {
+      "code": "lims.oos.approve",
+      "label": "QA approval of OOS conclusions and invalidations"
+    },
+    {
       "code": "lims.view",
       "label": "View samples, analyses, methods and specifications"
     },
@@ -48,7 +52,8 @@
   },
   "publishes": [
     "coa_v1",
-    "result_v1"
+    "result_v1",
+    "oos_v1"
   ],
   "reads": {
     "master_data": [

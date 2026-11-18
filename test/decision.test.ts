@@ -144,7 +144,9 @@ describe('QC decision on the server', () => {
     const sid = await sampleOf();
     await analysed(sid, '7.4');
     const d = await detail(sid);
-    expect(d.approvalProblems[0]).toMatch(/^pH: 7\.4 is out of limits \(analysis LA\d+\): it is investigated as an OOS result/);
+    // The OOS it opened (test/oos.test.ts) and the result out of limits both stand in the way.
+    expect(d.approvalProblems[0]).toMatch(/^OOS\d{6} \(pH\) is open/);
+    expect(d.approvalProblems[1]).toMatch(/^pH: 7\.4 is out of limits \(analysis LA\d+\): it is investigated as an OOS result/);
     expect((await decide(sid, 'qcuser', 'approve')).statusCode).toBe(409);
     const r = await decide(sid, 'qcuser', 'reject', { reason: 'pH out of limits, confirmed' });
     expect(r.statusCode, r.body).toBe(200);

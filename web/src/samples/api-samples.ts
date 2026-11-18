@@ -16,8 +16,8 @@ export interface SampleListRow {
   registeredByName: string; registeredAt: string; specNumber: string; specVersionNo: number; status: SampleStatus;
 }
 export interface SampleEntry {
-  id: number; kind: 'checked' | 'received' | 'stored' | 'handed_over' | 'disposed' | 'note' | 'approved' | 'rejected'; personName: string; at: string;
-  payload: { condition?: string; where?: string; to?: string; reason?: string; method?: string; text?: string; coaNo?: string };
+  id: number; kind: 'checked' | 'received' | 'stored' | 'handed_over' | 'disposed' | 'note' | 'approved' | 'rejected' | 'oot_answered'; personName: string; at: string;
+  payload: { condition?: string; where?: string; to?: string; reason?: string; method?: string; text?: string; coaNo?: string; test?: string; analysisNo?: string; answer?: string };
   signature: { printedName: string; signedAt: string } | null;
 }
 export interface SampleDetail {
@@ -29,6 +29,9 @@ export interface SampleDetail {
   actions: SampleAction[]; refusals: Record<SampleAction, string | null>; contentHash: string;
   // QC's decision (LIMS-20): made, or what stands in the way of approval for this person.
   decision: 'approved' | 'rejected' | null; decisionHash: string | null; approvalProblems: string[]; rejectionRefusal: string | null;
+  // LIMS-23, LIMS-25: the sample's OOS, and the tests whose reviewed result is out of trend with QC's answer.
+  oos: { id: number; oosNo: string; testName: string; testKey: string; analysisNo: string; status: 'open' | 'confirmed' | 'invalidated'; detail: string }[];
+  oot: { key: string; name: string; analysisNo: string; shown: string; trend: string; answer: SampleEntry | null }[]; ootRefusal: string | null;
 }
 // A spec test's analysis: its status and, once worked out, its result (pass or fail against the test's limit).
 export interface TestResult { analysisId: number; analysisNo: string; status: string; result: { shown: string; value: string; unit: string; pass?: boolean } | null }
@@ -43,6 +46,7 @@ export const getSample = (id: number) => api<SampleDetail>('GET', `/api/samples/
 export const specsFor = (of: 'material' | 'product', itemId: string) => api<SpecChoice[]>('GET', `/api/sample-specs?of=${of}&itemId=${encodeURIComponent(itemId)}`);
 export const registerSample = (b: RegisterInput) => api<{ id: number; sampleNo: string }>('POST', '/api/samples', b);
 export const decide = (id: number, decision: 'approve' | 'reject', body: object) => api<{ ok: true; coaNo?: string }>('POST', `/api/samples/${id}/${decision}`, body);
+export const answerOot = (id: number, body: { test: string; answer: 'no action' | 'investigation'; reason: string }) => api<{ ok: true }>('POST', `/api/samples/${id}/oot`, body);
 export const coaLink = (id: number) => `/api/samples/${id}/coa`;
 export const sampleEntry = (id: number, action: SampleAction, body: object) => api<{ ok: true }>('POST', `/api/samples/${id}/${action}`, body);
 

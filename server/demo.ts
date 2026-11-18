@@ -15,7 +15,7 @@ import { keyId, skipKey, skippable, timers, type Timer } from '../shared/engine/
 // answers 403 and the terminal command exits non-zero.
 export const isDemo = (env: NodeJS.ProcessEnv = process.env) => env.LIMS_DEMO === '1';
 
-const closed = (l: LoadedAnalysis) => l.analysisEvents.some((e) => ['reviewed', 'stopped'].includes(e.kind));
+const closed = (l: LoadedAnalysis) => l.analysisEvents.some((e) => ['reviewed', 'stopped', 'invalidated'].includes(e.kind));
 
 /** Ends a running wait at once: one insert-only event with who, when and which wait, and its audit row. */
 async function skipWait(tx: Tx, l: LoadedAnalysis, t: Timer, person: number): Promise<boolean> {
