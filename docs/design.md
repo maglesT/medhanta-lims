@@ -500,7 +500,7 @@ not the result.
 ## Step 7: environmental monitoring and water (build step 7, 18 Nov 2026)
 Plan 2.9 (LIMS-36, LIMS-37; library 8c item 33, safety rule S11; owner decision of 18 Nov 2026 on continuous
 monitoring). The Logbook way again: master versions, ordinary samples, a record row with insert-only entries, and pure
-functions (`shared/master/monitoring.ts`, `shared/engine/monitoring.ts`); migration `0017`; no new permission.
+functions (`shared/master/monitoring.ts`, `shared/engine/monitoring.ts`); migration `0019`; no new permission.
 
 | LIMS record | Copied from | How |
 |---|---|---|
