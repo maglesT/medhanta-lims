@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Content, TDocumentDefinitions } from 'pdfmake/interfaces.js';
-import { call, freshApp, login, proofFor, seedUser, type TestApp } from './helpers.js';
+import { call, freshApp, login, proofFor, seedUser, validatedOutside, type TestApp } from './helpers.js';
 import { small } from './engine-fixture.js';
 import { approvalProblems, type TestState } from '../shared/engine/sample.js';
 import { identityContainers, sampledProblem, samplingPlan, specSchema, testsForAnalysis, type SpecDoc } from '../shared/master/spec.js';
@@ -188,6 +188,7 @@ async function effective(kind: 'method' | 'spec', doc: object) {
     const res = await as(who, 'POST', `/api/master-versions/${v.id}/${a}`, { proof: proofFor(who), contentHash: await hash(who), ...x });
     expect(res.statusCode, `${a}: ${res.body}`).toBe(200);
   }
+  if (kind === 'method') await validatedOutside(t.owner, v.id);
   expect((await as('quality2', 'POST', `/api/master-versions/${v.id}/make-effective`, {})).statusCode).toBe(200);
   return v;
 }
