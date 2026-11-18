@@ -99,7 +99,7 @@ function ChartsTab({ onSample }: { onSample: (id: number) => void }) {
             <thead><tr><th>#</th><th>Decided</th><th>Sample</th><th>Lot or batch</th><th>Result</th><th>Decision</th><th>OOS / OOT</th></tr></thead>
             <tbody>{c.points.map((p) => (
               <tr key={p.n} className="clickable" onClick={() => onSample(p.sampleId)}>
-                <td>{p.n}</td><td>{plantTime(p.decidedAt)}</td><td>{p.sampleNo}</td><td>{p.lotNo}</td><td>{Number(p.value)}{u}</td><td>{p.decision}</td>
+                <td>{p.n}</td><td>{plantTime(p.decidedAt)}</td><td>{p.sampleNo}</td><td>{p.lotNo}</td><td>{p.reported ?? `${Number(p.value)}${u}`}</td><td>{p.decision}</td>
                 <td>{p.oos && <span className="chip chip-bad">{p.oos}</span>} {p.oot && <span className="chip chip-warn">OOT: {p.oot}</span>}</td></tr>))}</tbody>
           </table></div>
         </section>

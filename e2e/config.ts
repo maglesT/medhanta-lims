@@ -23,6 +23,8 @@ export const E2E_PRODUCT_ID = '00000000-0000-4000-8000-000000000101';
 export const E2E_STAB_PRODUCT_ID = '00000000-0000-4000-8000-000000000102';
 // The EM journey's specification item (an EM specification is written for a master-data material) and its grade B room.
 export const E2E_EM_ID = '00000000-0000-4000-8000-000000000201';
+// The product of the trends journey (its own, so the other journeys' results are not on its chart).
+export const E2E_TREND_PRODUCT_ID = '00000000-0000-4000-8000-000000000103';
 // Invented test people and the Medhanta LIMS permissions core gives them.
 export const USERS: Record<string, Permission[]> = {
   op1: ['lims.analysis.perform'],

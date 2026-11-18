@@ -6,7 +6,7 @@ export interface SeriesRow { series: string; kind: 'item' | 'point'; code: strin
 export interface Chart {
   series: string; test: string; testName?: string; unit?: string; item?: { code: string; name: string };
   spec: { number: string; versionNo: number; limit: { low?: string; high?: string; unit: string } | null } | null;
-  points: { n: number; sampleId: number; sampleNo: string; lotNo: string; value: string; shown: string; pass: boolean | null; analysisNo: string; decidedAt: string; decision: string; oos: string | null; oot: string | null }[];
+  points: { n: number; sampleId: number; sampleNo: string; lotNo: string; value: string; reported: string | null; shown: string; pass: boolean | null; analysisNo: string; decidedAt: string; decision: string; oos: string | null; oot: string | null }[];
   chart: {
     shown: string; mean: string; sigma: string; sd: string; ucl: string; lcl: string; mrBar: string; mrUcl: string; zones: { plus1: string; plus2: string; minus1: string; minus2: string };
     movingRanges: string[]; mrBreaks: number[]; specLow: string | null; specHigh: string | null; cpk: string | null; ppk: string | null; breaks: { rule: number; text: string; points: number[] }[];

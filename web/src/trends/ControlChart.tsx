@@ -3,7 +3,7 @@
 import type { Chart } from './api-trends.js';
 
 const W = 900;
-const PAD = { l: 64, r: 16, t: 14, b: 26 };
+const PAD = { l: 84, r: 16, t: 14, b: 26 };
 const n = (s: string | null | undefined) => (s == null ? null : Number(s));
 
 function scale(lo: number, hi: number, h: number) {

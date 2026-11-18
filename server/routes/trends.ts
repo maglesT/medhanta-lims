@@ -36,7 +36,7 @@ const CHARTED: SamplePurpose[] = ['release', 'retest'];
 export interface Decided {
   sampleId: number; sampleNo: string; lotNo: string; purpose: SamplePurpose; item: SampleRow['item']; point: string | null; pointName: string | null;
   specVersionId: number; decision: 'approved' | 'rejected'; decidedAt: Date; testKey: string; testName: string; value: string; unit: string; shown: string;
-  limitText: string; pass: boolean | null; analysisNo: string; coaNo: string | null;
+  limitText: string; pass: boolean | null; analysisNo: string; coaNo: string | null; reported: string | null;
 }
 /** A chart's series: a product or material (its release and retest samples), or an EM or water point. */
 type Series = { of: 'product' | 'material'; code: string } | { point: string };
@@ -55,7 +55,7 @@ export async function decided(q: Sql | Tx, f: { series?: Series; test?: string; 
     select s.id::int as "sampleId", s.sample_no as "sampleNo", s.lot_no as "lotNo", s.purpose, s.item, s.monitoring->>'pointCode' as point,
       s.monitoring->>'pointName' as "pointName", s.spec_version_id::int as "specVersionId", d.kind as decision, d.at as "decidedAt",
       r->>'key' as "testKey", r->>'name' as "testName", coalesce(r->>'value', '') as value, coalesce(r->>'unit', '') as unit, coalesce(r->>'shown', '') as shown,
-      coalesce(r->>'limit', '') as "limitText", (r->>'pass')::boolean as pass, r->>'analysisNo' as "analysisNo", d.payload->>'coaNo' as "coaNo"
+      coalesce(r->>'limit', '') as "limitText", (r->>'pass')::boolean as pass, r->>'analysisNo' as "analysisNo", d.payload->>'coaNo' as "coaNo", r->>'reported' as reported
     from samples s join sample_events d on d.sample_id = s.id and d.kind in ('approved', 'rejected')
     cross join lateral jsonb_array_elements(coalesce(d.payload->'results', '[]'::jsonb)) r
     where true
@@ -179,7 +179,7 @@ export function trendRoutes(app: FastifyInstance, sql: Sql) {
     return {
       series: p.data.series, test: p.data.test, testName: last.testName, unit, item: last.purpose === 'monitoring' ? { code: last.point, name: last.pointName } : { code: last.item.code, name: last.item.name },
       spec: v ? { number: v.number, versionNo: v.versionNo, limit: limit ?? null, trendLimit: t?.trendLimit ?? null } : null,
-      points: rows.map((r, k) => ({ n: k + 1, sampleId: r.sampleId, sampleNo: r.sampleNo, lotNo: r.lotNo, value: r.value, shown: r.shown, pass: r.pass, analysisNo: r.analysisNo,
+      points: rows.map((r, k) => ({ n: k + 1, sampleId: r.sampleId, sampleNo: r.sampleNo, lotNo: r.lotNo, value: r.value, reported: r.reported, shown: r.shown, pass: r.pass, analysisNo: r.analysisNo,
         decidedAt: r.decidedAt, decision: r.decision, oos: oos.find((o) => o.sampleId === r.sampleId && o.analysisNo === r.analysisNo)?.oosNo ?? null,
         oot: oot.find((o) => o.sampleId === r.sampleId && o.analysisNo === r.analysisNo)?.answer ?? null })),
       chart: c.ok ? { shown: c.shown, mean: str(c.mean), sigma: str(c.sigma), sd: str(c.sd), ucl: str(c.ucl), lcl: str(c.lcl), mrBar: str(c.mrBar), mrUcl: str(c.mrUcl),
