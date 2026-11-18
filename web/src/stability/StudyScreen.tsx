@@ -9,10 +9,11 @@ import { plantDate } from '../../../shared/plant-time.js';
 import { conditionLabel, PURPOSE_WORDS } from '../../../shared/master/protocol.js';
 import { getStudy, studyAction, STATE_CHIPS, STATE_WORDS, type Point, type StudyDetail } from './api-stability.js';
 import { TextDialog } from './Stability.js';
+import { EvaluationPanel } from './Evaluation.js';
 
 const ENTRY: Record<string, string> = { placed: 'Placed', extra: 'Extra placed', extra_approved: 'Extra placement approved by QA', pulled: 'Pulled', checked: 'Checked by a second person', note: 'Note' };
 
-export function StudyScreen({ me, id, onBack }: { me: Me; id: number; onBack: () => void }) {
+export function StudyScreen({ me, id, onBack, onProduct }: { me: Me; id: number; onBack: () => void; onProduct?: (p: { of: 'product' | 'material'; itemId: string }) => void }) {
   const [d, setD] = useState<StudyDetail | null>(null);
   const [error, setError] = useState('');
   const [late, setLate] = useState<Point | null>(null);
@@ -41,6 +42,7 @@ export function StudyScreen({ me, id, onBack }: { me: Me; id: number; onBack: ()
           <h1>{s.studyNo}</h1>
           <p className="greeting"><b>{s.item.code}</b> {s.item.name} · {s.item.of === 'material' ? 'lot' : 'batch'} {s.lotNo} · placed {plantDate(s.t0)}</p>
         </div>
+        {onProduct && <div><button onClick={() => onProduct({ of: s.item.of, itemId: s.item.itemId })}>Product evaluation</button></div>}
       </div>
       {error && <p className="notice" role="alert">{error}</p>}
       {done && <p className="notice" role="status">{done}</p>}
@@ -112,6 +114,7 @@ export function StudyScreen({ me, id, onBack }: { me: Me; id: number; onBack: ()
             </table>
           </div>)}
       </section>
+      <EvaluationPanel me={me} scope={{ study: id }} />
       {d.excursions.length > 0 && (
         <section className="dash-panel samples-waiting" aria-label="Excursions">
           <div className="panel-head"><h2>Chamber excursions</h2></div>

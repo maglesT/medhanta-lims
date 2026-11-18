@@ -84,7 +84,7 @@ export interface TestState {
   key: string; name: string; applies: boolean;
   // A test whose limit type has no limit (report only, conforms) passes when it has a result.
   reviewed: { analysisNo: string; hasResult: boolean; pass?: boolean; shown?: string; people: number[]; openDeviations: number;
-    // LIMS-25: within the limit but outside the spec's trend limit (in words).
+    // LIMS-25: within the limit but outside the spec's trend limit, or a stability result outside its prediction interval (in words).
     outOfTrend?: string } | null;
 }
 
@@ -121,7 +121,7 @@ export function approvalProblems(s: SampleFacts, events: readonly SampleEvent[],
     if (!r) { out.push(`${t.name}: no reviewed result yet.`); continue; }
     if (!r.hasResult) out.push(`${t.name}: analysis ${r.analysisNo} has no result.`);
     else if (r.pass === false) out.push(`${t.name}: ${r.shown ?? 'the result'} is out of limits (analysis ${r.analysisNo}): it is investigated as an OOS result; the sample cannot be approved.`);
-    else if (r.outOfTrend && !ootAnswer(events, t.key, r.analysisNo)) out.push(`${t.name}: ${r.shown ?? 'the result'} is out of trend (trend limit ${r.outOfTrend}, analysis ${r.analysisNo}): QC answers the flag first.`);
+    else if (r.outOfTrend && !ootAnswer(events, t.key, r.analysisNo)) out.push(`${t.name}: ${r.shown ?? 'the result'} is out of trend (${r.outOfTrend}, analysis ${r.analysisNo}): QC answers the flag first.`);
     if (r.openDeviations) out.push(`${t.name}: analysis ${r.analysisNo} has ${r.openDeviations} open deviation${r.openDeviations === 1 ? '' : 's'}.`);
     if (r.people.includes(person)) out.push(`${t.name}: you worked on analysis ${r.analysisNo}; another person approves the sample.`);
   }

@@ -13,6 +13,7 @@ import { loadReserves, openRetestSample, reserveNeed } from './reserve.js';
 import { coaDoc } from '../coa.js';
 import { render, sendPdf } from '../pdf.js';
 import { sampleTestResults, type TestResult } from './analyses.js';
+import { stabilityTrend } from './stability-evaluation.js';
 import {
   PROVIDER_NAME, SAMPLE_ACTIONS, SAMPLE_ACTION_NAMES, SAMPLE_PURPOSES, isHand, sampleRefusal, sampleStatus,
   type LinkState, type SampleAction, type SampleEvent, type SamplePurpose, type Source,
@@ -112,17 +113,20 @@ const ACTION_BODIES: Record<SampleAction, z.ZodTypeAny> = {
  * The tests QC decides on (LIMS-11): each test of the sample's specification, whether it applies to the sample's
  * purpose, and its latest reviewed analysis with its result.
  */
-export function testStates(spec: SpecDoc, purpose: string, results: Record<string, TestResult[]>): (TestState & { decided: Record<string, unknown> | null })[] {
+export function testStates(spec: SpecDoc, purpose: string, results: Record<string, TestResult[]>, trend: Record<string, string> = {}): (TestState & { decided: Record<string, unknown> | null })[] {
   const on = purposeLimits(purpose);
   return spec.tests.map((t) => {
     const r = (results[t.key] ?? []).filter((a) => a.status === 'reviewed').at(-1);
     const shown = r?.result ? `${r.result.value} ${r.result.unit}`.trim() : undefined;
+    // LIMS-25: within the limit but outside the spec's trend limit, or (a stability result, plan 2b-3) outside the
+    // prediction interval of the earlier results (template L22, stabilityTrend): flagged.
+    const oot = r?.result && r.result.pass !== false
+      ? [t.trendLimit && outOfTrend(t, r.result.value, r.result.unit) ? `trend limit ${limitWords(t.trendLimit)}` : '', trend[t.key] ?? ''].filter(Boolean).join('; ') : '';
     return {
       key: t.key, name: t.name, applies: t.use === 'release and stability' || t.use === on,
       reviewed: r ? { analysisNo: r.analysisNo, hasResult: !!r.result, ...(r.result?.pass !== undefined ? { pass: r.result.pass } : {}), ...(shown ? { shown } : {}),
         people: r.people, openDeviations: r.openDeviations,
-        // LIMS-25: within the limit but outside the trend limit: flagged.
-        ...(r.result && r.result.pass !== false && t.trendLimit && outOfTrend(t, r.result.value, r.result.unit) ? { outOfTrend: limitWords(t.trendLimit) } : {}) } : null,
+        ...(oot ? { outOfTrend: oot } : {}) } : null,
       // The result as it goes on the certificate and into result_v1.
       decided: r?.result ? { key: t.key, name: t.name, value: r.result.value, unit: r.result.unit, shown: r.result.shown, ...(r.result.pass !== undefined ? { pass: r.result.pass } : {}),
         limit: limitText(t, on), method: r.method, analysisNo: r.analysisNo, reviewedAt: r.reviewedAt } : null,
@@ -274,6 +278,7 @@ export function sampleRoutes(app: FastifyInstance, sql: Sql) {
     const [v] = await sql<{ id: number; masterId: number; versionNo: number; state: string; doc: SpecDoc }[]>`
       select id::int, master_id::int as "masterId", version_no as "versionNo", state, doc from master_versions where id = ${l.s.specVersionId}`;
     const results = await sampleTestResults(sql, l.s.id, app);
+    const trend = await stabilityTrend(sql, l.s);
     const oos = await oosOfSample(sql, l.s.id);
     const methodIds = [...new Set((v?.doc.tests ?? []).filter((t) => t.use === 'release and stability' || t.use === purposeLimits(l.s.purpose)).map((t) => t.method.masterId))];
     const methods = methodIds.length ? await sql<{ versionId: number; masterId: number; versionNo: number; code: string; name: string }[]>`
@@ -296,12 +301,12 @@ export function sampleRoutes(app: FastifyInstance, sql: Sql) {
       actions: SAMPLE_ACTION_NAMES.filter((a) => refusals[a] === null), refusals, contentHash: sampleHash(l.s, l.events),
       // QC's decision (LIMS-20): made, or what stands in the way of approval for this person.
       // LIMS-23, LIMS-25: the OOS of the sample, and the tests whose reviewed result is out of trend (answered or not).
-      oos, oot: v ? testStates(v.doc, l.s.purpose, results).flatMap((t) => (t.reviewed?.outOfTrend ? [{ key: t.key, name: t.name, analysisNo: t.reviewed.analysisNo, shown: t.reviewed.shown ?? '',
+      oos, oot: v ? testStates(v.doc, l.s.purpose, results, trend).flatMap((t) => (t.reviewed?.outOfTrend ? [{ key: t.key, name: t.name, analysisNo: t.reviewed.analysisNo, shown: t.reviewed.shown ?? '',
         trend: t.reviewed.outOfTrend, answer: l.events.find((e) => e.kind === 'oot_answered' && e.payload.test === t.key && e.payload.analysisNo === t.reviewed!.analysisNo) ?? null }] : [])) : [],
       ootRefusal: user.permissions.includes('lims.qc.approve') ? null : 'Answering an out-of-trend flag needs the QC approval permission.',
-      decision: sampleDecision(l.events), decisionHash: v ? decisionHash(l.s, l.events, testStates(v.doc, l.s.purpose, results)) : null,
+      decision: sampleDecision(l.events), decisionHash: v ? decisionHash(l.s, l.events, testStates(v.doc, l.s.purpose, results, trend)) : null,
       approvalProblems: !v ? ['The sample has no specification.'] : !user.permissions.includes('lims.qc.approve') ? ['QC approval needs the QC approval permission.']
-        : approvalProblems(facts(l.s), l.events, testStates(v.doc, l.s.purpose, results), user.id, oos, need),
+        : approvalProblems(facts(l.s), l.events, testStates(v.doc, l.s.purpose, results, trend), user.id, oos, need),
       // LIMS-30: the reserve sample (null: none logged), and what the decision says when the specification names no quantity.
       reserve: reserve ? { id: reserve.row.id, amount: reserve.row.amount, unit: reserve.row.unit, location: reserve.row.location, keptUntil: reserve.row.keptUntil, state: reserve.state } : null,
       reserveRequired: v?.doc.header.reserveQuantity ?? null,
@@ -365,7 +370,7 @@ export function sampleRoutes(app: FastifyInstance, sql: Sql) {
           const l = await loadSample(tx, id);
           if (!l) throw new SampleError(404, 'not_found');
           const [v] = await tx<{ doc: SpecDoc }[]>`select doc from master_versions where id = ${l.s.specVersionId}`;
-          const tests = testStates(v!.doc, l.s.purpose, await sampleTestResults(tx, id, app));
+          const tests = testStates(v!.doc, l.s.purpose, await sampleTestResults(tx, id, app), await stabilityTrend(tx, l.s));
           const need = l.s.purpose === 'release' ? await reserveNeed(tx, id, v!.doc) : undefined;
           const problems = decision === 'approve' ? approvalProblems(facts(l.s), l.events, tests, user.id, await oosOfSample(tx, id), need) : [rejectionRefusal(l.events)].filter((x): x is string => !!x);
           if (problems.length) throw new SampleError(problems.some((p) => p.includes('another person approves')) ? 403 : 409, 'not_ready', problems);
@@ -406,7 +411,7 @@ export function sampleRoutes(app: FastifyInstance, sql: Sql) {
         const l = await loadSample(tx, id);
         if (!l) throw new SampleError(404, 'not_found');
         const [v] = await tx<{ doc: SpecDoc }[]>`select doc from master_versions where id = ${l.s.specVersionId}`;
-        const tests = testStates(v!.doc, l.s.purpose, await sampleTestResults(tx, id, app));
+        const tests = testStates(v!.doc, l.s.purpose, await sampleTestResults(tx, id, app), await stabilityTrend(tx, l.s));
         const no = ootRefusal(l.events, tests, body.data.test);
         if (no) throw new SampleError(409, 'not_allowed_now', [no]);
         const payload = { test: body.data.test, analysisNo: tests.find((t) => t.key === body.data.test)!.reviewed!.analysisNo, answer: body.data.answer, reason: body.data.reason };

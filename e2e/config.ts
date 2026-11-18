@@ -19,6 +19,8 @@ export const E2E_MATERIAL_ID = '00000000-0000-4000-8000-000000000012';
 export const E2E_RETEST_ID = '00000000-0000-4000-8000-000000000031';
 // The product of the OOS journey (TrueBatch is not linked: its batch is registered by hand).
 export const E2E_PRODUCT_ID = '00000000-0000-4000-8000-000000000101';
+// The product of the stability evaluation journey (its own, so the other journeys' studies are not in its evaluation).
+export const E2E_STAB_PRODUCT_ID = '00000000-0000-4000-8000-000000000102';
 // Invented test people and the Medhanta LIMS permissions core gives them.
 export const USERS: Record<string, Permission[]> = {
   op1: ['lims.analysis.perform'],

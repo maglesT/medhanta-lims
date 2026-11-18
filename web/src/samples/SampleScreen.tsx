@@ -238,7 +238,7 @@ function OosBlocks({ d, reload }: { d: SampleDetail; reload: () => Promise<void>
       ))}
       {d.oot.map((t) => (
         <div key={t.key} className={t.answer ? 'notice info' : 'notice'}>
-          <p><b>Out of trend:</b> {t.name} {t.shown} (trend limit {t.trend}), analysis {t.analysisNo}.</p>
+          <p><b>Out of trend:</b> {t.name} {t.shown} ({t.trend}), analysis {t.analysisNo}.</p>
           {t.answer ? <p>QC answered: <b>{t.answer.payload.answer}</b> · {t.answer.payload.reason} · {t.answer.personName}, {plantTime(t.answer.at)}</p>
             : d.decision ? null : d.ootRefusal ? <p className="muted small">{d.ootRefusal}</p> : (
             <div className="decide">

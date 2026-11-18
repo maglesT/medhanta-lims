@@ -447,5 +447,26 @@ stability samples' analyses, excursions, entries). Permissions: protocols `lims.
 placement, excursions and checks `lims.sample.register`; QA's approval of extra placement, the excursion assessment and
 the on-going reason `lims.qc.approve`; reading also `lims.view`.
 
-Not in this round: the Q1E evaluation (L15), the out-of-trend prediction interval (L22), the Arrhenius advisory (L24),
-the CTD tables and `stability_v1` (LIMS-29, next round); excursions read from the Logbook.
+Not in this round: excursions read from the Logbook (the evaluation follows below).
+
+## Step 6: stability evaluation (build step 6, 18 Nov 2026)
+Plan 2.6 and 2b items 3, 4, 7, 8 (LIMS-29, LIMS-25). Nothing is typed: the results are the reportable values of the
+stability samples' **reviewed** analyses (the latest reviewed, not invalidated, per test; the sample's QC decision
+shown beside it), read per study, condition and time point (`server/routes/stability-evaluation.ts` `itemData`). The
+calculations are pure functions (`shared/engine/stability-evaluation.ts`) over templates L15, L22 and L24; migration
+`0015`; no new permission.
+
+| What | How |
+|---|---|
+| **Stability-indicating tests** | The specification's tests that apply on stability with a numeric shelf-life limit (range, NMT, NLT; the shelf-life limit of "release and shelf life"). |
+| **Q1E evaluation** (L15) | Per protocol (all its versions) and long-term condition, per test: the batches with 3 or more time points (the others named, not used), pooled as the poolability tests allow (level 0.25), the estimate, the model, the limiting line; on the study screen for its batch alone, on the product screen across the product's studies. QA (`lims.qc.approve`) answers the Q1E decision tree (storage, significant change at accelerated and at intermediate, little or no change, statistics performed), may pick a log fit per test, sees the proposed shelf life (the shortest over the tests, capped, rounded down) and signs it (e-signature "QC approved"). |
+| **Evaluation record** | `stability_evaluations`, insert-only: scope, item, protocol, condition, the studies, the kind (shelf life; retest period for a material), the months, the inputs as read (every result with its sample and analysis, the answers, the fits) and the outputs. Signing is refused when a result changed since the screen was read (content hash). |
+| **Out of trend** (L22, LIMS-25) | A stability result outside the 95 % prediction interval of its batch's earlier results at the condition (3 or more time points), or of the product's other batches there pooled, is the sample's existing OOT flag (`testStates(..., trend)` via `stabilityTrend`), answered by QC ("no action" or "investigation") before approval. Computed when read, like the spec's trend limit. |
+| **To be reported** (LIMS-29) | A confirmed OOS of a stability sample, or an OOT answered "investigation", on a marketed batch (TrueBatch released; an MMS lot released; link down: treated as marketed and said) shows on the study and product screens as "to be reported", with the OOS number. QA records whether a regulator notice is needed (yes/no with the reference or why not; `stability_report_answers`, insert-only); the app never sends one. |
+| **Arrhenius** (L24) | On the product screen when the protocol has accelerated (or intermediate, stress) results: per test the rate at each condition with a temperature (slope of all batches, towards the limit), the allowed change from the mean initial value to the limit, the time to it at the long-term condition; humidity-corrected when 4 or more conditions with 2 humidities allow. Always shown as "advisory: for development decisions, not for the label"; it never sets a shelf life. |
+| **CTD tables** | `GET /api/stability/ctd` (PDF, `server/ctd.ts`, as the CoA; CSV): 3.2.P.8.3 for a product, 3.2.S.7.3 for a material; per batch and condition the tests with their acceptance criteria as rows and the schedule's time points as columns, OOS and OOT marked, pending QC decisions starred; the signed evaluations at the end; the CSV one row per batch, condition, test and time point with the signed shelf life. |
+| **View** | `report.stability_v1`, one row per study (ids `md5('lims:stability:'||id)`): product or material, batch, protocol, conditions, last time point, ON_STUDY / COMPLETE, and the latest signed evaluation covering it as `shelf_life_months` or `retest_period_months` (MMS reads the latter in a later readers round). |
+
+Screens: the Stability tab's **Evaluation** list (products and materials on stability, their signed shelf life), the
+product evaluation screen (CTD downloads, studies, to be reported, data, Q1E per condition with "Propose the shelf life
+(QA)", signed evaluations, Arrhenius), and the same panel on the study screen (its batch alone).

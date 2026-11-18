@@ -63,3 +63,31 @@ export const getCapacity = () => api<Capacity>('GET', '/api/stability/capacity')
 
 export const STATE_WORDS: Record<PointStateWord, string> = { pulled: 'Pulled', due: 'Due', overdue: 'Overdue', 'not yet': 'Not yet' };
 export const STATE_CHIPS: Record<PointStateWord, string> = { pulled: 'chip chip-ok', due: 'chip chip-info', overdue: 'chip chip-bad', 'not yet': 'chip chip-draft' };
+
+// ---- Evaluation (LIMS-29, LIMS-25; server/routes/stability-evaluation.ts) ----
+export type EvalScope = { study: number } | { of: 'product' | 'material'; itemId: string };
+export interface CtdCell { figure: string; pass: boolean | null; decided: string | null; oot: string | null; ootAnswer: string | null; sampleNo: string; analysisNo: string }
+export interface CtdTable { studyId: number; studyNo: string; lotNo: string; protocolNumber: string; protocolVersionNo: number; pack: string; t0: string; condition: string; role: string;
+  months: number[]; rows: { key: string; name: string; criterion: string; cells: Record<number, CtdCell> }[] }
+export interface TestEvaluation { key: string; name: string; criterion: string; transform: 'none' | 'log'; used: string[]; notUsed: { lotNo: string; why: string }[]; ok: boolean; message?: string;
+  estimate?: string; model?: string; limiting?: string; slopesP?: string; interceptsP?: string; branch?: string; cap?: string; proposed?: number; shown?: string }
+export interface EvalGroup { key: string; protocolNumber: string; label: string; storage: Answers['storage']; studies: string[]; tests: TestEvaluation[]; contentHash: string; signRefusal: string | null }
+export interface Answers { storage: 'room temperature' | 'refrigerated' | 'frozen'; accelerated?: 'no significant change' | 'significant change'; intermediate?: 'no significant change' | 'significant change';
+  change?: 'little or none' | 'change or variability'; statistics?: 'performed' | 'not amenable' }
+export interface ReportRow { key: string; kind: 'confirmed OOS' | 'negative trend'; studyId: number; studyNo: string; lotNo: string; label: string; month: number; test: string; what: string; oosNo?: string;
+  marketed: boolean | null; answer: { needed: boolean; text: string; by: string; at: string } | null }
+export interface SignedEvaluation { id: number; scope: string; condition: string; kind: string; months: number; studyIds: number[]; outputs: { proposal?: { test?: string; limiting?: string } };
+  inputs: { answers?: Answers; studies?: string[] }; printedName: string | null; signedAt: string | null }
+export interface EvaluationView {
+  scope: 'study' | 'product'; item: SampleItem; kind: 'shelf life' | 'retest period'; studies: { id: number; studyNo: string; lotNo: string; protocolNumber: string; purpose: string }[];
+  tables: CtdTable[]; groups: EvalGroup[]; arrhenius: { protocolNumber: string; longTerm: string; test: string; ok: boolean; message?: string; shown?: string; months?: string; rates: { label: string; rate: string }[]; advisory: string }[];
+  toReport: ReportRow[]; reportRefusal: string | null; evaluations: SignedEvaluation[];
+}
+const scopeQuery = (s: EvalScope) => ('study' in s ? `study=${s.study}` : `of=${s.of}&itemId=${encodeURIComponent(s.itemId)}`);
+export const getEvaluation = (s: EvalScope) => api<EvaluationView>('GET', `/api/stability/evaluation?${scopeQuery(s)}`);
+export const previewEvaluation = (b: { scope: EvalScope; group: string; answers: Answers; transforms: Record<string, 'none' | 'log'> }) =>
+  api<{ tests: TestEvaluation[]; proposal: { months: number | null; test?: string; limiting?: string; why?: string }; answersRefusal: string | null }>('POST', '/api/stability/evaluation/preview', b);
+export const signEvaluation = (b: object) => api<{ ok: true; id: number; months: number }>('POST', '/api/stability/evaluations', b);
+export const answerReport = (b: { of: string; itemId: string; key: string; needed: boolean; text: string }) => api<{ ok: true }>('POST', '/api/stability/report-answers', b);
+export const listEvaluated = () => api<{ of: 'product' | 'material'; itemId: string; code: string; name: string; studies: number; months: number | null }[]>('GET', '/api/stability/products');
+export const ctdLink = (of: string, itemId: string, format: 'pdf' | 'csv') => `/api/stability/ctd?of=${of}&itemId=${encodeURIComponent(itemId)}&format=${format}`;

@@ -1,6 +1,6 @@
 // Invented master data for the browser tests: what core's master_data views would list.
 import type { FakeMaster } from '../test/helpers.js';
-import { E2E_MATERIAL_ID, E2E_PRODUCT_ID, E2E_RETEST_ID } from './config.js';
+import { E2E_MATERIAL_ID, E2E_PRODUCT_ID, E2E_RETEST_ID, E2E_STAB_PRODUCT_ID } from './config.js';
 
 const item = (itemId: string, code: string, name: string) => ({ itemId, code, name, version: 1, active: true });
 export function seedMasterData(m: FakeMaster) {
@@ -22,6 +22,8 @@ export function seedMasterData(m: FakeMaster) {
   m.materials_.push({ ...item(E2E_RETEST_ID, 'RM-031', 'Exampline hydrochloride (active substance)'), category: 'API', unit: 'kg' });
   // The product of the OOS journey.
   m.products_.push({ ...item(E2E_PRODUCT_ID, 'FG-DEM100', 'Demolol 100 mg tablets'), strength: '100 mg', dosageForm: 'Tablet' });
+  // The product of the stability evaluation journey.
+  m.products_.push({ ...item(E2E_STAB_PRODUCT_ID, 'FG-DEM200', 'Demolol 200 mg tablets'), strength: '200 mg', dosageForm: 'Tablet' });
   // These rooms only, not the fixtures' rooms of the server tests.
   m.rooms_.splice(0);
   m.rooms_.push(

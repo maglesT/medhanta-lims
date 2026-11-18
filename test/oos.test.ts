@@ -93,7 +93,7 @@ describe('the OOS rules', () => {
     expect(approvalProblems(f, received, [ok], 9, [{ oosNo: 'OOS260001', testName: 'pH', status: 'open' }])).toEqual(['OOS260001 (pH) is open: the sample is approved only after the OOS is concluded.']);
     expect(approvalProblems(f, received, [ok], 9, [{ oosNo: 'OOS260001', testName: 'pH', status: 'confirmed' }])).toEqual(['OOS260001 (pH) is a confirmed OOS: the sample can only be rejected.']);
     expect(approvalProblems(f, received, [ok], 9, [{ oosNo: 'OOS260001', testName: 'pH', status: 'invalidated' }])).toEqual([]);
-    const oot = { ...ok, reviewed: { ...ok.reviewed!, outOfTrend: '5.5 to 6.5' } };
+    const oot = { ...ok, reviewed: { ...ok.reviewed!, outOfTrend: 'trend limit 5.5 to 6.5' } };
     expect(approvalProblems(f, received, [oot], 9)).toEqual(['pH: 6.8 is out of trend (trend limit 5.5 to 6.5, analysis LA2600002): QC answers the flag first.']);
     const answered: SampleEvent[] = [...received, { kind: 'oot_answered', person: 9, payload: { test: 'ph', analysisNo: 'LA2600002', answer: 'no action', reason: 'Within the variation of the method' } }];
     expect(approvalProblems(f, answered, [oot], 9)).toEqual([]);

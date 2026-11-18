@@ -14,13 +14,19 @@ const small = (text: string, extra: Record<string, unknown> = {}): Content => ({
 const th = (text: string): Content => ({ text, fontSize: 8, bold: true, fillColor: '#eef1f4' });
 const RED = '#b3261e';
 
+/**
+ * A result's figure as decided: the worked line's end ("… = 99.6 %"), or a reading as written ("99.0 %; limit …"), else
+ * value and unit (CoA, CTD tables).
+ */
+export const resultFigure = (shown: string, value: string, unit: string) =>
+  /=\s*([^=;]+)$/.exec(shown.replace(/:\s*(PASS|FAIL)$/i, ''))?.[1]?.trim() ?? /^\s*([-+]?\d[\d.]*(?:\s*[^\s;]+)?)\s*;/.exec(shown)?.[1]?.trim() ?? `${value} ${unit}`.trim();
+
 export function coaDoc(c: CoaInput, by: string, printedAt = new Date(), demo = false): TDocumentDefinitions {
   const s = c.sample;
   const h = c.spec.header;
   const p = c.decision.payload as { coaNo?: string; results?: Decided[] };
   const results = p.results ?? [];
-  // The figure as decided: the worked line's end ("… = 99.6 %"), else value and unit.
-  const figure = (r: Decided) => /=\s*([^=;]+)$/.exec(r.shown.replace(/:\s*(PASS|FAIL)$/i, ''))?.[1]?.trim() ?? `${r.value} ${r.unit}`.trim();
+  const figure = (r: Decided) => resultFigure(r.shown, r.value, r.unit);
   const content: Content[] = [
     { text: runs(`Certificate of analysis ${p.coaNo ?? ''}`), fontSize: 16, bold: true },
     { text: runs(`${s.item.code} · ${s.item.name}`), fontSize: 11, margin: [0, 2, 0, 8] },

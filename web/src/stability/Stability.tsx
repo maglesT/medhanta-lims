@@ -10,21 +10,24 @@ import { PURPOSE_WORDS, protocolSchema, type ProtocolDoc } from '../../../shared
 import { ANY_PACK } from '../../../shared/engine/stability.js';
 import { Picker } from '../designer/ui.js';
 import {
-  answerOngoing, batchesFor, createProtocol, effectiveProtocols, excursionAction, getCapacity, getOngoing, listChambers, listExcursions, listProtocols, listStudies,
+  answerOngoing, batchesFor, listEvaluated, createProtocol, effectiveProtocols, excursionAction, getCapacity, getOngoing, listChambers, listExcursions, listProtocols, listStudies,
   recordExcursion, startStudy, STATE_CHIPS, STATE_WORDS, type Capacity, type Chamber, type Excursion, type Ongoing, type ProtocolRow, type Studies,
 } from './api-stability.js';
 import { ProtocolEditor } from './ProtocolEditor.js';
 import { StudyScreen } from './StudyScreen.js';
+import { ProductEvaluation } from './Evaluation.js';
 import '../designer/designer.css';
 import '../samples/samples.css';
 
-type Tab = 'studies' | 'protocols' | 'excursions' | 'capacity';
+type Tab = 'studies' | 'evaluation' | 'protocols' | 'excursions' | 'capacity';
 
 export function Stability({ me }: { me: Me }) {
   const [tab, setTab] = useState<Tab>('studies');
   const [study, setStudy] = useState<number | null>(null);
   const [protocol, setProtocol] = useState<number | null>(null);
-  if (study !== null) return <StudyScreen me={me} id={study} onBack={() => setStudy(null)} />;
+  const [product, setProduct] = useState<{ of: 'product' | 'material'; itemId: string } | null>(null);
+  if (study !== null) return <StudyScreen me={me} id={study} onBack={() => setStudy(null)} onProduct={(p) => { setStudy(null); setProduct(p); }} />;
+  if (product !== null) return <ProductEvaluation me={me} {...product} onBack={() => setProduct(null)} onOpenStudy={(id) => { setProduct(null); setStudy(id); }} />;
   if (protocol !== null) return <ProtocolEditor me={me} versionId={protocol} onBack={() => setProtocol(null)} onOpen={setProtocol} />;
   return (
     <>
@@ -35,14 +38,39 @@ export function Stability({ me }: { me: Me }) {
         </div>
       </div>
       <nav className="subtabs" aria-label="Stability">
-        {([['studies', 'Studies'], ['protocols', 'Protocols'], ['excursions', 'Excursions'], ['capacity', 'Chamber capacity']] as const).map(([k, label]) => (
+        {([['studies', 'Studies'], ['evaluation', 'Evaluation'], ['protocols', 'Protocols'], ['excursions', 'Excursions'], ['capacity', 'Chamber capacity']] as const).map(([k, label]) => (
           <button key={k} className={tab === k ? 'on' : ''} aria-pressed={tab === k} onClick={() => setTab(k)}>{label}</button>))}
       </nav>
       {tab === 'studies' && <StudiesTab me={me} onOpen={setStudy} />}
+      {tab === 'evaluation' && <EvaluationTab onOpen={setProduct} />}
       {tab === 'protocols' && <ProtocolsTab me={me} onOpen={setProtocol} />}
       {tab === 'excursions' && <ExcursionsTab me={me} />}
       {tab === 'capacity' && <CapacityTab />}
     </>
+  );
+}
+
+/** The products and materials on stability, with their latest signed shelf life or retest period (LIMS-29). */
+function EvaluationTab({ onOpen }: { onOpen: (p: { of: 'product' | 'material'; itemId: string }) => void }) {
+  const [rows, setRows] = useState<Awaited<ReturnType<typeof listEvaluated>> | null>(null);
+  const [error, setError] = useState('');
+  useEffect(() => { listEvaluated().then(setRows, (e) => setError(plainError(e))); }, []);
+  if (error) return <p className="notice" role="alert">{error}</p>;
+  if (!rows) return <div className="skel skel-block" />;
+  if (!rows.length) return <div className="card placeholder"><p>No studies yet.</p></div>;
+  return (
+    <div className="table-wrap">
+      <table className="masters" aria-label="Products on stability">
+        <thead><tr><th>Product or material</th><th>Studies</th><th>Signed shelf life or retest period</th></tr></thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={`${r.of}:${r.itemId}`} className="clickable" onClick={() => onOpen({ of: r.of, itemId: r.itemId })}>
+              <td><b>{r.code}</b> {r.name}<span className="cell-sub">{r.of}</span></td><td>{r.studies}</td>
+              <td>{r.months === null ? 'Not evaluated yet' : `${r.months} months (${r.of === 'material' ? 'retest period' : 'shelf life'})`}</td>
+            </tr>))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
