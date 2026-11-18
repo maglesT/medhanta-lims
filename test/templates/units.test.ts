@@ -37,6 +37,9 @@ describe('units: same-kind conversion', () => {
     ['1', 'kWh/kg', 'kJ/kg', '3600'],
     ['100000', 'IU/g', 'IU/mg', '100'],
     ['45', 'U/mg', 'U/g', '45000'],
+    ['49.75', 'µg/mL', 'mg/mL', '0.04975'], // lab solutions: 1000 µg/mL = 1 mg/mL
+    ['1', '%w/v', 'µg/mL', '10000'], // 1 g/100 mL = 10 mg/mL
+    ['497.5', 'mAU', 'AU', '0.4975'], // absorbance (L1)
   ])('Units: %s %s = %s %s', (v, from, to, want) => {
     expect(c(v, from, to)).toBe(want);
   });
@@ -67,12 +70,13 @@ describe('units: same-kind conversion', () => {
     ['5', '%w/w', '%w/v', /cannot be converted/],
     ['1', 'kg', 'L', /cannot be converted/],
     ['25', '°C', 'Δ°C', /temperature reading/],
+    ['0.5', 'AU', 'mg/mL', /cannot be converted/], // an absorbance is never a concentration (L1 uses A(1 %, 1 cm))
   ])('Units: refused: %s %s to %s', (v, from, to, msg) => {
     expect(() => convert(new Dec(v), unit(from), unit(to))).toThrow(Refused);
     expect(() => convert(new Dec(v), unit(from), unit(to))).toThrow(msg);
   });
 
-  it.each([['mcg', 'µg'], ['ml', 'mL'], ['kP', 'kp'], ['% w/w', '%w/w'], ['cfu/g', 'CFU/g'], ['kg/cm²', 'kgf/cm²']])('Units: alias %s is %s', (a, s) => {
+  it.each([['mcg', 'µg'], ['ml', 'mL'], ['kP', 'kp'], ['% w/w', '%w/w'], ['cfu/g', 'CFU/g'], ['kg/cm²', 'kgf/cm²'], ['ug/mL', 'µg/mL'], ['µg/g', 'ppm'], ['mcg/g', 'ppm']])('Units: alias %s is %s', (a, s) => {
     expect(findUnit(a)?.symbol).toBe(s);
   });
 

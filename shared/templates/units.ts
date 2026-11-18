@@ -14,7 +14,8 @@ export type Kind =
   | 'fraction' | 'mass concentration' | 'density' | 'rotation speed' | 'angle' | 'mass per area' | 'Strong-Cobb hardness'
   | 'mass rate' | 'volume rate' | 'count rate' | 'current' | 'power' | 'specific energy'
   | 'relative humidity' | 'absolute humidity' | 'absolute humidity per volume' | 'log' | 'frequency' | 'rpm per Hz' | 'charge'
-  | 'IU' | 'CFU' | 'activity units' | 'IU per mass' | 'CFU per mass' | 'activity units per mass' | 'mass per IU';
+  | 'IU' | 'CFU' | 'activity units' | 'IU per mass' | 'CFU per mass' | 'activity units per mass' | 'mass per IU'
+  | 'absorbance';
 
 export interface Unit {
   readonly symbol: string;
@@ -51,6 +52,7 @@ const TABLE: [string, Kind, Dec | string, string?][] = [
   ['%', 'fraction', '1'], ['%w/w', 'fraction', '1'], ['ppm', 'fraction', '0.0001'],
   ['µg/mg', 'fraction', '0.1'], ['mg/g', 'fraction', '0.1'], // potency per mass of material: 1000 µg/mg = 100 %
   ['%w/v', 'mass concentration', '10'], ['mg/mL', 'mass concentration', '1'], ['g/L', 'mass concentration', '1'],
+  ['µg/mL', 'mass concentration', '0.001'], // lab solutions (L1, L4, L9): 1000 µg/mL = 1 mg/mL
   ['g/mL', 'density', '1'], ['g/cm³', 'density', '1'], ['kg/L', 'density', '1'], ['kg/m³', 'density', '0.001'],
   ['rpm', 'rotation speed', '1'], ['rad/min', 'rotation speed', d(1).div(TWO_PI)], // 1 rpm = 2π rad/min
   ['°', 'angle', '1'],
@@ -77,6 +79,7 @@ const TABLE: [string, Kind, Dec | string, string?][] = [
   ['CFU/g', 'CFU per mass', '1'], ['CFU/mg', 'CFU per mass', '1000'],
   ['U/g', 'activity units per mass', '1'], ['U/mg', 'activity units per mass', '1000'],
   ['mg/IU', 'mass per IU', '1'],
+  ['AU', 'absorbance', '1'], ['mAU', 'absorbance', '0.001'], // absorbance readings (L1); a peak area is a plain number
 ];
 
 /** Other spellings people type. */
@@ -85,6 +88,7 @@ const ALIASES: Record<string, string> = {
   mm2: 'mm²', cm2: 'cm²', sec: 's', hr: 'h', degC: '°C', degF: '°F', kP: 'kp', Kp: 'kp',
   '% w/w': '%w/w', '% w/v': '%w/v', '% RH': '%RH', RH: '%RH', cfu: 'CFU', 'cfu/g': 'CFU/g', 'cfu/mg': 'CFU/mg',
   'kg/cm²': 'kgf/cm²', 'N/mm2': 'N/mm²', 'g/m3': 'g/m³', 'ft³/min': 'cfm', 'ft3/min': 'cfm', meq: 'mEq', mEQ: 'mEq', 'US gallon': 'US gal', 'imperial gallon': 'imp gal', 'kg/cm2': 'kgf/cm²', 'g/cm3': 'g/cm³', 'm3/h': 'm³/h', tablet: 'tablets', unit: 'units', pack: 'packs', no: 'nos', 'nos.': 'nos',
+  'ug/mL': 'µg/mL', 'mcg/mL': 'µg/mL', 'μg/mL': 'µg/mL', 'µg/g': 'ppm', 'ug/g': 'ppm', 'mcg/g': 'ppm', 'μg/g': 'ppm', // 1 µg/g = 1 ppm
 };
 
 /** Every unit symbol with its kind, in table order (the designer's unit pick lists). */

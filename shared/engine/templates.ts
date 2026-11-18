@@ -16,6 +16,8 @@ export const TEMPLATES: Record<string, Template> = {
   C6: T.c6StagedTest, C7: T.c7SamplingPlan,
   // Packing: expiry from the shelf life, printed data against the batch data, serialisation codes of sample packs.
   T27: T.t27Expiry, C8: T.c8PrintedData, C9: T.c9SerialCodes,
+  // Lab assay templates (LIMS library 3b): assay, % label claim, basis, impurities, residual solvents, chromatographic adjustment.
+  L1: T.l1Assay, L2: T.l2LabelClaim, L3: T.l3OnBasis, L4: T.l4Impurities, L9: T.l9ResidualSolvents, L20: T.l20ChromAdjustment,
   // F2 "no further change": this round's reading against the previous round's ("$prev.name").
   F2: (i: { previous: T.Q; current: T.Q; limit: Parameters<typeof T.noFurtherChange>[2] }) => T.noFurtherChange(i.previous, i.current, i.limit),
 };
