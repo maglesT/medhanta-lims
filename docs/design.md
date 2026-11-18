@@ -1,12 +1,26 @@
 # Medhanta LIMS: design decisions
 
-Owner decisions of 15 November 2026. Built the Logbook way (the platform Logbook is the model for structure, patterns
-and size), not the Batchwright way.
+Plan approved by the owner on 18 November 2026 (all 6 questions yes); template test done the same day (114 public
+monographs and methods, 3723 rows, no formula language; library v1).
 
 ## Product
-- **One product per dosage form.** Medhanta LIMS covers manufacturing, from dispensing to QA release of bulk
-  tablets. Packing is a separate product, "TrueBatch Tablets Packing", in this repository on the same engine
-  (`docs/packing-design.md`).
+- **Medhanta LIMS** (`lims`): the QC laboratory system for raw materials, packing materials, intermediates,
+  in-process, finished products, APIs, stability, microbiology, environmental monitoring and water.
+- **Engine.** The analysis worksheet is a copy of the TrueBatch Tablets engine (master / record / step / sign /
+  correct / audit / PDF / timers / repeat-until / preparations alongside / sub-records). Lab items (standards,
+  reagents, columns, media, cultures, chambers) copy the Logbook's item + entries + derived status model. Samples,
+  specifications, OOS, stability and trends are new, built in the same style. No new engine mechanism without the
+  owner.
+- **Numbers.** Sample `LS26xxxxx`, analysis `LA26xxxxx`, CoA `COA26xxxxx`, OOS `OOS26xxxx`, stability study
+  `STB26xxx`.
+- **Owner decisions from the template test (18 Nov 2026).** Particle counters and online water monitors: their
+  daily report is imported as a file with a checksum, alarms are entered as excursions with a second person (no live
+  link in version 1). Not in version 1: non-linear curve fits, PLS/NIR models, measurement uncertainty. A Tier 1
+  failure the method sends to Tier 2 (and a test the method replaces by another on failure) is recorded and shown in
+  review but opens no OOS. Dissolution time points are a fixed list.
+- **Published views** use the product's own id prefix in their ids: `md5('lims:...' || id)`.
+
+The sections below describe the copied TrueBatch engine; each is rewritten for the lab as its LIMS screens are built.
 
 ## Platform
 - Runs on the Medhanta platform. Core provides people, sign-in, permissions, e-signature re-authentication and master
@@ -66,7 +80,7 @@ answering) or **ok**.
   qualified, expired or missing, the signature is refused in plain words ("<name> has no valid training in <skill>
   (Recruitment): ask QA, or another trained person signs."). Link off or down: the sign dialog asks the signer to
   tick "I am trained in <skill>", and the signature records `training` from `hand` ("training typed by hand
-  (Recruitment not reachable)"), shown on the step, listed in QA's release review and in the PDF (TA-23). A step
+  (Recruitment not reachable)"), shown on the step, listed in QA's release review and in the PDF (LIMS-40). A step
   marked not applicable, a QA hold release and the batch-level signatures do not read training.
 - **Published** (`db/migrations/0006_report_views.sql`): `batch_fact_v1` and `equipment_use_v1` with Batchwright's
   names and columns, so the Logbook and Deviations read TrueBatch as they read Batchwright, and `deviation_note_v1`
@@ -114,7 +128,7 @@ answering) or **ok**.
   available again with no change there. The app counts the same when it compares a lot with MMS's stock
   (`shared/engine/stock.ts`: materialUses, issuedLots, returnProblems). A batch that used no material is asked nothing.
 - **Where machines are**: a stage that works machines or names a room chooses the rooms it may run in (master check,
-  TA-11); the floor is offered the machines of the field's type standing in those rooms. A balance is offered where
+  LIMS-12); the floor is offered the machines of the field's type standing in those rooms. A balance is offered where
   the weighing is done: in one of the master's **dispensing rooms** (header, picked from master data's rooms; a new
   tablet master starts with none, as a segregated block's booth may also be in a "Dispensing" area (17 Nov 2026 run);
   the rooms where a weighing balance stands are listed first; a master that weighs and names none is ⛔),
@@ -122,7 +136,7 @@ answering) or **ok**.
   server and the screen). Not every area called dispensing: a liquids block's "Liquid dispensing" balance is not
   offered to a tablet weighing. A version approved before the setting reads the rooms of the Dispensing area.
   The designer lists first the areas and rooms where the stage's machines stand (by type, from master data), and the
-  master check warns (⚠️, TA-11) when no machine of a step's type stands in the rooms its stage allows, naming where
+  master check warns (⚠️, LIMS-12) when no machine of a step's type stands in the rooms its stage allows, naming where
   the machines of that type stand: the floor's picker would be empty (17 Nov 2026 run: the disintegration tester in
   the QC lab). A warning, not ⛔: master data changes without a new master version, and the floor checks it again.
 - **Pick lists from master data** (17 Nov 2026 run): the product pick lists offer the products whose dosage form

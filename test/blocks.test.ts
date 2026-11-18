@@ -6,7 +6,7 @@ import { readValue } from '../shared/engine/values.js';
 import { masterChecks } from '../shared/master/checks.js';
 import type { MasterDoc } from '../shared/master/schema.js';
 import { at, ev, small, unplaced } from './engine-fixture.js';
-// The problems, without the rooms a stage must name (TA-11): the fixtures name none.
+// The problems, without the rooms a stage must name (LIMS-12): the fixtures name none.
 const checks = (d: Parameters<typeof masterChecks>[0]) => unplaced(masterChecks(d));
 
 // The standard tablet blocks: each is a description that the format accepts and that a small master can use without

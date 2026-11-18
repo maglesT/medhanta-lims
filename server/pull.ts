@@ -6,7 +6,7 @@ import { CERTIFICATE, PROVIDER_NAME, clauses, type Provider, type Source, type V
 import { LOT_USABLE } from './links.js';
 import { plantDate } from '../shared/plant-time.js';
 
-// What a link gives a step value at write time (owner 15 Nov 2026, TA-11, TA-12): the value as read now, or a
+// What a link gives a step value at write time (owner 15 Nov 2026, LIMS-12, TA-12): the value as read now, or a
 // refusal in plain words; when the link is absent or down, the value is typed by hand (its questions in
 // shared/engine/links.ts). Nothing read is kept but what the record keeps (PL-07).
 
@@ -23,7 +23,7 @@ export function lineOf(doc: MasterDoc, st: Step): FormulaLine | undefined {
 }
 
 /**
- * TA-11: a machine or room the Logbook says is fit for use, not kept for another product (after an antibiotic) and not
+ * LIMS-12: a machine or room the Logbook says is fit for use, not kept for another product (after an antibiotic) and not
  * in use by another batch. Line clearance: its facts. `productCode` is the code the batch publishes as its product
  * (batch_fact_v1 / packing_batch_v1 product_code: the master's header), the one the Logbook compares.
  */

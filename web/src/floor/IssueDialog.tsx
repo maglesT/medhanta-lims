@@ -4,7 +4,7 @@ import { SignDialog } from '../components/SignDialog.js';
 import { getVersion, type MasterRow, type Version } from '../api-designer.js';
 import { batchLink, go, plainError } from '../api-floor.js';
 
-// TA-03: issue a batch from the effective master version, signed "issued".
+// LIMS-01: issue a batch from the effective master version, signed "issued".
 export function IssueDialog({ row, onCancel }: { row: MasterRow; onCancel: () => void }) {
   const [v, setV] = useState<Version | null>(null);
   const [problems, setProblems] = useState<string[]>([]);

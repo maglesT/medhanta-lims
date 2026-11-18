@@ -129,7 +129,7 @@ export const headerSchema = z.object({
   dieAreaMm2: decimal.optional(),
   // Other strengths compressed from the same blend at their own core weight (F0225, F0366).
   otherStrengths: z.array(z.object({ name: text().min(1), labelClaim: text(40), coreWeightMg: decimal }).strict()).max(10).optional(),
-  // TA-11: the rooms of master data (codes) where this product's materials are weighed; a balance is offered there or
+  // LIMS-12: the rooms of master data (codes) where this product's materials are weighed; a balance is offered there or
   // in a room the stage allows (shared/engine/picks.ts). A version made before this setting has none.
   dispensingRooms: z.array(text()).max(20).optional(),
 }).strict();

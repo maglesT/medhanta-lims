@@ -79,21 +79,21 @@ async function batch(training: object | null = SKILL) {
 const eventsOf = async (id: number) => (await loadBatch(t.sql, id))!.events;
 
 describe('the training a step needs, in the master', () => {
-  it('TA-23 a step may name a training (code and title); none by default, so existing masters do not change', () => {
+  it('LIMS-40 a step may name a training (code and title); none by default, so existing masters do not change', () => {
     expect(small([{}]).stages[0]!.steps[0]!.training).toBeUndefined();
     const d = small([{ steps: [{ checker: true, training: SKILL }] }]);
     expect(d.stages[0]!.steps[0]!.training).toEqual(SKILL);
     expect(masterSchema.safeParse({ ...d, stages: [{ ...d.stages[0], steps: [{ ...d.stages[0]!.steps[0], training: { code: '' } }] }] }).success).toBe(false);
   });
 
-  it('TA-23 the plain view says who may sign it: "Done by a person trained in SOP-STR-004 …"', () => {
+  it('LIMS-40 the plain view says who may sign it: "Done by a person trained in SOP-STR-004 …"', () => {
     const lines = describeMaster(small([{ steps: [{ checker: true, training: SKILL }, {}] }])).flatMap((s) => s.lines.map((l) => l.text));
     expect(lines.find((l) => l.startsWith('1.'))).toContain('Done by a person trained in SOP-STR-004 Operating the stirrer; checked by a person trained in it too (Recruitment).');
     expect(lines.find((l) => l.startsWith('2.'))).not.toContain('trained');
     expect(neededText({ code: 'SOP-X' }, false)).toBe('Done by a person trained in SOP-X (Recruitment).');
   });
 
-  it('TA-23 the designer picks the skill from those Recruitment publishes (each once); none while the link is off or down', async () => {
+  it('LIMS-40 the designer picks the skill from those Recruitment publishes (each once); none while the link is off or down', async () => {
     expect((await as('author', 'GET', '/api/recruitment/skills')).json()).toEqual({ link: 'ok', skills: [{ code: 'SOP-GRN-001', title: 'Granulation' }, SKILL] });
     await cut();
     try {
@@ -102,7 +102,7 @@ describe('the training a step needs, in the master', () => {
     expect(await recruitmentClient(link('recruitment', null)).skills()).toEqual({ state: 'absent' });
   });
 
-  it('TA-23 the link is RECRUITMENT_DATABASE_URL, by the platform\'s <PROVIDER>_DATABASE_URL convention; unset, it is off', () => {
+  it('LIMS-40 the link is RECRUITMENT_DATABASE_URL, by the platform\'s <PROVIDER>_DATABASE_URL convention; unset, it is off', () => {
     const base = { DATABASE_URL: 'postgres://a@h/d', MASTER_DATA_DATABASE_URL: 'postgres://a@h/m', OIDC_ISSUER: 'https://core.example', OIDC_CLIENT_SECRET: 'x', OIDC_REDIRECT_URI: 'https://tb.example/cb' };
     expect(loadConfig({ ...base, RECRUITMENT_DATABASE_URL: 'postgres://tb@h/recruitment' }).RECRUITMENT_DATABASE_URL).toBe('postgres://tb@h/recruitment');
     expect(loadConfig({ ...base, RECRUITMENT_DATABASE_URL: '' }).RECRUITMENT_DATABASE_URL).toBeUndefined();
@@ -110,7 +110,7 @@ describe('the training a step needs, in the master', () => {
 });
 
 describe('signing a step that names a training', () => {
-  it('TA-23 qualified: the signature records the training as Recruitment has it (pulled), with the signed content', async () => {
+  it('LIMS-40 qualified: the signature records the training as Recruitment has it (pulled), with the signed content', async () => {
     const id = await batch();
     const before = (await as('asha', 'GET', `/api/batches/${id}/steps/0.1.0.1/training`)).json() as { link: string; ok: boolean; training: object };
     expect(before).toMatchObject({ link: 'ok', ok: true, training: { code: 'SOP-STR-004', from: 'recruitment', validUntil: '2027-01-09' } });
@@ -122,7 +122,7 @@ describe('signing a step that names a training', () => {
     expect(audit!.new_value.training).toMatchObject({ code: 'SOP-STR-004' });
   });
 
-  it('TA-23 expired or missing: the signature is refused in plain words, and another trained person signs', async () => {
+  it('LIMS-40 expired or missing: the signature is refused in plain words, and another trained person signs', async () => {
     const id = await batch();
     expect((await sign('asha', id, 'done')).statusCode).toBe(200);
     // ravi's training expired (qualified false); kiran has none.
@@ -139,7 +139,7 @@ describe('signing a step that names a training', () => {
     expect((await eventsOf(id)).find((e) => e.kind === 'checked')!.payload.training).toMatchObject({ from: 'recruitment', validUntil: '2027-01-31' });
   });
 
-  it('TA-23 Recruitment down: the signer ticks "I am trained in …"; the signature says training typed by hand, for QA', async () => {
+  it('LIMS-40 Recruitment down: the signer ticks "I am trained in …"; the signature says training typed by hand, for QA', async () => {
     const id = await batch();
     await cut();
     try {
@@ -162,7 +162,7 @@ describe('signing a step that names a training', () => {
     expect(pdf).toContain('SOP-STR-004 Operating the stirrer: ticked \\"I am trained\\", Recruitment link down');
   });
 
-  it('TA-23 Recruitment not linked (absent): the same tick, marked "not linked"', async () => {
+  it('LIMS-40 Recruitment not linked (absent): the same tick, marked "not linked"', async () => {
     const id = await batch();
     const was = t.app.links.recruitment;
     t.app.links.recruitment = recruitmentClient(link('recruitment', null));
@@ -174,7 +174,7 @@ describe('signing a step that names a training', () => {
     expect((await eventsOf(id)).find((e) => e.kind === 'done')!.payload.training).toEqual({ ...SKILL, from: 'hand', state: 'absent' });
   });
 
-  it('TA-23 a step without a training signs as before: nothing read, nothing recorded; the PDF has no training section', async () => {
+  it('LIMS-40 a step without a training signs as before: nothing read, nothing recorded; the PDF has no training section', async () => {
     const id = await batch(null);
     expect((await as('kiran', 'GET', `/api/batches/${id}/steps/0.1.0.1/training`)).json()).toEqual({ skill: null });
     expect((await sign('asha', id, 'done')).statusCode).toBe(200);
@@ -183,7 +183,7 @@ describe('signing a step that names a training', () => {
     expect(pdf).not.toContain('Training typed by hand');
   });
 
-  it('TA-23 the sign check, as a rule: qualified passes; not qualified or no row is refused; off or down needs the tick', () => {
+  it('LIMS-40 the sign check, as a rule: qualified passes; not qualified or no row is refused; off or down needs the tick', () => {
     const row = { code: 'S', title: 'Skill', qualified: true, trainedOn: '2026-01-01', validUntil: '2027-01-01', dataAsOf: null };
     expect(trainingCheck({ code: 'S' }, 'A', { state: 'ok', value: row }, false)).toMatchObject({ ok: true, training: { from: 'recruitment', title: 'Skill' } });
     expect(trainingCheck({ code: 'S' }, 'A', { state: 'ok', value: { ...row, qualified: false } }, true)).toMatchObject({ ok: false, error: 'not_trained' });

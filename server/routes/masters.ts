@@ -11,7 +11,7 @@ import { masterSchema, type MasterDoc, type MasterState } from '../../shared/mas
 import { isHand, type Source } from '../../shared/engine/links.js';
 import { CHANGE_STEPS, approvedChange, namesProduct } from '../links.js';
 
-// Master versions: the model, the table, the draft routes, and the review and approval workflow (TA-02). A version
+// Master versions: the model, the table, the draft routes, and the review and approval workflow (LIMS-01). A version
 // leaves draft only through that workflow (or, in tests, the database owner).
 
 export interface VersionRow { id: number; masterId: number; versionNo: number; state: MasterState; doc: MasterDoc; createdBy: number; createdAt: Date }
@@ -125,7 +125,7 @@ export function masterRoutes(app: FastifyInstance, sql: Sql) {
   reviewRoutes(app, sql);
 }
 
-// ---- Review and approval (TA-02) ----
+// ---- Review and approval (LIMS-01) ----
 
 export const REVIEW_ACTIONS = {
   submit: { from: 'draft', to: 'in_review', event: 'submitted', meaning: 'prepared', needs: ['lims.master.author'] },
@@ -178,9 +178,9 @@ export function reviewRefusal(action: ReviewAction, l: Loaded, user: SessionUser
     return no(409, 'no_changes', `This version is the same as version ${l.previous.versionNo}: change what the new version is for, then send it for review.`);
   }
   if (action === 'submit' || action === 'approve') {
-    // TA-01, and the calculation checks: errors, and warnings that need an answer and have none.
+    // LIMS-01, and the calculation checks: errors, and warnings that need an answer and have none.
     const open = masterChecks(l.v.doc).filter(blocking);
-    if (open.length) return no(409, 'master_has_errors', `The master check shows ${open.length} problem${open.length === 1 ? '' : 's'} to fix or answer first (TA-01).`);
+    if (open.length) return no(409, 'master_has_errors', `The master check shows ${open.length} problem${open.length === 1 ? '' : 's'} to fix or answer first (LIMS-01).`);
   }
   if (action === 'pass') {
     if (author) return no(403, 'author_cannot_check', 'The person who wrote this version cannot check it: a second person checks it.');
@@ -191,7 +191,7 @@ export function reviewRefusal(action: ReviewAction, l: Loaded, user: SessionUser
     if (author || passed.person === user.id) return no(403, 'author_cannot_approve', 'QA approval is by a person who neither wrote nor checked this version.');
   }
   if (action === 'make-effective') {
-    // TA-02: a change control number typed by hand at approval (QMS absent or down) is confirmed by a second person.
+    // LIMS-01: a change control number typed by hand at approval (QMS absent or down) is confirmed by a second person.
     const approved = l.events.filter((e) => e.kind === 'approved').at(-1);
     if (isHand(approved?.payload.source?.changeControl) && approved!.person === user.id) {
       return no(403, 'same_person', 'The change control number was typed by hand at approval: another person makes the version effective, after checking the number and its QA approval in QMS or its paper record.');
@@ -201,7 +201,7 @@ export function reviewRefusal(action: ReviewAction, l: Loaded, user: SessionUser
 }
 
 /**
- * TA-02: while QMS answers, the change control must be one of its change controls, approved by QA (CHANGE_STEPS);
+ * LIMS-01: while QMS answers, the change control must be one of its change controls, approved by QA (CHANGE_STEPS);
  * its title and approval are kept with the approval (PL-07). Otherwise the number is typed by hand.
  */
 async function changeControlSource(app: FastifyInstance, number: string, product?: MasterDoc['header']): Promise<Source> {
@@ -298,7 +298,7 @@ function reviewRoutes(app: FastifyInstance, sql: Sql) {
             insert into master_events (version_id, kind, payload, person_id) values (${id}, ${rule.event}, ${tx.json(payload)}, ${user.id}) returning id::int`;
           const retired: number[] = [];
           if (action === 'make-effective') {
-            // TA-02: one effective version; the previous one is retired.
+            // LIMS-01: one effective version; the previous one is retired.
             for (const r of await tx<{ id: number }[]>`update master_versions set state = 'retired' where master_id = ${l.v.masterId} and state = 'effective' returning id::int`) {
               await tx`insert into master_events (version_id, kind, payload, person_id) values (${r.id}, 'retired', ${tx.json({ by: id })}, ${user.id})`;
               retired.push(r.id);

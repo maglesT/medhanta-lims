@@ -1,58 +1,77 @@
-# TrueBatch rules
+# Medhanta LIMS rules
 
-The 23 TrueBatch rules. Each is checked once, in the app. Each test that proves a rule starts its name with the rule
-ID, e.g. `TA-08 the person who performed a step cannot check it`. `npm run traceability` prints the rule-to-test list;
-CI (`npm run traceability -- --check`) fails when a rule has no test, unless its feature comes later (marked
-"later" in the Tests column, with the feature it waits for).
+The 54 rules of the Medhanta LIMS compliance register (EU, US, India). Each is checked once, in the app. Each test
+that proves a rule starts its name with the rule ID, e.g. `LIMS-41 the person who performed a step cannot check it`.
+`npm run traceability` prints the rule-to-test list; CI (`npm run traceability -- --check`) fails when a rule has no
+test, unless its feature comes later (marked "later" in the Tests column, with the build step it waits for).
 
-Clauses: the binding clauses each rule rests on (US: 21 CFR 211 and Part 11; EU: EudraLex Vol 4 Part I chapters C2, C4, C5 and Annexes A11, A16; IN: Revised Schedule M Part I (SCHM) and Part VIII oral solids (SCHM-VIII)), checked against the official texts when the minimum register was made. QA should confirm them before validation.
+E = the app enforces it (blocks or refuses); S = supported (the app records and shows it, a person decides).
+Clauses: US 21 CFR 211 and Part 11; EU EudraLex Vol 4 Part I chapters (C1-C7) and annexes (A1-A19); IN Revised
+Schedule M Part I (SCHM); API ICH Q7. "(no. to verify)" marks a clause number not yet checked against the text.
 
-| Rule | Requirement | Clauses | Tests |
-|------|-------------|---------|-------|
-| TA-01 | A master is complete before it can be approved | US 211.186(a),(b); 211.101(a); 211.110(a); EU C4 4.17, 4.18; IN SCHM 17.3.6.1, 17.3.6.2(a)-(k); SCHM-VIII 2.3 | `test/master-checks.test.ts` |
-| TA-02 | A master is checked by a second person and approved by QA; one effective version; a new version needs a change control number | US 211.186(a); 211.100(a); 211.68(b); EU C4 4.3; A11 10; IN SCHM 17.2.4; 8.3; 17.3.6.1 | `test/master-review.test.ts`, `test/links.test.ts` (QMS change control) |
-| TA-03 | A batch is issued from the effective master, with a unique number never reused | US 211.188(a); 211.186(a); EU C4 4.2, 4.20 (lead-in); IN SCHM 17.3.8.1; 17.3.10.8-17.3.10.11; 14.32 (new number for rework) | `test/batches.test.ts` |
-| TA-04 | Entries are saved at once, with the person and the server time; late entries need a reason | US 211.100(b); 211.188(b)(1); 11.10(e); EU C4 4.8, 4.20(b); A11 12.4; IN SCHM 17.2.7; 17.3.8.3 (lead-in, (c)); 20.4 (omissions) | `test/batches.test.ts`, `test/release.test.ts` |
-| TA-05 | TrueBatch keeps its own audit trail | US 11.10(e); EU A11 9, 12.4; IN SCHM 20.4; 17.2.8 ("record of changes and deletions") | `test/batches.test.ts` |
-| TA-06 | A correction keeps the original value and its reason, and reaches the steps that used it; nothing is deleted | US 11.10(e); 211.180(a); EU C4 4.9, 4.11; A11 9; IN SCHM 17.2.6, 17.2.7 (retention: expiry + 1 year) | `test/engine.test.ts`, `test/batches.test.ts` |
-| TA-07 | E-signatures carry the name, time and meaning, linked to what was signed | US 11.50(a),(b); 11.70; 11.200(a); 211.186(a); 211.188(a); EU A11 14; C4 4.20(h),(i); IN SCHM 17.3.8.3 ("dated and signed"); 17.2.8 | `test/batches.test.ts` |
-| TA-08 | Significant steps have a second-person check; the checker is not the performer | US 211.188(b)(11); 211.101(c),(d); 211.103; 211.68(c); EU C4 4.20(c); C5 5.38; A11 6; IN SCHM 14.19; 17.2.8 ("critical data independently checked"); 17.3.8.3(e); 20.6 | `test/engine.test.ts`, `test/batches.test.ts`, `test/master-checks.test.ts`, `test/mywork.test.ts` |
-| TA-09 | Steps are done in order; a departure needs a deviation note | US 211.100(b); 11.10(f); EU C5 5.15; C4 4.20(h); IN SCHM 18.2.2; 17.3.8.3(k) | `test/engine.test.ts` |
-| TA-10 | Line clearance before each stage | US 211.67(b)(6); 211.100(a); EU C4 4.18(c); C5 5.40, 5.14; IN SCHM 17.3.8.2; 18.4.1; 18.4.7 | `test/master-checks.test.ts`, `test/engine.test.ts`, `test/designer.test.ts`, `test/links.test.ts` (cleaning facts from the Logbook; typed from the label without it) |
-| TA-11 | Equipment and rooms are fit for use | US 211.67; 211.68(a); 211.105(b); 211.160(b)(4); 211.188(b)(2); 211.42(c); EU C4 4.20(e); C5 5.9, 5.12; IN SCHM 18.4.3, 18.4.4, 18.4.9; 18.2.4; 17.3.6.2(e) | `test/batches.test.ts` (master data), `test/picks.test.ts` (the machines offered: balances of the master's dispensing rooms, lines in the stage's rooms), `test/master-checks.test.ts` (a stage names its rooms), `test/links.test.ts` (Logbook status; the label questions without it) |
-| TA-12 | Only released, in-date lots are used | US 211.84(a); 211.86; 211.87; 211.101(c)(1); EU C5 5.34; IN SCHM 14.14, 14.16, 14.17 | `test/links.test.ts` (MMS lot status, material and dates; the label without it) |
-| TA-13 | The dispensing target comes from the master, adjusted by assay and LOD | US 211.101(a),(b),(d); 211.188(b)(3),(4); EU C5 5.37, 5.39; C4 4.20(d), 4.8; IN SCHM 14.18, 14.20; 17.3.8.3(f); 7 (recalls) | `test/engine.test.ts`, `test/master-checks.test.ts` |
-| TA-14 | In-process checks against the master's limits; out of limits needs a deviation note | US 211.110(a)-(c); 211.188(b)(5),(10); 211.192; EU C4 4.18(d),(e), 4.20(f); C5 5.43; IN SCHM 17.3.6.2(g),(h); 17.3.8.3(i); 18.4.2; 19.7.5; SCHM-VIII 1.5, 2.3 | `test/engine.test.ts`, `e2e/floor.spec.ts` |
-| TA-15 | Compression: every station at the start, then a sample at least every 30 minutes | US 211.110(a)(1),(2); EU C5 5.43; IN SCHM-VIII 3.3, 3.4, 3.5, 3.7, 3.8 | `test/engine.test.ts`, `test/mywork.test.ts` |
-| TA-16 | Sieves, punches and dies are checked before and after use | IN SCHM-VIII 1.3, 1.4, 2.2, 2.5, 4.2, 6.1, 6.2; US 211.67, 211.113(a) (general); EU C5 5.11 (dust, general) | `test/engine.test.ts` (screens), `test/blocks.test.ts` (punches and dies, the punch and die check block) |
-| TA-17 | Hold times run on the server clock; an overrun needs a deviation note | US 211.111; EU C4 4.18(f); C5 5.41; IN SCHM 17.3.6.2(k); 17.3.8.3(h); 18.4.4 | `test/engine.test.ts`, `test/batches.test.ts` |
-| TA-18 | Yield is calculated and verified; out of limits blocks release | US 211.103; 211.186(b)(7); 211.188(b)(7); 211.192; EU C4 4.17(d), 4.20(g); C5 5.44; IN SCHM 17.3.6.2(d); 17.3.8.3(j); 18.2.3; 18.4.6 | `test/engine.test.ts`, `test/release.test.ts` |
-| TA-19 | Rework only as a new batch issued from an approved master | US 211.115(a),(b); EU C5 5.67, 5.68, 5.69; C4 4.20(d); IN SCHM 14.32, 14.33, 14.34; 17.3.8.3(f) | `test/batches.test.ts` |
-| TA-20 | The record is complete before production signs | US 211.188(b); EU C4 4.20(i); IN SCHM 17.3.8.3 (lead-in, (d)); 18.5.12 | `test/release.test.ts`, `test/batches.test.ts` |
-| TA-21 | QC approval, then QA review and release or rejection by e-signature; all changes and deviations shown; release blocked until linked deviations are closed | US 211.22(a); 211.192; 211.165(a); EU C4 4.27; A11 9, 15 (only if certifying here); IN SCHM 1 PQS (i); 11.3.6-11.3.9; 18.5.12; 19.8.1 | `test/release.test.ts`, `test/batches.test.ts`, `test/links.test.ts` (Deviations status), `test/packing.test.ts` and `test/packing-api.test.ts` (packing: QC before QA) |
-| TA-22 | A complete copy (PDF) with its signatures and changes | US 11.10(b); 211.180(c); EU A11 8.1, 8.2; C4 4.27; IN SCHM 17.2.8 ("readily available") | `test/batches.test.ts`, `e2e/release.spec.ts` |
-| TA-23 | A step that names a training is signed (performed or checked) only by a person Recruitment shows trained in it; while Recruitment cannot be reached the signer confirms it and QA sees it | US 211.25(a); 11.10(i); EU C2 2.11 | `test/training.test.ts`, `e2e/floor.spec.ts` |
+The engine (master, record, steps, signatures, corrections, audit trail, timers, PDF) is a copy of TrueBatch Tablets.
+Its tests already prove LIMS-01, 03, 11, 12, 17, 20, 40, 41, 44, 45, 46, 47 and 51 for the copied engine; each such
+rule moves from "later" to its tests as its LIMS screens are built (step 3 onward). Until step 3 replaces the tablet
+batch master with the method master, some copied tests still carry TrueBatch production rule IDs (TA-10 line
+clearance, TA-12 dispensed lots, TA-13 dispensing target, TA-15 compression, TA-16 tooling, TA-18 yield, TA-19
+rework): they are not LIMS rules and go with the production blocks.
 
-## Packing rules (TrueBatch Tablets Packing)
-
-The 9 packing rules of the minimum register, section E (owner, 15 November 2026: packing is a separate product,
-"TrueBatch Tablets Packing", with the shared engine). Each uses the mechanisms of the rules above: the master and its
-check (TA-01, TA-02), issue (TA-03), entries, signatures and second-person checks (TA-04 to TA-08), deviation notes
-(TA-09), in-process checks and periodic checks (TA-14, TA-15), reconciliation that blocks release (TA-18) and QA
-release (TA-21, TA-22), which apply to the packing record unchanged (QC approves it, then QA releases it). The tests
-name the packing rule; the tests of the shared rules cover the packing record through the same engine and routes.
-
-| Rule | Requirement | Clauses | Tests |
-|------|-------------|---------|-------|
-| TB-P1 | A packing master per product, pack type and size (and destination): its packing materials with codes, where the batch number, dates and MRP are printed, line clearance before and after, and IPCs with limits | US 211.186(b); EU C4 4.19; IN SCHM 17.3.7 | `test/packing.test.ts` |
-| TB-P2 | A packing record per packing batch, linked to the RELEASED bulk batch: quantities, responsible people, checks, specimens and problems | US 211.188(b)(6),(8),(9),(13); EU C4 4.21; IN SCHM 17.3.9 | `test/packing.test.ts`, `test/packing-api.test.ts` (bulk released, read from Medhanta LIMS; typed from its labels without the link), `e2e/packing.spec.ts` |
-| TB-P3 | Line clearance before and after packing, checked by a second person; strips and blisters formed and sealed within limits and leak tested periodically | US 211.130(e); 211.188(b)(6); EU C4 4.19(f),(g), C5 5.50; IN SCHM 17.3.9.2, 18.5.2; SCHM-VIII 7.1-7.4 | `test/packing.test.ts` |
-| TB-P4 | Printed and other packing materials issued only by their signed and checked step, from a released lot of the master's material; every component checked against the packing master at line start | US 211.125(a),(b),(f), 211.130(d); EU C5 5.52 | `test/packing.test.ts` |
-| TB-P5 | Coding (batch number, dates, MRP) checked at the start and at intervals; the camera challenged; packs inspected on line; line samples never returned; the customer's serialisation checked (codes of this batch, no serial twice, reconciled), never generated | US 211.122(g), 211.130(c), 211.134; EU C5 5.55-5.60; IN SCHM 18.5.4-18.5.9 | `test/packing.test.ts` |
-| TB-P6 | Bulk tablets and every printed material reconciled (issued = used + destroyed + returned); a gap needs a deviation note and blocks release until its number is linked; batch-coded leftovers destroyed and recorded | US 211.125(c)-(e), 211.192; EU C4 4.21(h), C5 5.61, 5.62; IN SCHM 18.2.3, 18.5.10, 18.5.11 | `test/packing.test.ts`, `test/packing-api.test.ts` |
-| TB-P7 | One active packing order per line; the line is named on the record, with the product and batch | US 211.130(a); EU C5 5.49, 5.51; IN SCHM 18.5.1, 18.5.3 | `test/packing-api.test.ts` |
-| TB-P8 | The expiry is worked out from the approved shelf life and the bulk's date of manufacture, never typed | US 211.137; EU C4 4.16; IN SCHM 17.3.1.2 | `test/packing.test.ts`, `test/links.test.ts` (`batch_fact_v1.manufactured_on`: the date the first step started), `test/packing-api.test.ts` (read from it; a typed date in the future refused) |
-| TB-P9 | Label data per destination (India domestic: dates and MRP); the coding check compares the printed data with the batch record | IN SCHM 17.3.1.2; US 211.137 (expiry) | `test/packing.test.ts` |
+| Rule | Requirement | Clauses | E/S | Tests |
+|------|-------------|---------|-----|-------|
+| LIMS-01 | Specifications are written, approved by QC/QA, dated and versioned. Only the effective version is used. Every change goes through change control. | US 211.160(a); 211.22(c); 211.84(d)(2); EU C4 4.13-4.16; C6 6.7(i); IN SCHM 17.3.2.2, 17.3.2.3, 17.3.3-17.3.5; 8 (change control); API Q7 11.1 (no. to verify) | E | engine tests (copied); LIMS screens: step 3 |
+| LIMS-02 | A test method is validated (or, for a pharmacopoeial method, verified) before routine use. | US 211.165(e); 211.194(a)(2); EU C6 6.15; A15 section 9 (no. to verify); IN SCHM 17.3.2.1; 5.11; API Q7 12.8 | E | later: step 8 (method validation records) |
+| LIMS-03 | Any departure from the written method or spec is recorded and justified. A changed method needs proof it is as good. | US 211.160(a); 211.194(b); IN SCHM 19.6.1 | E | engine tests (copied); LIMS screens: step 3 |
+| LIMS-04 | Method transfer to another lab follows a protocol and a report. | EU C6 6.37-6.40 | S | later: step 8 |
+| LIMS-05 | Samples are taken by authorised people, by an approved sampling plan. The plan says method, equipment, amount, sub-division, containers, precautions and storage. | US 211.84(b),(c); 211.160(b)(1)-(3); 211.165(c); EU C6 6.11, 6.12; C4 4.25; IN SCHM 19.3(b); 17.3.10.6, 17.3.10.7; 19.6.2-19.6.5 | E | later: step 3 |
+| LIMS-06 | Each sample is labelled, and sampled containers are marked. Label: material, lot, container number, sample number, sampler, date. | US 211.84(c)(5),(6); EU C6 6.13; IN SCHM 19.6.3, 19.6.6 | E | later: step 3 |
+| LIMS-07 | Each sample can be traced from taking to disposal (chain of custody). Source, quantity, lot, date taken, date received. | US 211.194(a)(1); IN SCHM 17.3.10.13(a),(b); EU C6 6.13 (avoid mix-up) | E | later: step 3 |
+| LIMS-08 | Identity test on each container of a starting material, unless a validated reduced-sampling procedure applies. Never reduced for broker-supplied material or material for parenterals. | US 211.84(d)(1); EU C5 5.35; A8 (no. to verify); IN SCHM 19.7.2, 19.7.2.1-19.7.2.3 | E | later: step 3 |
+| LIMS-09 | Supplier certificate in place of full testing. At least one specific identity test is still done. The supplier's results are checked by full testing at intervals. The certificate holds the required fields. | US 211.84(d)(2),(3); EU C5 5.35, 5.36; IN SCHM 19.7.4(a)-(g) | E | later: step 3 |
+| LIMS-10 | The worksheet holds complete data. Sample, method, weights, every observation, every calculation with units and factors, result vs limit, equipment used, who and when, who checked. | US 211.194(a)(1)-(8); EU C6 6.17(i)-(ix); C6 6.10; IN SCHM 17.3.10.12, 17.3.10.13(a)-(h); 19.3(d); API Q7 6.6 (no. to verify) | E | later: step 3 |
+| LIMS-11 | All tests in the spec are done before a status decision. This includes identity and strength of each active, and special tests (sterility, endotoxin, release rate, microbial limits) where the spec has them. | US 211.84(a),(d); 211.165(a),(b); 211.167(a)-(c); EU C6 6.3; IN SCHM 19.7.1, 19.7.6 | E | engine tests (copied); LIMS screens: step 3 |
+| LIMS-12 | Instruments, equipment and columns used must be fit: qualified, calibration not overdue, not out of service, balance check done. Failing instruments are not used. | US 211.160(b)(4); 211.194(d); 211.68(a); EU C6 6.7(iii); C4 4.31; C6 6.17(ix); IN SCHM 13.5, 13.7; 17.3.10.16, 17.3.10.17 | E | engine tests (copied); LIMS screens: step 4 (instruments, lab inventory) |
+| LIMS-13 | Reagents, test solutions, volumetric solutions and media are prepared by procedure and labelled: prepared/opened date, who, expiry, storage; for VS also factor and next standardisation. Only in-date ones are used. | US 211.194(c); EU C6 6.19, 6.21, 6.22; IN SCHM 14.37, 14.38 | E | later: step 4 (instruments, lab inventory) |
+| LIMS-14 | Reference standards. Use official ones where they exist, for the monograph's purpose. In-house / working standards are tested, traced to a primary and re-standardised at intervals. Labelled, kept by a designated person. | US 211.194(c); EU C6 6.20, 6.21; IN SCHM 15.1-15.8; 17.3.1.3; 17.3.2.5; API Q7 11.1 (no. to verify) | E | later: step 4 (instruments, lab inventory) |
+| LIMS-15 | Calculations are correct and checked; rounding follows the pharmacopoeia. | US 211.194(a)(5); 211.68(b); EU C6 6.16 ("critically examined"); IN SCHM 17.3.10.13(d),(g); How: USP General Notices 7.20 rounding | E | later: step 3 |
+| LIMS-16 | System suitability must pass before sample results are used. | US 211.194(a)(2) ("verified under actual conditions of use"); 211.160(b); Compendial: USP <621>, Ph. Eur. 2.2.46 (no. to verify) | E | later: step 3 |
+| LIMS-17 | Each result is compared with the limit, and the record says pass or fail. | US 211.194(a)(6); IN SCHM 17.3.10.13(d) | E | engine tests (copied); LIMS screens: step 3 |
+| LIMS-18 | A second person reviews the original records for accuracy, completeness and compliance before the result is approved. | US 211.194(a)(8); EU C6 6.17(vii); IN SCHM 19.6.1; 17.3.10.13(g); 20.6 | E | later: step 3 |
+| LIMS-19 | The reviewer checks the audit trail (LIMS and, for imported results, the CDS) before approval. | US 211.194(a)(8) read with FDA-DI (audit-trail review Q&A); 11.10(e); EU A11 9 ("regularly reviewed"); IN SCHM 20.4 | E | later: step 3 |
+| LIMS-20 | A designated person makes a clear status decision (approve, reject, other) with a dated signature. Failing material is rejected. | US 211.22(a); 211.84(e); 211.165(f); EU C6 6.17(viii); C4 4.27; IN SCHM 17.3.10.13(h), 17.3.10.14; 19.7.7; 19.8.1 | E | engine tests (copied); LIMS screens: step 3 |
+| LIMS-21 | Certificate of analysis shows only approved results, with limits, method and batch; for APIs also grade, release date, expiry/retest date, original manufacturer, and a QU signature. | EU C6 6.7(v); API Q7 11.4 (sub-clause no. to verify) | E | later: step 3 |
+| LIMS-22 | Outside (contract) lab testing is stated in the QC records. | EU C6 6.6; C7; IN SCHM 9 (contract analysis) | S | later: step 3 |
+| LIMS-23 | Every OOS result is investigated by an approved procedure, recorded, and extended to other batches where needed. | US 211.192; 211.165(f); EU C6 6.7(iv), 6.9, 6.35; IN SCHM 19.6.7; 19.8.1; How: FDA-OOS | E | later: step 4 (OOS) |
+| LIMS-24 | No result is replaced or hidden. A result is invalidated only for a documented, assignable lab cause approved by QA. Retests and resamples follow the procedure; the original stays. | US 211.192; 211.194(a)(4); EU C4 4.9; How: FDA-OOS (no testing into compliance; averaging rules) | E | later: step 4 (OOS) |
+| LIMS-25 | Key results are recorded so they can be trended; out-of-trend results are addressed. | EU C6 6.9, 6.16, 6.35; IN SCHM 2.3.1(b),(g) | E (flag) / S (decide) | later: step 8 (trends) |
+| LIMS-26 | A written, approved stability protocol with batches, tests and methods, limits, container closure, time points and storage conditions, to the end of shelf life. | US 211.166(a)(1)-(5); EU C6 6.29, 6.30, 6.31; IN SCHM 19.9.1-19.9.3; API Q7 11.5 | E | later: step 6 (stability, reserve samples, retest) |
+| LIMS-27 | On-going stability: at least one batch a year per strength and primary pack, plus batches after significant changes or deviations. | EU C6 6.32, 6.33; IN SCHM 19.9.4 | S (flag) | later: step 6 (stability, reserve samples, retest) |
+| LIMS-28 | Pulls happen on schedule; samples are stored in qualified chambers at the protocol condition. | US 211.166(a)(2); EU C6 6.29 (chambers qualified) | E | later: step 6 (stability, reserve samples, retest) |
+| LIMS-29 | Stability results are complete, evaluated and summarised; they set expiry and storage. Confirmed OOS or a negative trend on marketed batches is reported. | US 211.166(b); 211.194(e); EU C6 6.34, 6.35, 6.36; IN SCHM 19.9.2; 19.9.3(g) | E (OOS) / S (report) | later: step 6 (stability, reserve samples, retest) |
+| LIMS-30 | Reserve / retention samples are kept for each lot, in enough quantity, for the required time. US: at least twice the full test quantity (except sterility, pyrogen), 1 year after expiry; finished product reserves visually examined yearly. India: two full re-examinations; 1 year after expiry; other starting materials 2 years. | US 211.170(a),(b); EU C6 6.14; A19 (no. to verify); IN SCHM 19.3(g); 19.8.2; API Q7 11.7 | E | later: step 6 (stability, reserve samples, retest) |
+| LIMS-31 | Stored materials subject to deterioration are retested by their retest date. | US 211.87; 211.160(b)(1); API Q7 11.6 | E | later: step 6 (stability, reserve samples, retest) |
+| LIMS-32 | Values from balances, pH meters, KF and titrators are captured correctly; critical values typed by hand get a second check. | US 211.68(b); EU A11 5, 6; IN SCHM 20.6 | E | later: step 5 (instrument capture, CDS import) |
+| LIMS-33 | Chromatography results are imported from the CDS, which stays the raw-data record. | US 211.194(a)(4); 211.68(b); EU A11 4.8, 5; How: FDA-DI, MHRA-DI | E | later: step 5 (instrument capture, CDS import) |
+| LIMS-34 | Culture media are checked (growth promotion, positive and negative controls) before use; in-use shelf life is set; used media are decontaminated. | EU C6 6.23, 6.24; IN SCHM 14.37, 14.39 | E | later: step 7 (micro, EM, water) |
+| LIMS-35 | Test cultures are traceable to a reference culture and kept within the passage limit. | Compendial: USP <61>/<62>, Ph. Eur. 2.6.12/2.6.13 (no. to verify) | E | later: step 7 (micro, EM, water) |
+| LIMS-36 | Environmental monitoring by a written plan (sites, frequency, alert/action limits); excursions are investigated; results trended. | US 211.42(c)(10)(iv) (aseptic); EU A1 section 9 (no. to verify); C6 6.7(vi); IN SCHM 17.3.10.1(e); 19.3(a); 19.4.1(f) | E | later: step 7 (micro, EM, water) |
+| LIMS-37 | Water (purified, WFI) is tested to its pharmacopoeial spec at planned points. | IN SCHM 14.6; EU A1 section 6 (no. to verify); C6 6.7(vi) | E | later: step 7 (micro, EM, water) |
+| LIMS-38 | Sterility and endotoxin tests for sterile products; a positive sterility test is invalidated only with documented proof. | US 211.167(a); EU A1 section 10 (no. to verify) | E | later: step 7 (micro, EM, water) |
+| LIMS-39 | Lab animals (if used) are identified, kept suitable, with a use history. | US 211.173; EU C6 6.25 | S | later: step 7 (micro, EM, water) |
+| LIMS-40 | Only analysts trained on the method version do the test. | US 211.25(a); EU C6 6.39(ii) (transfer); IN SCHM 11.4.1, 11.4.2 | E | engine tests (copied); LIMS screens: step 3 |
+| LIMS-41 | QC is independent; nobody approves their own work. | US 211.22(a); EU C6 6.1; IN SCHM 19.2, 19.3 | E | engine tests (copied); LIMS screens: step 3 |
+| LIMS-42 | Lab data feed the annual product review: results, failed batches and investigations, method changes, stability trends, water/EM results. | US 211.180(e); EU C1 1.10; IN SCHM 2.3.1(b),(c),(e),(g),(k) | S | later: step 8 (APQR views) |
+| LIMS-43 | Attributable: unique personal accounts; access by role. | US 11.10(d),(g); 11.300; EU A11 12.1, 12.3; IN SCHM 17.2.8; 20.4 | E | later: step 3 |
+| LIMS-44 | Contemporaneous: each entry saved at once with the server's time. Nobody types the time of an action. | US 211.160(a) ("at the time of performance"); 11.10(e); EU C4 4.8; A11 12.4; IN SCHM 20.4 | E | engine tests (copied); LIMS screens: step 3 |
+| LIMS-45 | Audit trail: every create, change and void with who, when, old value, new value, reason. Cannot be switched off or edited. | US 11.10(e); EU A11 9; 12.4; IN SCHM 20.4; 17.2.8 | E | engine tests (copied); LIMS screens: step 3 |
+| LIMS-46 | Nothing is deleted. Corrections keep the original visible. | US 11.10(c),(e); 211.180(a); EU C4 4.9, 4.10; IN SCHM 20.4 | E | engine tests (copied); LIMS screens: step 3 |
+| LIMS-47 | E-signatures: password again, printed name, time, meaning; linked to what was signed. | US 11.50; 11.70; 11.200(a); EU A11 14 | E | engine tests (copied); LIMS screens: step 3 |
+| LIMS-48 | Complete data: invalid runs, failed SST, aborted tests and trial work are kept. | US 211.194(a)(4); How: FDA-DI, MHRA-DI | E | later: step 3 |
+| LIMS-49 | Raw data / CDS boundary is defined. The CDS (or the instrument print) is the original; LIMS holds the reported result with a link back. | US 211.194(a)(4); 211.180(d); EU A11 4.8, 5; How: FDA-DI, PICS-DI | E | later: step 3 |
+| LIMS-50 | Interfaces have built-in checks; manual critical entries are double-checked. | US 211.68(b); EU A11 5, 6; IN SCHM 20.6 | E | later: step 3 |
+| LIMS-51 | Accurate copies on demand. | US 11.10(b); 211.180(c); EU A11 8.1, 8.2 | E | engine tests (copied); LIMS screens: step 3 |
+| LIMS-52 | Records kept for the retention period, protected and backed up, and readable all that time. | US 11.10(c); 211.180(a); EU A11 7, 17; C4 4.10; IN SCHM 20.9; 17.2.8 | E | later: step 3 |
+| LIMS-53 | Changes to LIMS (templates, calculations, interfaces) are controlled and tested. | US 11.10(a),(k); EU A11 4, 10; IN SCHM 20.1, 20.8 | E | later: step 3 |
+| LIMS-54 | Paper fallback (hybrid) is controlled. Issued blank forms are numbered and reconciled. | EU C4 (principle, hybrid); IN SCHM 20.10; How: MHRA-DI, WHO-DI | S | later: step 8 |
 
 ## Notes: safety rules built into the calculation templates
 
@@ -76,7 +95,7 @@ rules to the table above. Each safety rule refuses with a plain-English message.
     cannot be kept, and a deviation is needed.
   - **Potency units are never a mass.** IU, CFU and activity units never convert to a mass. They become a weight
     only through the lot's content per gram (T18).
-- **TA-14 (in-process checks against the master's limits):**
+- **LIMS-17 (in-process checks against the master's limits):**
   - **No weight-variation method for coated tablets other than film-coated (T14).** Uniformity of dosage units by
     weight variation is refused for sugar-coated and other coated tablets. It is also refused below 25 mg or 25 %
     of the unit, and for products set to "individual results only".

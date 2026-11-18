@@ -3,7 +3,7 @@ import { openSteps, timers } from '../shared/engine/index.js';
 import { blocking, masterChecks } from '../shared/master/checks.js';
 import type { MasterDoc } from '../shared/master/schema.js';
 import { at, ev, tablet, unplaced } from './engine-fixture.js';
-// The problems, without the rooms a stage must name (TA-11): the fixtures name none.
+// The problems, without the rooms a stage must name (LIMS-12): the fixtures name none.
 const checks = (d: Parameters<typeof masterChecks>[0]) => unplaced(masterChecks(d));
 
 // Calculation checks from the 1,000-formulation test (waves 1-5): not GMP rules. Each case cites its formulation.

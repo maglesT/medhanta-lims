@@ -26,7 +26,7 @@ const schema = z.object({
   COOKIE_SECURE: z.enum(['true', 'false']).default('true').transform((v) => v === 'true'),
   PORT: z.coerce.number().int().positive().default(3000),
   HOST: z.string().default('0.0.0.0'),
-  // The fixed start of every batch number, then the plant year and a counter: LA260001 (TA-03).
+  // The fixed start of every batch number, then the plant year and a counter: LA260001 (LIMS-01).
   BATCH_PREFIX: z.string().regex(/^[A-Z]{1,6}$/).default('LA'),
   // Plant-local display time zone; storage is always UTC.
   DISPLAY_TZ: z.string().default('Asia/Kolkata'),

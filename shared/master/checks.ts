@@ -16,7 +16,7 @@ export interface Question { key: string; options: string[]; needsReason: boolean
 export interface Problem { level: 'error' | 'warning'; path: string; message: string; rule?: string; question?: Question }
 
 /**
- * A message in plain words for the people who read it: without the internal codes of the rules (TA-11), templates
+ * A message in plain words for the people who read it: without the internal codes of the rules (LIMS-12), templates
  * (T9) and failure cases (F0204) the code comments use. The rule stays in `rule` for the tests.
  */
 export const plainWords = (m: string) => m
@@ -42,14 +42,14 @@ export function masterChecks(doc: MasterDoc): Problem[] {
   formulaChecks(doc, out, error);
 
   twice(doc.stages.map((s) => s.key), 'stages');
-  // TA-11: a master that weighs names the rooms its materials are weighed in (its balances are offered there).
+  // LIMS-12: a master that weighs names the rooms its materials are weighed in (its balances are offered there).
   const weighs = doc.stages.some((s) => s.steps.some((t) => findBlock(t.block)?.fields.some((f) => f.kind === 'machine' && isBalance(f))));
-  if (weighs && !doc.header.dispensingRooms?.length) error('header.dispensingRooms', 'The master weighs but names no dispensing rooms: choose them in the header (rooms of master data)', 'TA-11');
+  if (weighs && !doc.header.dispensingRooms?.length) error('header.dispensingRooms', 'The master weighs but names no dispensing rooms: choose them in the header (rooms of master data)', 'LIMS-12');
   doc.stages.forEach((s, si) => {
     const path = `stages[${si}]`;
     twice(s.steps.map((t) => t.key), `${path}.steps`);
     if (s.kind === 'sub-batch' && !s.count) error(path, 'A sub-batch stage needs the number of sub-batches');
-    if (s.produces && !s.produces.holdHours) error(`${path}.produces`, `The intermediate ${s.produces.name} has no hold time`, 'TA-01');
+    if (s.produces && !s.produces.holdHours) error(`${path}.produces`, `The intermediate ${s.produces.name} has no hold time`, 'LIMS-01');
     // Everything the plain view would show as "(not set)" is reported here (the plain view's sentences, describe.ts).
     if (!s.role.trim()) warn(path, `Stage ${s.name} names no responsible role`);
     if (s.kind !== 'preparation' && !s.steps.some((t) => findBlock(t.block)?.gmp === 'yield')) error(path, `Stage ${s.name} has no yield step`);
@@ -58,10 +58,10 @@ export function masterChecks(doc: MasterDoc): Problem[] {
     const clearance = s.steps.findIndex((t) => findBlock(t.block)?.gmp === 'line-clearance');
     if (s.roomTypes.length && clearance < 0) error(path, `Stage ${s.name} is worked in a room but has no line clearance step`, 'TA-10');
     if (clearance > 0) warn(`${path}.steps[${clearance}]`, `Line clearance is not the first step of ${s.name}`);
-    // TA-11: a stage that works machines (not balances) or names a room
+    // LIMS-12: a stage that works machines (not balances) or names a room
     // runs only in the rooms it allows (shared/engine/picks.ts).
     const placed = s.steps.some((t) => { const b = findBlock(t.block); return b?.fields.some((f) => f.kind === 'room' || (f.kind === 'machine' && !isBalance(f))); });
-    if (placed && !s.roomTypes.length) error(`${path}.roomTypes`, `Stage ${s.name}: choose the rooms this stage may run in (an area or a room of master data, in the stage settings)`, 'TA-11');
+    if (placed && !s.roomTypes.length) error(`${path}.roomTypes`, `Stage ${s.name}: choose the rooms this stage may run in (an area or a room of master data, in the stage settings)`, 'LIMS-12');
     for (const u of s.uses) {
       const pi = doc.stages.findIndex((x) => x.key === u);
       if (pi < 0 || pi >= si) error(`${path}.uses`, `${u} is not an earlier stage`);
@@ -71,7 +71,7 @@ export function masterChecks(doc: MasterDoc): Problem[] {
       const p = `${path}.steps[${ti}]`;
       const block = findBlock(st.block);
       if (!block) return void error(`${p}.block`, `No block ${st.block.id} version ${st.block.version}`);
-      if (!st.checker && (block.gmp || st.critical)) error(p, `${block.gmp ? `A ${block.gmp.replace('line-clearance', 'line clearance')} step` : 'A critical step'} needs a second-person check`, 'TA-08');
+      if (!st.checker && (block.gmp || st.critical)) error(p, `${block.gmp ? `A ${block.gmp.replace('line-clearance', 'line clearance')} step` : 'A critical step'} needs a second-person check`, 'LIMS-41');
       if (st.critical && st.flow.kind === 'optional-with-reason') error(`${p}.flow`, 'A critical step cannot be optional');
       if (st.waitForCheck && !st.checker) warn(p, 'The next step waits for a check this step does not have');
       for (const bs of block.settings) if (!bs.optional && st.settings[bs.name] === undefined) error(`${p}.settings.${bs.name}`, `${bs.label} is not set`);
@@ -80,10 +80,10 @@ export function masterChecks(doc: MasterDoc): Problem[] {
         const listed = !bs?.options || (typeof v === 'string' && bs.options.includes(v));
         const why = !bs ? `The block ${block.name} has no setting ${name}` : listed ? settingProblem(doc, si, ti, bs.kind, v) : `${bs.label}: choose one of ${bs.options!.join(', ')}`;
         if (why) error(`${p}.settings.${name}`, why);
-        // TA-01: a limit (or a typed target) in a unit of another kind than the value it checks.
+        // LIMS-01: a limit (or a typed target) in a unit of another kind than the value it checks.
         const unit = typeof v === 'object' && 'unit' in v ? v.unit : typeof v === 'string' && bs?.kind === 'quantity' ? QUANTITY.exec(v)?.[3] : undefined;
         const wrong = !why && unit !== undefined ? unitKindProblem(block, name, st.settings, unit) : null;
-        if (wrong) error(`${p}.settings.${name}`, wrong, 'TA-01');
+        if (wrong) error(`${p}.settings.${name}`, wrong, 'LIMS-01');
       }
       // A temperature recorded with optional limits left empty is recorded without a check (the disintegration
       // medium at 37 ± 2 °C, an inlet or forming temperature): a warning, so the author sets them or leaves them knowingly.

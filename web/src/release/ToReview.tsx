@@ -10,7 +10,7 @@ interface ReviewItem {
   since: string; by: string; openDeviations: number; actions: string[];
 }
 
-// "To review": QC sees the production-approved batches, QA the QC-approved ones waiting for release (TA-21), and the
+// "To review": QC sees the production-approved batches, QA the QC-approved ones waiting for release (LIMS-20), and the
 // batches still in production, which QA may terminate.
 export function ToReview({ me }: { me: Me }) {
   const [rows, setRows] = useState<ReviewItem[] | null>(null);

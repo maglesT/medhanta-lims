@@ -70,7 +70,7 @@ export interface ActionRule {
   // The signature meaning, for a signing action.
   meaning?: 'performed' | 'verified' | 'released';
   reason?: boolean;
-  // TA-08: nobody who started, recorded, corrected or signed the step as performed may do this.
+  // LIMS-41: nobody who started, recorded, corrected or signed the step as performed may do this.
   notInvolved?: boolean;
 }
 
@@ -102,7 +102,7 @@ export interface ActionContext {
 }
 
 const INVOLVING: EventKind[] = ['started', 'value', 'done', 'corrected', 'not_applicable'];
-/** The people who did the step: none of them may check it (TA-08). */
+/** The people who did the step: none of them may check it (LIMS-41). */
 export const involved = (events: readonly StepEvent[]) => new Set(events.filter((e) => INVOLVING.includes(e.kind)).map((e) => e.person));
 
 /** Whether the person may do the action on the step now; null when allowed. */

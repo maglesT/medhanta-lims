@@ -82,7 +82,7 @@ async function materialUnits(master: FastifyInstance['master']): Promise<Map<str
 const batchHash = (l: LoadedBatch) => contentHash('batch', l.batch.id, batchContent(l));
 const view = (l: LoadedBatch, read?: ReadonlyMap<string, DeviationStatus> | null) => batchView(l.doc, l.events, l.batchEvents, l.now, read);
 /**
- * TA-21: the batch's deviation references as the Deviations system has them now, and (owner, 17 Nov 2026) the
+ * LIMS-20: the batch's deviation references as the Deviations system has them now, and (owner, 17 Nov 2026) the
  * deviation filed from each note written without one, found by the note's source_ref (keyed filedKey(note)); null when
  * the link does not answer.
  */
@@ -218,7 +218,7 @@ function myWork(l: LoadedBatch, user: SessionUser) {
   const stageName = (i: number) => l.doc.stages[i]?.name ?? '';
   const badges: { kind: 'check' | 'resign' | 'due' | 'late' | 'approve'; step?: string; stage: string; title: string; at?: Date; timer?: string }[] = [];
   for (const v of steps) {
-    // TA-08: the checker's own list holds only steps the person was not involved in.
+    // LIMS-41: the checker's own list holds only steps the person was not involved in.
     if (!refusal('check', context(l.doc, v, user))) badges.push({ kind: 'check', step: v.id, stage: stageName(v.key.stage), title: title(v) });
     if (v.needsResign && user.permissions.includes('lims.batch.operate')) badges.push({ kind: 'resign', step: v.id, stage: stageName(v.key.stage), title: title(v) });
   }
@@ -302,7 +302,7 @@ async function recordClosedStages(tx: Tx, id: number, before: readonly StageView
 export function batchRoutes(app: FastifyInstance, sql: Sql) {
   const anyUser = { preHandler: requirePermission() };
 
-  // TA-03: issue a batch from an effective master version, with the next number of the year (never reused).
+  // LIMS-01: issue a batch from an effective master version, with the next number of the year (never reused).
   app.post('/api/batches', { preHandler: requirePermission('lims.batch.issue') }, async (req, reply) => {
     const b = z.object({ masterVersionId: z.number().int().positive(), proof: z.string().min(1).max(2000) }).safeParse(req.body);
     if (!b.success) return reply.code(400).send({ error: 'invalid' });
@@ -313,9 +313,9 @@ export function batchRoutes(app: FastifyInstance, sql: Sql) {
         const v = await masterVersion(tx, b.data.masterVersionId, true);
         if (v?.state !== 'effective') throw new StepError(409, 'not_effective', ['Only an effective master version can be issued.']);
         // Approval will refuse a version with errors; until that workflow exists, issuing checks it too.
-        // A version approved before its stages had to name their rooms (TA-11) still issues: its stages allow any room.
+        // A version approved before its stages had to name their rooms (LIMS-12) still issues: its stages allow any room.
         // So does one approved before it had to name its dispensing rooms: its balances are those of the Dispensing area.
-        const errors = masterChecks(v.doc).filter((p) => blocking(p) && !(p.rule === 'TA-11' && (p.path.endsWith('.roomTypes') || p.path === 'header.dispensingRooms')));
+        const errors = masterChecks(v.doc).filter((p) => blocking(p) && !(p.rule === 'LIMS-12' && (p.path.endsWith('.roomTypes') || p.path === 'header.dispensingRooms')));
         if (errors.length) throw new StepError(409, 'master_has_errors', errors.map((p) => `${p.path}: ${p.message}`));
         const [c] = await tx<{ n: number; yy: string }[]>`
           insert into batch_counters (year, last_no) values (extract(year from now() at time zone ${PLANT_TZ})::int, 1)
@@ -366,7 +366,7 @@ export function batchRoutes(app: FastifyInstance, sql: Sql) {
     return out;
   });
 
-  // To review: for QC the production-approved batches, for QA the QC-approved ones (TA-21), oldest decision first; for
+  // To review: for QC the production-approved batches, for QA the QC-approved ones (LIMS-20), oldest decision first; for
   // QA also the batches still in production, which QA may terminate.
   app.get('/api/batches/to-review', { preHandler: requirePermission('lims.qc.approve', 'lims.qa.release') }, async (req) => {
     const qa = req.user!.permissions.includes('lims.qa.release');
@@ -429,7 +429,7 @@ export function batchRoutes(app: FastifyInstance, sql: Sql) {
     return s ? { events: s.events, replaced: s.replaced, inputChanged: s.inputChanged } : reply.code(404).send({ error: 'not_found' });
   });
 
-  // TA-21: what QA reviews in the release screen: corrections, sent-backs, late items, values out of limits with
+  // LIMS-20: what QA reviews in the release screen: corrections, sent-backs, late items, values out of limits with
   // their notes, deviation notes and their status, steps not applicable, and every signature of the batch.
   app.get<{ Params: { id: string } }>('/api/batches/:id/review', anyUser, async (req, reply) => {
     const id = parseId(req.params.id);
@@ -505,7 +505,7 @@ export function batchRoutes(app: FastifyInstance, sql: Sql) {
     return { link: r.state, items: r.state === 'ok' ? r.value : [] };
   });
 
-  // TA-22: the batch record as a PDF: a complete copy with its values, calculations, changes, notes and signatures.
+  // LIMS-51: the batch record as a PDF: a complete copy with its values, calculations, changes, notes and signatures.
   app.get<{ Params: { id: string } }>('/api/batches/:id/pdf', anyUser, async (req, reply) => {
     const id = parseId(req.params.id);
     const l = id === null ? null : await loadBatch(sql, id);

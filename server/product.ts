@@ -9,7 +9,7 @@ export interface Product {
   name: string;
   // What the product declares to the platform: its permission codes and labels (ops/manifest.draft.json).
   permissions: Record<string, string>;
-  // The fixed start of its batch numbers (TA-03).
+  // The fixed start of its batch numbers (LIMS-01).
   batchPrefix: string;
 }
 

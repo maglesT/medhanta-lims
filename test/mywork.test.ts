@@ -51,7 +51,7 @@ describe('My work', () => {
     expect(Math.abs(Date.parse(now) - Date.now())).toBeLessThan(60_000);
   });
 
-  it('TA-08 the checker\'s own list: a step waiting for check is listed for a second person only, never for its performer', async () => {
+  it('LIMS-41 the checker\'s own list: a step waiting for check is listed for a second person only, never for its performer', async () => {
     await act('asha', b.id, '0.1.0.1', 'start');
     await act('asha', b.id, '0.1.0.1', 'record', { values: { reading: '6.0' } });
     expect((await sign('asha', b.id, '0.1.0.1', 'done')).statusCode).toBe(200);

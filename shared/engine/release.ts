@@ -27,7 +27,7 @@ export const BATCH_ACTIONS: Record<BatchAction, { event: BatchEventKind; permiss
   'qc-approve': { event: 'qc_approved', permission: 'lims.qc.approve', from: 'production approved', meaning: 'qc_approved' },
   release: { event: 'released', permission: 'lims.qa.release', from: 'QC approved', meaning: 'released' },
   reject: { event: 'rejected', permission: 'lims.qa.release', from: 'QC approved', meaning: 'rejected' },
-  // QA stops a batch still in production that cannot be finished, with a reason (TA-21 rows in test/release.test.ts).
+  // QA stops a batch still in production that cannot be finished, with a reason (LIMS-20 rows in test/release.test.ts).
   terminate: { event: 'rejected', permission: 'lims.qa.release', meaning: 'rejected' },
   'close-deviation': { event: 'deviation_closed', permission: 'lims.qa.release' },
 };
@@ -40,7 +40,7 @@ export function terminatedText<T extends string | Date>(t: { personName: string;
 }
 
 /**
- * A note with a reference is a linked deviation. While the Deviations link answers, its status is Deviations' (TA-21):
+ * A note with a reference is a linked deviation. While the Deviations link answers, its status is Deviations' (LIMS-20):
  * open until closed (or rejected) there. Otherwise it is open until QA closes it by hand with a reason.
  * The number comes back too (owner, 17 Nov 2026): a note written without a number that Deviations filed a deviation
  * from (its deviation_v1.source_ref names the note, deviation_note_v1) is that deviation, read live while the link
@@ -134,17 +134,17 @@ export function batchRefusal(action: BatchAction, v: BatchView, user: { id?: num
     if (d.by === user.id) return { status: 403, error: 'own_work', problems: ['You typed this deviation number: another QA person closes it.'] };
     return null;
   }
-  // TA-20: the record is complete before production signs.
+  // LIMS-11: the record is complete before production signs.
   if (action === 'production-approve' && v.status === 'in production') return no(...v.open);
   if (v.status !== rule.from) return no(`Not possible while the batch is ${words}.`);
   if (action === 'production-approve') return no(...v.late);
   if (action === 'qc-approve') return null;
-  // TA-21: release or rejection only with every linked deviation closed; TA-18: a yield out of limits blocks release.
+  // LIMS-20: release or rejection only with every linked deviation closed; TA-18: a yield out of limits blocks release.
   const open = v.deviations.filter((d) => d.open).map((d) => `Deviation ${d.reference} (${d.where ?? `step ${d.step}`}) is ${d.status ? `still open in the Deviations system (${deviationStatusWords(d.status)}): it is closed there first` : 'open'}`);
   return no(...open, ...(action === 'release' ? v.yieldOut : []));
 }
 
-/** What QA reviews before release (TA-21): every change, departure and finding of the batch. Signatures are the server's. */
+/** What QA reviews before release (LIMS-20): every change, departure and finding of the batch. Signatures are the server's. */
 export function review(doc: MasterDoc, events: readonly StepEvent[], batchEvents: readonly BatchEvent[], now: Date, read?: ReadonlyMap<string, DeviationStatus> | null) {
   const { steps } = openSteps(doc, events, now);
   const notes = (s: StepView) => s.events.filter((e) => e.kind === 'note');

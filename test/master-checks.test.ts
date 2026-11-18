@@ -5,7 +5,7 @@ import { evaluate } from '../shared/engine/index.js';
 import { blocking, masterChecks } from '../shared/master/checks.js';
 import { masterSchema, type MasterDoc } from '../shared/master/schema.js';
 import { placed, tablet, unplaced } from './engine-fixture.js';
-// The problems, without the rooms a stage must name (TA-11): the fixtures name none.
+// The problems, without the rooms a stage must name (LIMS-12): the fixtures name none.
 const checks = (d: Parameters<typeof masterChecks>[0]) => unplaced(masterChecks(d));
 
 /** The fixture with one change; the problems that change makes. */
@@ -40,13 +40,13 @@ describe('master checks', () => {
     expect(masterChecks(placed(tablet()))).toEqual([]);
   });
 
-  it('TA-11 a stage that works machines or names a room, with no rooms chosen, is an error; balances alone are not', () => {
-    expect(masterChecks(tablet()).filter((p) => p.rule === 'TA-11').map((p) => `${p.path}: ${p.message}`)).toEqual(['Binder solution', 'Granulation', 'Compression', 'Coating']
+  it('LIMS-12 a stage that works machines or names a room, with no rooms chosen, is an error; balances alone are not', () => {
+    expect(masterChecks(tablet()).filter((p) => p.rule === 'LIMS-12').map((p) => `${p.path}: ${p.message}`)).toEqual(['Binder solution', 'Granulation', 'Compression', 'Coating']
       .map((name, i) => `stages[${i}].roomTypes: Stage ${name}: choose the rooms this stage may run in (an area or a room of master data, in the stage settings)`));
     const d = placed(tablet());
     d.stages[0]!.roomTypes = [];
     d.stages[0]!.steps = d.stages[0]!.steps.filter((t) => t.block.id === 'weigh');
-    expect(masterChecks(d).filter((p) => p.rule === 'TA-11')).toEqual([]);
+    expect(masterChecks(d).filter((p) => p.rule === 'LIMS-12')).toEqual([]);
   });
 
   it('a draft may be incomplete, but its shape is checked', () => {
@@ -54,11 +54,11 @@ describe('master checks', () => {
   });
 
   it.each<[string, (d: MasterDoc) => void, string]>([
-    ['weighing', (d) => { step(d, 'granulation', 'weigh-api').checker = false; }, 'error TA-08 stages[1].steps[0]: A weighing step needs a second-person check'],
-    ['charge-in', (d) => { step(d, 'granulation', 'charge-api').checker = false; }, 'error TA-08 stages[1].steps[2]: A charge-in step needs a second-person check'],
-    ['yield', (d) => { step(d, 'compression', 'yield').checker = false; }, 'error TA-08 stages[2].steps[1]: A yield step needs a second-person check'],
-    ['critical', (d) => { step(d, 'granulation', 'granulate').critical = true; }, 'error TA-08 stages[1].steps[3]: A critical step needs a second-person check'],
-  ])('TA-08 a %s step without a second-person check is an error', (_what, change, want) => {
+    ['weighing', (d) => { step(d, 'granulation', 'weigh-api').checker = false; }, 'error LIMS-41 stages[1].steps[0]: A weighing step needs a second-person check'],
+    ['charge-in', (d) => { step(d, 'granulation', 'charge-api').checker = false; }, 'error LIMS-41 stages[1].steps[2]: A charge-in step needs a second-person check'],
+    ['yield', (d) => { step(d, 'compression', 'yield').checker = false; }, 'error LIMS-41 stages[2].steps[1]: A yield step needs a second-person check'],
+    ['critical', (d) => { step(d, 'granulation', 'granulate').critical = true; }, 'error LIMS-41 stages[1].steps[3]: A critical step needs a second-person check'],
+  ])('LIMS-41 a %s step without a second-person check is an error', (_what, change, want) => {
     expect(after(change)).toEqual([want]);
   });
 
@@ -68,11 +68,11 @@ describe('master checks', () => {
     expect(after((d) => { d.stages[2]!.roomTypes = ['Compression']; d.stages[2]!.steps.unshift(clearance); })).toEqual([]);
     expect(after((d) => { d.stages[2]!.steps.push(clearance); })).toEqual(['warning - stages[2].steps[2]: Line clearance is not the first step of Compression']);
     expect(after((d) => { d.stages[2]!.steps.unshift({ ...clearance, checker: false }); }))
-      .toEqual(['error TA-08 stages[2].steps[0]: A line clearance step needs a second-person check']);
+      .toEqual(['error LIMS-41 stages[2].steps[0]: A line clearance step needs a second-person check']);
   });
 
-  it('TA-01 an intermediate without a hold time is an error', () => {
-    expect(after((d) => { delete d.stages[1]!.produces!.holdHours; })).toEqual(['error TA-01 stages[1].produces: The intermediate dried granules has no hold time']);
+  it('LIMS-01 an intermediate without a hold time is an error', () => {
+    expect(after((d) => { delete d.stages[1]!.produces!.holdHours; })).toEqual(['error LIMS-01 stages[1].produces: The intermediate dried granules has no hold time']);
   });
 
   it('a stage without a yield step is an error (a preparation needs none)', () => {
@@ -102,13 +102,13 @@ describe('master checks', () => {
       .toEqual(['error - stages[1].steps[3].settings.endPointLimit: The lower limit 12.0 is above the upper limit 8.0']);
   });
 
-  it('TA-01 a limit or a typed target in a unit of another kind than the value it checks is an error (every reading would be refused)', () => {
+  it('LIMS-01 a limit or a typed target in a unit of another kind than the value it checks is an error (every reading would be refused)', () => {
     expect(errors((d) => { step(d, 'compression', 'compress').settings.meanLimit = { low: '245.0', high: '255.0', unit: 'min' }; }))
-      .toEqual(['error TA-01 stages[2].steps[0].settings.meanLimit: Mean weight limits: min is a time, but the value checked is a mass. Choose a unit of that kind (in min every reading would be refused at batch time)']);
+      .toEqual(['error LIMS-01 stages[2].steps[0].settings.meanLimit: Mean weight limits: min is a time, but the value checked is a mass. Choose a unit of that kind (in min every reading would be refused at batch time)']);
     expect(errors((d) => { step(d, 'coating', 'qa-hold').settings = { what: 'Weight', unit: 'mg', limit: { low: '95', high: '105', unit: '%' } }; }))
-      .toEqual(['error TA-01 stages[3].steps[1].settings.limit: Limits: % is a percentage, but the value checked is a mass. Choose a unit of that kind (in % every reading would be refused at batch time)']);
+      .toEqual(['error LIMS-01 stages[3].steps[1].settings.limit: Limits: % is a percentage, but the value checked is a mass. Choose a unit of that kind (in % every reading would be refused at batch time)']);
     expect(errors((d) => { step(d, 'granulation', 'yield').settings.yieldLimit = { low: '97.0', high: '100.5', unit: 'kg' }; })).toHaveLength(1);
-    expect(errors((d) => { step(d, 'granulation', 'weigh-lactose').settings.target = '12.0 min'; })).toEqual([expect.stringMatching(/^error TA-01 stages\[1\]\.steps\[1\]\.settings\.target: .*min is a time, but the value checked is a mass/)]);
+    expect(errors((d) => { step(d, 'granulation', 'weigh-lactose').settings.target = '12.0 min'; })).toEqual([expect.stringMatching(/^error LIMS-01 stages\[1\]\.steps\[1\]\.settings\.target: .*min is a time, but the value checked is a mass/)]);
     // A unit not in the list is refused as before; a unit of the same kind, or °C on a temperature difference, is not a kind problem.
     expect(errors((d) => { step(d, 'compression', 'compress').settings.meanLimit = { low: '245.0', high: '255.0', unit: 'F-min' }; })).toEqual([expect.stringMatching(/"F-min" is not in the unit list/)]);
     expect(errors((d) => { Object.assign(step(d, 'compression', 'compress').settings, { meanLimit: { low: '0.245', high: '0.255', unit: 'g' }, hardnessLimit: { low: '6', high: '12', unit: 'kp' } }); })).toEqual([]);

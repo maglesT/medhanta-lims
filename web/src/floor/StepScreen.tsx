@@ -50,7 +50,7 @@ function settingsText(doc: BatchDetail['master']['doc'], block: Block, st: Step,
 
 // The step screen: the instruction, only the fields the block needs, the results worked out by the server with their
 // worked line, and the actions open to this person. A step waiting for its check shows what was recorded to the
-// checker, on their own device (TA-08).
+// checker, on their own device (LIMS-41).
 export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: BatchDetail; blocks: Block[]; row: StepRow; now: number; reload: (b?: boolean) => Promise<void> }) {
   const doc = d.master.doc;
   const st = stepOf(doc, row.key);
@@ -421,7 +421,7 @@ function Summary({ row, block, mdUnit }: { row: StepRow; block: Block; mdUnit: s
   );
 }
 
-// TA-06: the original value stays, crossed out, with who changed it, when and why.
+// LIMS-46: the original value stays, crossed out, with who changed it, when and why.
 function Replaced({ h, field, names, label, mdUnit }: { h: History | null; field: string; names: Map<number | null, string | null>; label?: string; mdUnit: string | null }) {
   const list = h?.replaced.filter((r) => r.field === field) ?? [];
   return <>{list.map((r, i) => (

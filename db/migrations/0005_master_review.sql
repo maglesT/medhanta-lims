@@ -1,4 +1,4 @@
--- Review and approval of master versions (TA-02): the author sends a draft for review, a second person checks it
+-- Review and approval of master versions (LIMS-01): the author sends a draft for review, a second person checks it
 -- (passes or returns it), QA approves it with a change control number, and making it effective retires the previous
 -- effective version. Each step is one insert-only event; the signed ones are the object of their signature
 -- (object_type 'master_event'). The version's state follows the events (master_versions.state, migration 0003).

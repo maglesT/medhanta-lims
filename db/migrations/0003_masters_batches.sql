@@ -39,7 +39,7 @@ end $$;
 create trigger master_versions_locked before update or delete on master_versions
   for each row execute function refuse_change_unless_draft();
 
--- TA-03: batch numbers come from one counter per year and are never reused (batch_no is unique).
+-- LIMS-01: batch numbers come from one counter per year and are never reused (batch_no is unique).
 create table batch_counters (
   year integer primary key,
   last_no integer not null check (last_no >= 1)

@@ -169,7 +169,7 @@ export function Alerts({ d, blocks, now, only }: { d: BatchDetail; blocks: Block
   );
 }
 
-// TA-20: production signs only a complete record. The list of what is still open comes from the server; step ids are
+// LIMS-11: production signs only a complete record. The list of what is still open comes from the server; step ids are
 // shown as the step's name.
 function Approval({ d, blocks, reload }: { d: BatchDetail; blocks: Block[]; reload: (b?: boolean) => Promise<void> }) {
   const [signing, setSigning] = useState(false);

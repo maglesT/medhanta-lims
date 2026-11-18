@@ -6,7 +6,7 @@ import {
 import { at, ev, fail, pass, reading, small } from './engine-fixture.js';
 import { batchRecordDoc } from '../server/batch-record.js';
 
-// The batch status and its signatures (TA-20, TA-21), computed from step events and batch events.
+// The batch status and its signatures (LIMS-11, LIMS-20), computed from step events and batch events.
 
 let n = 1000;
 const be = (kind: BatchEventKind, payload: BatchEvent['payload'] = {}): BatchEvent => ({ id: n++, kind, payload, person: 5, at: at(900) });
@@ -46,29 +46,29 @@ describe('batch signatures', () => {
   const refused = (a: BatchAction, who: Who, events: StepEvent[], batch: BatchEvent[] = [], note?: number) =>
     batchRefusal(a, view(events, batch), people[who], note);
   it.each<[string, BatchAction, Who, StepEvent[], BatchEvent[], string | null]>([
-    ['TA-20 production approval while a check is open', 'production-approve', 'supervisor', started, [], 'Stage 0 › Check a value against limits: pH is waiting for its check'],
-    ['TA-20 production approval of a step that needs signing again', 'production-approve', 'supervisor',
+    ['LIMS-11 production approval while a check is open', 'production-approve', 'supervisor', started, [], 'Stage 0 › Check a value against limits: pH is waiting for its check'],
+    ['LIMS-11 production approval of a step that needs signing again', 'production-approve', 'supervisor',
       [...complete, ev('corrected', '0.1.0.1', { min: 6, payload: { values: {}, reason: 'x' } })], [], 'Stage 0 › Check a value against limits: pH needs signing again'],
-    ['TA-20 production approval without batch.supervise', 'production-approve', 'operator', complete, [], 'You do not have the permission for this action.'],
-    ['TA-20 production approval of a complete record', 'production-approve', 'supervisor', complete, [], null],
-    ['TA-20 production approval twice', 'production-approve', 'supervisor', complete, approved.slice(0, 1), 'Not possible while the batch is production approved.'],
-    ['TA-21 QC approval before production approval', 'qc-approve', 'qc', complete, [], 'Not possible while the batch is manufacturing complete.'],
-    ['TA-21 QC approval after production approval', 'qc-approve', 'qc', complete, approved.slice(0, 1), null],
-    ['TA-21 QC approval while a linked deviation is open', 'qc-approve', 'qc', [...complete, deviation], approved.slice(0, 1), null],
-    ['TA-21 release before QC approval', 'release', 'qa', complete, approved.slice(0, 1), 'Not possible while the batch is production approved.'],
-    ['TA-21 release without qa.release', 'release', 'qc', complete, approved, 'You do not have the permission for this action.'],
-    ['TA-21 release after QC approval', 'release', 'qa', complete, approved, null],
-    ['TA-21 release while a linked deviation is open', 'release', 'qa', [...complete, deviation], approved, 'Deviation DEV-26-001 (Stage 0 › Check a value against limits: pH) is open'],
-    ['TA-21 rejection while a linked deviation is open', 'reject', 'qa', [...complete, deviation], approved, 'Deviation DEV-26-001 (Stage 0 › Check a value against limits: pH) is open'],
-    ['TA-21 release once the deviation is closed', 'release', 'qa', [...complete, deviation], [...approved, close], null],
-    ['TA-21 release after rejection', 'release', 'qa', complete, [...approved, be('rejected')], 'Not possible while the batch is rejected.'],
-    ['TA-21 QA terminates a batch in production', 'terminate', 'qa', started, [], null],
-    ['TA-21 QA terminates a complete batch with an open deviation', 'terminate', 'qa', [...complete, deviation], [], null],
-    ['TA-21 termination after production approval', 'terminate', 'qa', complete, approved.slice(0, 1), 'Not possible while the batch is production approved: QA decides at release.'],
-    ['TA-21 termination without qa.release', 'terminate', 'supervisor', started, [], 'You do not have the permission for this action.'],
-    ['TA-21 termination of a released batch', 'terminate', 'qa', complete, [...approved, be('released')], 'The batch is released.'],
-    ['TA-21 termination of a rejected batch', 'terminate', 'qa', complete, [...approved, be('rejected')], 'The batch is rejected.'],
-    ['TA-21 production approval after termination', 'production-approve', 'supervisor', complete, [be('rejected', { terminated: true, reason: 'x' })], 'Not possible while the batch is rejected.'],
+    ['LIMS-11 production approval without batch.supervise', 'production-approve', 'operator', complete, [], 'You do not have the permission for this action.'],
+    ['LIMS-11 production approval of a complete record', 'production-approve', 'supervisor', complete, [], null],
+    ['LIMS-11 production approval twice', 'production-approve', 'supervisor', complete, approved.slice(0, 1), 'Not possible while the batch is production approved.'],
+    ['LIMS-20 QC approval before production approval', 'qc-approve', 'qc', complete, [], 'Not possible while the batch is manufacturing complete.'],
+    ['LIMS-20 QC approval after production approval', 'qc-approve', 'qc', complete, approved.slice(0, 1), null],
+    ['LIMS-20 QC approval while a linked deviation is open', 'qc-approve', 'qc', [...complete, deviation], approved.slice(0, 1), null],
+    ['LIMS-20 release before QC approval', 'release', 'qa', complete, approved.slice(0, 1), 'Not possible while the batch is production approved.'],
+    ['LIMS-20 release without qa.release', 'release', 'qc', complete, approved, 'You do not have the permission for this action.'],
+    ['LIMS-20 release after QC approval', 'release', 'qa', complete, approved, null],
+    ['LIMS-20 release while a linked deviation is open', 'release', 'qa', [...complete, deviation], approved, 'Deviation DEV-26-001 (Stage 0 › Check a value against limits: pH) is open'],
+    ['LIMS-20 rejection while a linked deviation is open', 'reject', 'qa', [...complete, deviation], approved, 'Deviation DEV-26-001 (Stage 0 › Check a value against limits: pH) is open'],
+    ['LIMS-20 release once the deviation is closed', 'release', 'qa', [...complete, deviation], [...approved, close], null],
+    ['LIMS-20 release after rejection', 'release', 'qa', complete, [...approved, be('rejected')], 'Not possible while the batch is rejected.'],
+    ['LIMS-20 QA terminates a batch in production', 'terminate', 'qa', started, [], null],
+    ['LIMS-20 QA terminates a complete batch with an open deviation', 'terminate', 'qa', [...complete, deviation], [], null],
+    ['LIMS-20 termination after production approval', 'terminate', 'qa', complete, approved.slice(0, 1), 'Not possible while the batch is production approved: QA decides at release.'],
+    ['LIMS-20 termination without qa.release', 'terminate', 'supervisor', started, [], 'You do not have the permission for this action.'],
+    ['LIMS-20 termination of a released batch', 'terminate', 'qa', complete, [...approved, be('released')], 'The batch is released.'],
+    ['LIMS-20 termination of a rejected batch', 'terminate', 'qa', complete, [...approved, be('rejected')], 'The batch is rejected.'],
+    ['LIMS-20 production approval after termination', 'production-approve', 'supervisor', complete, [be('rejected', { terminated: true, reason: 'x' })], 'Not possible while the batch is rejected.'],
   ])('%s → %s', (_what, action, who, events, batch, want) => {
     expect(refused(action, who, events, batch)?.problems[0] ?? null).toBe(want);
   });
@@ -78,11 +78,11 @@ describe('batch signatures', () => {
     ['a note closed already', [close], deviation.id, 'There is no open deviation note with this number.'],
     ['a step event that is not a deviation note', [], complete[0]!.id, 'There is no open deviation note with this number.'],
     ['after release', [...approved, be('released')], deviation.id, 'The batch is released.'],
-  ])('TA-21 QA closes %s with a reason → %s', (_what, batch, note, want) => {
+  ])('LIMS-20 QA closes %s with a reason → %s', (_what, batch, note, want) => {
     expect(refused('close-deviation', 'qa', [...complete, deviation], batch, note)?.problems[0] ?? null).toBe(want);
   });
 
-  it('TA-04 production approval is refused while a check made late has no deviation note', () => {
+  it('LIMS-44 production approval is refused while a check made late has no deviation note', () => {
     const d = small([{ steps: [{ everyMinutes: 30, flow: { kind: 'repeat-until', maxRounds: 3, stop: 'readingCheck' } }] }]);
     const r = (round: number, start: number, pass: boolean) => [ev('started', `0.1.0.${round}`, { min: start }),
       ev('value', `0.1.0.${round}`, { min: start + 1, payload: { values: {}, results: evaluate(d, [], { stage: 0, sub: 1, step: 0, round }, { reading: { value: pass ? '6.0' : '8.0', unit: '' } }) } }),
@@ -112,7 +112,7 @@ describe('batch signatures', () => {
 });
 
 describe('the review list for QA', () => {
-  it('TA-21 lists corrections, sent-backs, values out of limits with their notes, deviations with status and steps not applicable', () => {
+  it('LIMS-20 lists corrections, sent-backs, values out of limits with their notes, deviations with status and steps not applicable', () => {
     const value = (v: string, pass: boolean) => ({ values: { reading: { value: v, unit: '' } }, results: { readingCheck: { ok: true as const, value: v, unit: '', shown: `${v} …`, check: { pass, level: pass ? 'pass' : 'fail', shown: '' } } } });
     const events = [
       ev('started', '0.1.0.1'), ev('value', '0.1.0.1', { payload: value('6.1', true) }), ev('done', '0.1.0.1'),
@@ -129,7 +129,7 @@ describe('the review list for QA', () => {
     expect(r.late).toEqual([]);
   });
 
-  it('TA-14 a repeat-until round whose stop check is "not yet" is not out of limits; the last allowed round failing is', () => {
+  it('LIMS-17 a repeat-until round whose stop check is "not yet" is not out of limits; the last allowed round failing is', () => {
     const d = small([{ steps: [{ flow: { kind: 'repeat-until', maxRounds: 3, stop: 'readingCheck' } }] }]);
     const round = (r: number, ok: boolean) => [ev('started', `0.1.0.${r}`), reading(`0.1.0.${r}`, { readingCheck: ok ? pass : fail }), ev('done', `0.1.0.${r}`)];
     const dried = [...round(1, false), ...round(2, true)];
@@ -144,7 +144,7 @@ describe('the review list for QA', () => {
     expect(notYetText('Compression finished: no: FAIL', true)).toBe('Compression finished: no: not reached (terminated)');
   });
 
-  it('TA-14 a terminated batch: only the last round left unfinished reads "not reached (terminated)"; an earlier round followed by another went on (owner, 16 Nov 2026)', () => {
+  it('LIMS-17 a terminated batch: only the last round left unfinished reads "not reached (terminated)"; an earlier round followed by another went on (owner, 16 Nov 2026)', () => {
     const d = small([{ steps: [{ flow: { kind: 'repeat-until', maxRounds: 3, stop: 'readingCheck' } }] }]);
     const notPassed = { ...fail, shown: 'pH = 9: FAIL' };
     // Round 1 did not pass and round 2 followed; round 2 was started and did not pass when QA terminated the batch.

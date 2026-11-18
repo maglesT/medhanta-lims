@@ -1,4 +1,4 @@
-// TA-22: the batch record as a PDF, the way the Logbook makes its copies. Everything comes from the master version and
+// LIMS-51: the batch record as a PDF, the way the Logbook makes its copies. Everything comes from the master version and
 // the events, worked out by the engine as on screen; nothing is typed again. Changed values are marked: the original
 // is struck through and kept with the reason, the person and the time.
 import type { Content, TDocumentDefinitions } from 'pdfmake/interfaces.js';

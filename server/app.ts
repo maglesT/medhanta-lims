@@ -34,7 +34,7 @@ export interface AppOptions {
   webRoot?: string;
   // Secure flag on the session cookie; off only for plain-HTTP development.
   cookieSecure?: boolean;
-  // The fixed start of every batch number (TA-03).
+  // The fixed start of every batch number (LIMS-01).
   batchPrefix?: string;
   // The product (server/product.ts).
   product?: Product;

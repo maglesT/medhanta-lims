@@ -158,7 +158,7 @@ describe('the labels people saw', () => {
   });
 });
 
-describe('TA-11 Logbook: equipment and rooms fit for use', () => {
+describe('LIMS-12 Logbook: equipment and rooms fit for use', () => {
   let b: { id: number; batchNo: string };
   beforeAll(async () => {
     b = await issue(small([{ machineTypes: ['stirrer'], steps: [{ block: { id: 'line-clearance', version: 1 }, checker: true, settings: {} },
@@ -178,7 +178,7 @@ describe('TA-11 Logbook: equipment and rooms fit for use', () => {
     expect((await sign('asha', b.id, '0.1.0.1', 'done')).statusCode).toBe(200);
   });
 
-  it('TA-11 while the Logbook answers, the machine and room pickers offer only what it has (an empty one names the rest); absent or down, every one', async () => {
+  it('LIMS-12 while the Logbook answers, the machine and room pickers offer only what it has (an empty one names the rest); absent or down, every one', async () => {
     const read = async () => (await as('asha', 'GET', '/api/logbook/items')).json() as { link: string; items: string[] };
     const r = await read();
     expect(r.link).toBe('ok');
@@ -199,14 +199,14 @@ describe('TA-11 Logbook: equipment and rooms fit for use', () => {
     expect((await call(t.app, '', 'GET', '/api/logbook/items')).statusCode).toBe(401);
   });
 
-  it('TA-11 a machine the Logbook says is not fit for use is refused with the Logbook\'s reasons; one in use by another batch too', async () => {
+  it('LIMS-12 a machine the Logbook says is not fit for use is refused with the Logbook\'s reasons; one in use by another batch too', async () => {
     await act('asha', b.id, '0.1.1.1', 'start');
     expect(await problems(record(b.id, '0.1.1.1', { machine: 'eq-str2' }))).toEqual(['STR-02 is not fit for use (Logbook): Dirty: clean and verify before the next use; Calibration overdue.']);
     expect(await problems(record(b.id, '0.1.1.1', { machine: 'eq-str3' }))).toEqual(['STR-03 is in use by batch XB26001 (Logbook).']);
     expect(await problems(record(b.id, '0.1.1.1', { machine: 'eq-str5' }))).toEqual(['STR-05 is not in the Logbook, so it cannot be used.']);
   });
 
-  it('TA-11 a machine fit for use is pulled with its status: no label questions, no extra check', async () => {
+  it('LIMS-12 a machine fit for use is pulled with its status: no label questions, no extra check', async () => {
     expect((await record(b.id, '0.1.1.1', { machine: 'eq-str', speed: '300' })).statusCode).toBe(200);
     const s = await stepOf(b.id, '0.1.1.1');
     expect(s.source.machine).toMatchObject({ from: 'logbook', shown: 'STR-01: clean; Use allowed under exception EXC-7' });
@@ -215,7 +215,7 @@ describe('TA-11 Logbook: equipment and rooms fit for use', () => {
     expect((await stepOf(b.id, '0.1.1.1')).state).toBe('done');
   });
 
-  it('TA-11 Logbook down or its status too old: the label questions, answered yes, and a second-person check', async () => {
+  it('LIMS-12 Logbook down or its status too old: the label questions, answered yes, and a second-person check', async () => {
     const c = await issue(small([{ machineTypes: ['stirrer'], steps: [{ block: { id: 'mix', version: 1 }, settings: {} }, yieldStep] }]));
     await act('asha', c.id, '0.1.0.1', 'start');
     expect((await record(c.id, '0.1.0.1', { machine: 'eq-str4', speed: '300' })).statusCode).toBe(200);
@@ -238,7 +238,7 @@ describe('TA-11 Logbook: equipment and rooms fit for use', () => {
     expect(r.hand).toMatchObject([{ step: '0.1.0.1', field: 'machine', link: 'logbook', state: 'down', personName: 'ASHA' }, { field: 'machine', state: 'down' }]);
   });
 
-  it('TA-11 after an antibiotic only that product may follow until the Logbook verifies a product-changeover cleaning (its only_product); a view without the column reads as any product', async () => {
+  it('LIMS-12 after an antibiotic only that product may follow until the Logbook verifies a product-changeover cleaning (its only_product); a view without the column reads as any product', async () => {
     // The stand-in view has no only_product yet (as the Logbook's before it was appended): read as null.
     expect(await t.app.links.logbook.status('eq-str')).toMatchObject({ state: 'ok', value: { code: 'STR-01', onlyProduct: null } });
     await t.owner.unsafe(`alter table ${S.lb}.equipment_status_v1 add column only_product text`);
@@ -374,7 +374,7 @@ describe('TA-12 MMS: only released, in-date lots of the material; certificate va
     } finally { await restore(S.mms); }
   });
 
-  it('TA-11 a balance is shared by the batches weighing on it: it is no use in equipment_use_v1, so the next weighing on it is not refused', async () => {
+  it('LIMS-12 a balance is shared by the batches weighing on it: it is no use in equipment_use_v1, so the next weighing on it is not refused', async () => {
     const uses = async (code: string) => (await t.owner.unsafe(`select batch_number from ${t.schema}_report.equipment_use_v1 where equipment_code = $1`, [code])).map((r) => r.batch_number);
     // The weighing above was signed on BAL-01; the charge's mixer is a use of the batch.
     expect(await uses('BAL-01')).toEqual([]);
@@ -397,7 +397,7 @@ describe('TA-12 MMS: only released, in-date lots of the material; certificate va
   });
 });
 
-describe('TA-21 Deviations: the deviation number and its status come from the Deviations system', () => {
+describe('LIMS-20 Deviations: the deviation number and its status come from the Deviations system', () => {
   let b: { id: number; batchNo: string };
   const devs = async () => ((await as('meera', 'GET', `/api/batches/${b.id}`)).json() as { batch: { deviations: { reference: string; open: boolean; status?: string }[]; deviationsLink: string } }).batch;
   beforeAll(async () => {
@@ -416,7 +416,7 @@ describe('TA-21 Deviations: the deviation number and its status come from the De
     expect((await act('asha', b.id, '0.1.0.1', 'note', { text: 'pH 7.4', reference: 'DEV-26-0001' })).statusCode).toBe(200);
   });
 
-  it('TA-21 its status is Deviations\' while the link answers: QA cannot close it by hand, and an unlinked deviation is shown', async () => {
+  it('LIMS-20 its status is Deviations\' while the link answers: QA cannot close it by hand, and an unlinked deviation is shown', async () => {
     expect(await devs()).toMatchObject({ deviationsLink: 'ok', deviations: [{ reference: 'DEV-26-0001', open: true, status: 'investigation' }] });
     const note = ((await as('meera', 'GET', `/api/batches/${b.id}/review`)).json() as { deviations: { note: number }[]; unlinked: { number: string }[] });
     expect(note.unlinked.map((d) => d.number)).toEqual(['DEV-26-0099']);
@@ -426,7 +426,7 @@ describe('TA-21 Deviations: the deviation number and its status come from the De
     expect(await devs()).toMatchObject({ deviations: [{ reference: 'DEV-26-0001', open: false, status: 'closed' }] });
   });
 
-  it('TA-21 release is blocked until Deviations has the deviation closed (the server passes the statuses in)', () => {
+  it('LIMS-20 release is blocked until Deviations has the deviation closed (the server passes the statuses in)', () => {
     const doc = small([{ steps: [{ checker: true }] }]);
     const events = [ev('started', '0.1.0.1', { min: 1 }), ev('done', '0.1.0.1', { min: 2 }), ev('checked', '0.1.0.1', { person: 2, min: 3 }),
       ev('note', '0.1.0.1', { min: 4, payload: { text: 'pH', reference: 'DEV-26-001' } })];
@@ -438,7 +438,7 @@ describe('TA-21 Deviations: the deviation number and its status come from the De
     expect(release('rejected')).toBeNull();
   });
 
-  it('TA-21 Deviations down: the number is typed, and a QA person other than the one who typed it closes it by hand', async () => {
+  it('LIMS-20 Deviations down: the number is typed, and a QA person other than the one who typed it closes it by hand', async () => {
     await cut(S.dv);
     try {
       expect((await act('mona', b.id, '0.1.0.1', 'note', { text: 'Second pH reading', reference: 'DEV-PAPER-7' })).statusCode).toBe(200);
@@ -455,7 +455,7 @@ describe('TA-21 Deviations: the deviation number and its status come from the De
   });
 });
 
-describe('TA-02 QMS: a new master version needs a QA-approved change control', () => {
+describe('LIMS-01 QMS: a new master version needs a QA-approved change control', () => {
   const draft = async () => {
     const { id } = (await as('author', 'POST', '/api/masters', { doc: placed(tablet()) })).json() as { id: number };
     const hash = async (who: string) => ((await as(who, 'GET', `/api/master-versions/${id}/review`)).json() as { contentHash: string }).contentHash;
@@ -466,7 +466,7 @@ describe('TA-02 QMS: a new master version needs a QA-approved change control', (
     return { id, review };
   };
 
-  it('TA-02 the change control must be in QMS and approved by QA; its title and approval are kept', async () => {
+  it('LIMS-01 the change control must be in QMS and approved by QA; its title and approval are kept', async () => {
     const { id, review } = await draft();
     expect((await review('quality', 'approve', { changeControl: 'CC-404' })).json()).toMatchObject({ error: 'unknown_change_control' });
     expect((await review('quality', 'approve', { changeControl: 'CC-2026-0002' })).json())
@@ -482,7 +482,7 @@ describe('TA-02 QMS: a new master version needs a QA-approved change control', (
     expect(picks.changes.map((c) => c.number)).toEqual(['CC-2026-0005', 'CC-2026-0004', 'CC-2026-0001']);
   });
 
-  it('TA-02 only a change control naming the master\'s product is offered and accepted; one naming no product is taken with a warning', async () => {
+  it('LIMS-01 only a change control naming the master\'s product is offered and accepted; one naming no product is taken with a warning', async () => {
     const { id, review } = await draft();
     const picks = (await as('quality', 'GET', `/api/change-controls?version=${id}`)).json() as { changes: { number: string; names: string }[] };
     expect(picks.changes.map((c) => [c.number, c.names])).toEqual([['CC-2026-0005', 'none'], ['CC-2026-0001', 'yes']]);
@@ -496,7 +496,7 @@ describe('TA-02 QMS: a new master version needs a QA-approved change control', (
     expect([c('fg-atv20, FG-ATV40'), c('ATORVASTATIN CALCIUM TABLETS 20 MG'), c('FG-ATV200'), c(' '), c(null)].map((x) => namesProduct(x, prd))).toEqual(['yes', 'yes', 'no', 'none', 'none']);
   });
 
-  it('TA-02 QMS down: the number is typed, and another person makes the version effective', async () => {
+  it('LIMS-01 QMS down: the number is typed, and another person makes the version effective', async () => {
     const { id, review } = await draft();
     await cut(S.qms);
     try {

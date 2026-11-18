@@ -111,7 +111,7 @@ const notYetOf = (st: Step, round: number, results: Current['results']) => {
   const stop = stopName(st);
   return stop && round < maxRounds(st) && failed(results[stop]) ? stop : undefined;
 };
-/** The results out of limits: a real limit failure, never a round that is "not yet" (TA-14). */
+/** The results out of limits: a real limit failure, never a round that is "not yet" (LIMS-17). */
 export const outOfLimits = (v: StepView) => Object.entries(v.results).filter(([n, r]) => n !== v.notYet && failed(r));
 /** A "not yet" worked line in plain words: the stop check is not reached yet and the rounds go on (a terminated batch: they do not). */
 export const notYetText = (shown: string, terminated = false) => shown.replace(/:\s*OUT OF LIMITS(?: \([^)]*\))?/g, terminated ? ': not reached (terminated)' : ': not reached yet, the rounds go on')

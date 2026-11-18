@@ -6,7 +6,7 @@
 // actual core mean weight, and the granulation end point is checked by a second person. A new master names no
 // dispensing rooms: the author picks them (Header.tsx). A stage starts with the rooms it usually runs in, by the usual
 // area names; a stage whose rooms differ from plant to plant (a binder or coating suspension, blending) is left for
-// the author: the master check asks for its rooms (TA-11).
+// the author: the master check asks for its rooms (LIMS-12).
 import { findBlock } from '../../../shared/blocks/index.js';
 import { Dec } from '../../../shared/templates/index.js';
 import type { MasterDoc, SettingValue, Stage, Step } from '../../../shared/master/schema.js';
