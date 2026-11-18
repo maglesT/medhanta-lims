@@ -15,8 +15,9 @@ import { OosList } from './oos/OosList.js';
 import { OosScreen } from './oos/OosScreen.js';
 import { Stability } from './stability/Stability.js';
 import { Em } from './em/Em.js';
+import { Trends } from './trends/Trends.js';
 
-type Page = 'home' | 'masters' | 'specs' | 'samples' | 'inventory' | 'stability' | 'em';
+type Page = 'home' | 'masters' | 'specs' | 'samples' | 'inventory' | 'stability' | 'em' | 'trends';
 
 export function App() {
   const [me, setMe] = useState<Me | null | undefined>(undefined);
@@ -92,6 +93,9 @@ export function App() {
           {['sample.register', 'qc.approve', 'master.author', 'master.check', 'master.approve', 'view'].some((c) => can(me, c)) && (
             <button className={page === 'em' && !release && !oos ? 'tab on' : 'tab'} onClick={() => { setPage('em'); go('#/'); }}>EM and water</button>
           )}
+          {['view', 'qc.approve', 'analysis.review', 'sample.register', 'analysis.perform'].some((c) => can(me, c)) && (
+            <button className={page === 'trends' && !release && !oos ? 'tab on' : 'tab'} onClick={() => { setPage('trends'); go('#/'); }}>Trends</button>
+          )}
           {['view', 'analysis.perform', 'analysis.review', 'qc.approve', 'oos.approve'].some((c) => can(me, c)) && (
             <button className={oos ? 'tab on' : 'tab'} onClick={() => go('#/oos')}>OOS</button>
           )}
@@ -113,6 +117,7 @@ export function App() {
           {page === 'inventory' && <Inventory me={me} />}
           {page === 'stability' && <Stability me={me} />}
           {page === 'em' && <Em me={me} />}
+          {page === 'trends' && <Trends me={me} />}
         </>)}
       </main>
     </>

@@ -30,3 +30,4 @@ export {
   l11MicrobialCount, l12Endotoxin, l13MicrobialAssay, tenToN, COUNTABLE, COUNT_PER, MPN_TABLE, GEL_ENDPOINTS, QUANT_DILUTIONS,
   type L11Input, type L11Level, type L12Input, type L13Input, type Qualifier,
 } from './lab-micro.js';
+export { l18ControlChart, NELSON_RULES, type L18Input, type L18Output, type RuleBreak } from './lab-trend.js';

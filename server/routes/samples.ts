@@ -14,7 +14,7 @@ import { coaDoc } from '../coa.js';
 import { render, sendPdf } from '../pdf.js';
 import { Dec, roundHalfUp, writtenDecimals } from '../../shared/templates/index.js';
 import { sampleTestResults, type TestResult } from './analyses.js';
-import { stabilityTrend } from './stability-evaluation.js';
+import { sampleTrend } from './trends.js';
 import {
   PROVIDER_NAME, SAMPLE_ACTIONS, SAMPLE_ACTION_NAMES, SAMPLE_PURPOSES, isHand, sampleRefusal, sampleStatus,
   type LinkState, type SampleAction, type SampleEvent, type SamplePurpose, type Source,
@@ -136,7 +136,8 @@ export function testStates(spec: SpecDoc, purpose: string, results: Record<strin
     const r = (results[t.key] ?? []).filter((a) => a.status === 'reviewed').at(-1);
     const shown = r?.result ? `${r.result.value} ${r.result.unit}`.trim() : undefined;
     // LIMS-25: within the limit but outside the spec's trend limit, or (a stability result, plan 2b-3) outside the
-    // prediction interval of the earlier results (template L22, stabilityTrend): flagged.
+    // prediction interval of the earlier results (template L22), or breaking a Nelson rule on the control chart of the
+    // earlier decided results (template L18): flagged (`trend`, from sampleTrend in server/routes/trends.ts).
     const oot = r?.result && r.result.pass !== false
       ? [t.trendLimit && outOfTrend(t, r.result.value, r.result.unit) ? `trend limit ${limitWords(t.trendLimit)}` : '', trend[t.key] ?? ''].filter(Boolean).join('; ') : '';
     return {
@@ -297,7 +298,7 @@ export function sampleRoutes(app: FastifyInstance, sql: Sql) {
     const [v] = await sql<{ id: number; masterId: number; versionNo: number; state: string; doc: SpecDoc }[]>`
       select id::int, master_id::int as "masterId", version_no as "versionNo", state, doc from master_versions where id = ${l.s.specVersionId}`;
     const results = await sampleTestResults(sql, l.s.id, app);
-    const trend = await stabilityTrend(sql, l.s);
+    const trend = v ? await sampleTrend(sql, l.s, v.doc, results) : {};
     const oos = await oosOfSample(sql, l.s.id);
     const methodIds = [...new Set((v?.doc.tests ?? []).filter((t) => t.use === 'release and stability' || t.use === purposeLimits(l.s.purpose)).map((t) => t.method.masterId))];
     const methods = methodIds.length ? await sql<{ versionId: number; masterId: number; versionNo: number; code: string; name: string }[]>`
@@ -390,7 +391,8 @@ export function sampleRoutes(app: FastifyInstance, sql: Sql) {
           const l = await loadSample(tx, id);
           if (!l) throw new SampleError(404, 'not_found');
           const [v] = await tx<{ doc: SpecDoc }[]>`select doc from master_versions where id = ${l.s.specVersionId}`;
-          const tests = testStates(v!.doc, l.s.purpose, await sampleTestResults(tx, id, app), await stabilityTrend(tx, l.s), l.s.monitoring?.testKey);
+          const sampleResults = await sampleTestResults(tx, id, app);
+          const tests = testStates(v!.doc, l.s.purpose, sampleResults, await sampleTrend(tx, l.s, v!.doc, sampleResults), l.s.monitoring?.testKey);
           const need = l.s.purpose === 'release' ? await reserveNeed(tx, id, v!.doc) : undefined;
           const problems = decision === 'approve' ? approvalProblems(facts(l.s), l.events, tests, user.id, await oosOfSample(tx, id), need) : [rejectionRefusal(l.events)].filter((x): x is string => !!x);
           if (problems.length) throw new SampleError(problems.some((p) => p.includes('another person approves')) ? 403 : 409, 'not_ready', problems);
@@ -431,7 +433,8 @@ export function sampleRoutes(app: FastifyInstance, sql: Sql) {
         const l = await loadSample(tx, id);
         if (!l) throw new SampleError(404, 'not_found');
         const [v] = await tx<{ doc: SpecDoc }[]>`select doc from master_versions where id = ${l.s.specVersionId}`;
-        const tests = testStates(v!.doc, l.s.purpose, await sampleTestResults(tx, id, app), await stabilityTrend(tx, l.s), l.s.monitoring?.testKey);
+        const results = await sampleTestResults(tx, id, app);
+        const tests = testStates(v!.doc, l.s.purpose, results, await sampleTrend(tx, l.s, v!.doc, results), l.s.monitoring?.testKey);
         const no = ootRefusal(l.events, tests, body.data.test);
         if (no) throw new SampleError(409, 'not_allowed_now', [no]);
         const payload = { test: body.data.test, analysisNo: tests.find((t) => t.key === body.data.test)!.reviewed!.analysisNo, answer: body.data.answer, reason: body.data.reason };

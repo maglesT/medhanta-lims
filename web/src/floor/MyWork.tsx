@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { api, type Me } from '../api.js';
 import { analysisLink, go, plainError, STATE_LABEL, statusText, stepLink, timeLeft, useServerNow, type WorkBadge, type WorkItem } from '../api-floor.js';
+import { getMine, type Mine } from '../trends/api-trends.js';
+import { plantDate } from '../../../shared/plant-time.js';
 import './floor.css';
 
 // "My work": the analyses in production the person may act on, the checks waiting for them (never their own work,
@@ -12,6 +14,9 @@ export function MyWork({ me }: { me: Me }) {
   // The analyses the person worked on that left production: the finished record stays one tap away.
   const [finished, setFinished] = useState<{ id: number; analysisNo: string; methodName: string; status: string }[]>([]);
   useEffect(() => { void api<typeof finished>('GET', '/api/analyses/finished', undefined, true).then(setFinished, () => {}); }, []);
+  // The open tests a planner assigned to this person (the workload planner, plan 2.10).
+  const [mine, setMine] = useState<Mine[]>([]);
+  useEffect(() => { void getMine().then(setMine, () => {}); }, []);
   const now = useServerNow(serverNow);
 
   useEffect(() => {
@@ -54,6 +59,21 @@ export function MyWork({ me }: { me: Me }) {
                     <span className="age-dot check" aria-hidden="true" />
                     <span className="pending-what"><strong>{x.title}</strong><small>{b.analysisNo} · {b.methodName} · {x.stage}</small></span>
                     <span className="pending-go">Check →</span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
+          {mine.length > 0 && (
+            <section className="dash-panel" aria-label="Assigned to you">
+              <div className="panel-head"><h2>Assigned to you</h2><span className="pill">{mine.length}</span><span className="muted">tests the planner gave you, by due date</span></div>
+              <div className="pending-list">
+                {mine.map((m) => (
+                  <button key={`${m.sampleId}-${m.method?.code}`} className={m.overdue ? 'pending-row late' : 'pending-row'} onClick={() => m.analysis && go(analysisLink(m.analysis.id))} disabled={!m.analysis}>
+                    <span className={m.overdue ? 'age-dot late' : 'age-dot'} aria-hidden="true" />
+                    <span className="pending-what"><strong>{m.sampleNo} · {m.method?.code} {m.method?.name}</strong>
+                      <small>{m.item.code} {m.item.name} · {m.lotNo} · {m.tests.join(', ')} · due {plantDate(m.due)}{m.overdue ? ' (overdue)' : ''} · assigned by {m.by}</small></span>
+                    <span className="pending-go">{m.analysis ? `${m.analysis.analysisNo} →` : 'start it from the sample (Samples)'}</span>
                   </button>
                 ))}
               </div>

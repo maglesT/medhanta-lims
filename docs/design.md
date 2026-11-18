@@ -522,3 +522,26 @@ plans `lims.master.*`; taking, opening, confirming, checking, isolates and impor
 
 Not in this round: trend charts and EM trend rules (consecutive alerts, flora) (step 8); a room's status for use read
 from the Logbook; an EM summary per batch for release; personnel picked from a list of people (typed with the sample).
+
+## Step 8: trends, KPIs, workload and APQR data (build step 8, 18 Nov 2026)
+Plan 2.10 (second half), 2.11 and section 3 (`trend_v1`); LIMS-25, LIMS-42. Everything is read from this product's own
+records when asked and computed by pure functions (`shared/engine/trends.ts`, template **L18** in
+`shared/templates/lab-trend.ts`); migration `0020`; no new permission, no chart library (plain SVG).
+
+| What | How |
+|---|---|
+| **Control charts** (LIMS-25) | Any numeric test of a product or material (its release and retest samples) or of an EM or water point: the results as QC decided on them (the decision's payload, as `result_v1`), oldest first. L18: individuals chart, centre line, sigma = MR̄ ÷ 1.128, ± 1, 2, 3 sigma, the moving range chart (3.267 × MR̄), the specification limits drawn, Cpk and Ppk with a two-sided limit, and the eight Nelson rules with the points that break them. |
+| **Out of trend** | One way only: `sampleTrend` (server/routes/trends.ts) gives `testStates` its `trend` argument. A stability sample: the prediction interval (L22, as before). A release, retest or monitoring sample: the control chart of the at least 10 (at most the last 30) results of its item or point and test decided before it, with the new reviewed result appended; a Nelson rule break that includes it is the sample's existing OOT flag, answered by QC before approval. The spec's trend limit stays in `testStates`. A result out of its limit is an OOS, not a trend. |
+| **KPIs** (plan 2.11) | Per plant month: right first time (finished analyses reviewed, never corrected, sent back or invalidated), OOS rate (of the reviewed analyses, those that opened an OOS), invalid-run rate (stopped or invalidated, of those finished), turnaround (samples by the month QC decided: days from receipt in QC to the decision, the mean and the share within the target); per analyst (who started the analysis) and per test method over the period; the backlog today (received, not decided, not disposed) by age (0-7, 8-14, 15-30, over 30 days) with those over target. |
+| **Turnaround targets** | The simplest settings place: an insert-only table `tat_targets` (purpose, days, who, when; the latest row of a purpose applies), set on the KPI screen by QC (`lims.qc.approve`, audited); until set, the product defaults in code (release and retest 10 days, stability and investigation 15, monitoring 7). |
+| **Workload planner** (plan 2.10) | The open samples' tests per method (received, not decided; not those whose analysis is reviewed) due on the plant date received plus the purpose's target, with the analysis if started and the assignment; the analysts (people who started or signed analyses, or have the perform permission) with their open analyses and assignments. Assigning (`lims.analysis.review` or `lims.qc.approve`) is an insert-only `lab_assignments` row (assigned again: a new row; the latest applies), refused while Recruitment answers and the analyst is not trained in a skill the method's steps name (`assignRefusal`); while it does not answer, the assignment says "not checked" (the training is checked again at every step signature, as before). My work lists "Assigned to you". |
+| **APQR** (LIMS-42) | Per product or material and period: the results per test (n, min, max, mean, SD, Cpk, rules broken: L18), the lots and their decisions (rejected = failed batches), the OOS opened (status, phase II deviation), the OOT flags QC answered, the method and specification versions made effective with their change controls, the stability studies (last time point, latest signed evaluation) and the stability results, and the plant's EM and water results (alert and action counts per point and sampling) and excursions. On screen; PDF (pdfmake, as the CoA) and CSV (one section after another). The review itself is QMS's. |
+| **View** | `report.trend_v1`, one row per decided result of any sample (ids `md5('lims:trend:'||sample id||':'||test key)`): purpose, item, lot or batch, EM point, stability study and time point and condition, test, value, unit, reported figure, limit as written and its bounds (the shelf-life limit for a stability sample), PASS/FAIL, method, analysis, the OOS number the analysis opened, out of trend with QC's answer, specification number and version, decision, decided at. For QMS's APQR (manifest `publishes`). |
+
+Screens: the **Trends** tab: Control charts (series and test, period, the I-MR chart, the rule breaks, the results with
+OOS and OOT), KPIs (per month, per analyst and method, backlog, targets), Workload (open tests by due date with
+"Assign", analysts), APQR (product, period, the summary, Export CSV and PDF); My work's "Assigned to you". Reading: any
+of `lims.view`, `lims.qc.approve`, `lims.analysis.review`, `lims.sample.register`, `lims.analysis.perform`.
+
+Not in this round: EM-specific trend rules beyond the Nelson rules (consecutive alerts at a point, flora shifts);
+QMS's reader of `trend_v1` (a QMS round).

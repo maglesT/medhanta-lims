@@ -1,0 +1,22 @@
+/* Trends: the pick bar, the control chart (plain SVG), the backlog buckets. */
+.tr-pick { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; }
+.tr-pick label { min-width: 160px; }
+.tr-pick label:first-child { flex: 1 1 320px; }
+.tr-shown { font-size: 0.92rem; color: var(--brand-grey); }
+.tr-buckets { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 12px; }
+.tr-assign { display: flex; gap: 6px; align-items: center; }
+.tr-assign select { max-width: 240px; }
+.cc { margin: 0 0 12px; display: grid; gap: 4px; }
+.cc svg { width: 100%; height: auto; background: #fff; border: 1px solid var(--line); border-radius: 8px; }
+.cc text { font-size: 11px; fill: var(--muted); }
+.cc line { stroke-width: 1; }
+.cc-centre line { stroke: var(--ok); }
+.cc-limit line { stroke: var(--bad); stroke-dasharray: 6 4; }
+.cc-zone line { stroke: var(--line-strong); stroke-dasharray: 2 4; }
+.cc-spec line { stroke: var(--brand-grey); stroke-width: 2; }
+.cc-spec text { fill: var(--brand-grey); font-weight: 600; }
+.cc-path { fill: none; stroke: var(--info, #2f6fb3); stroke-width: 1.5; }
+.cc-pt { fill: var(--info, #2f6fb3); }
+.cc-pt.cc-break { fill: var(--bad); stroke: #fff; stroke-width: 1.5; }
+.cc-n { font-size: 10px; }
+@media (max-width: 640px) { .tr-pick label { min-width: 100%; } }

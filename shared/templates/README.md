@@ -408,3 +408,23 @@ Decisions taken while building:
   an inventory fact (it is recorded on the step from the lot); particles per container (`count` mode, G023).
 - **Sterility** has no template of its own: the containers by L19 (with the number tested), the incubation by T13,
   the temperatures by C1, the controls and the result by C4.
+
+## Lab template, trends (`lab-trend.ts`: L18; build step 8)
+
+Plan 2.11, library L18. Not a worksheet step: the Trends screens and the out-of-trend flag of a new result use it
+(`shared/engine/trends.ts`). Same rules as every template: text inputs with units, exact decimals, plain refusals.
+
+| ID | Name | Inputs | Output | Refuses |
+|---|---|---|---|---|
+| L18 | Control chart (individuals and moving range) with the Nelson rules | `points` (the results in time order, one unit kind; converted to the first's unit), `baseline` (how many first points set the limits; default all), `limit` (the specification) | value = the centre line; `sigma` = MR̄ ÷ 1.128, `ucl`/`lcl` = mean ± 3 sigma, the 1 and 2 sigma `zones`, `movingRanges` with `mrUcl` = 3.267 × MR̄ and `mrBreaks`, `sd` (n − 1), `min`, `max`, `specLow`/`specHigh` in the points' unit, `cpk` = min(USL − mean, mean − LSL) ÷ 3 sigma and `ppk` (the same with the SD; two-sided limits only), `breaks` (rule, words, points), `lastPoint` (the rules a break of which includes the last point), `lastOutOfSpec` | fewer than 2 points; a baseline not from 2 to n; no spread in the baseline (every moving range 0); results of different kinds; an upper limit not above the lower |
+
+- **The eight rules** (L. S. Nelson, 1984; the Western Electric rules extended), paraphrased: 1 one point beyond 3
+  sigma; 2 nine in a row on one side (a point on the centre line is on neither); 3 six in a row steadily rising or
+  falling (equal neighbours break it); 4 fourteen in a row alternating up and down; 5 two of three beyond 2 sigma on
+  one side (the points beyond are named); 6 four of five beyond 1 sigma on one side; 7 fifteen in a row within 1
+  sigma; 8 eight in a row beyond 1 sigma with points on both sides. "Beyond" is strictly more than. Overlapping
+  windows of one rule are one break with all their points.
+- **A new result out of trend** (LIMS-25): the chart of the at least 10 (at most the last 30) earlier decided results
+  of the same product or material (release and retest samples) or EM and water point and test, with the new one
+  appended (`baseline` = the earlier ones): a break that includes the new point is the sample's OOT flag. A result
+  outside its specification is an OOS, not a trend.
