@@ -7,13 +7,18 @@ import { SKELETON_LIST, skeletonStages } from '../web/src/designer/skeletons.js'
 // a word with a lab field and must not be offered there (master data is shared with production).
 const TYPES = ['Balance', 'Analytical balance', 'Micro balance', 'Semi-micro balance', 'IPC balance', 'Platform balance', 'HPLC', 'GC',
   'Sonicator', 'Magnetic stirrer', 'Stirrer', 'Incubator shaker', 'Anchor stirrer vessel', 'Rapid mixer granulator', 'Planetary mixer (semi-solid)',
-  'Hot air oven', 'Muffle furnace', 'Fluid bed dryer', 'Tray dryer', 'Vacuum tray dryer', 'Friabilator', 'Disintegration tester', 'Sieve shaker'];
+  'Hot air oven', 'Muffle furnace', 'Fluid bed dryer', 'Tray dryer', 'Vacuum tray dryer', 'Friabilator', 'Disintegration tester', 'Sieve shaker',
+  'UV-Vis spectrophotometer', 'Dissolution tester', 'Potentiometric titrator', 'Karl Fischer titrator'];
 const MACHINES = TYPES.map((type, i) => ({ code: `EQ-${i}`, type, room: null }));
 const BALANCES = ['Balance', 'Analytical balance', 'Micro balance', 'Semi-micro balance', 'IPC balance'];
 // The instrument of a run takes the instrument types the stage allows (the skeleton's run stage: HPLC and GC).
 const OFFERS: Record<string, string[]> = {
   'weigh.balance': BALANCES, 'mix.machine': ['Sonicator', 'Magnetic stirrer', 'Stirrer'], 'instrument-run.instrument': ['HPLC', 'GC'],
   'uniformity-by-weight.balance': BALANCES, 'friability.machine': ['Friabilator'], 'disintegration.machine': ['Disintegration tester'],
+  // The result blocks' instruments: a Karl Fischer titrator is not offered for a titration, nor a titrator for water.
+  'assay-absorbance.spectrophotometer': ['UV-Vis spectrophotometer'], 'dissolution.apparatus': ['Dissolution tester'],
+  'titration.titrator': ['Potentiometric titrator'], 'water-kf.titrator': ['Karl Fischer titrator'],
+  'loss-on-drying.balance': BALANCES, 'loss-on-drying.oven': ['Hot air oven', 'Muffle furnace'],
 };
 const field = (block: string, name: string) => findBlock({ id: block, version: 1 })!.fields.find((f) => f.name === name)!;
 

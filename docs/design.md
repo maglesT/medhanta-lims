@@ -223,8 +223,14 @@ Logbook already does; there is no new engine mechanism.
 
 Worksheet blocks kept from TrueBatch: weigh, check, mix (as "prepare"), disintegration, content uniformity,
 uniformity by weight, friability, density and flow, sieve analysis, line clearance (as bench clearance, optional).
-New blocks (library v1): dilute, instrument run, system suitability, result. All production blocks and the tablet
-formula, dispensing, stock and yield parts are removed.
+New blocks (library v1): dilute, instrument run, system suitability, and the result blocks of the chemistry lab:
+assay (external standard, single or bracketing), assay by specific absorbance (UV), related substances, dissolution
+(with the stage rules), titration, water by Karl Fischer, loss on drying / residue on ignition, specific optical
+rotation, pH and relative density. Each result block's reportable value is its calculation `result`, its main limit
+the setting `limit` (normally `{ spec: 'limit' }`); up to 3 preparations are numbered fields and settings, their
+masses and dilution factors refer to the weigh and dilute steps before it, and a check (C2) flags a preparation the
+method sets but whose result is missing. All production blocks and the tablet formula, dispensing, stock and yield
+parts are removed.
 
 Permissions (`lims.*`): master.author, master.check, master.approve (methods and specs), sample.register,
 analysis.perform, analysis.check, analysis.review, qc.approve, view, demo.skip.

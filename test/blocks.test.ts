@@ -30,6 +30,22 @@ const ALL: [string, Record<string, unknown>, object?][] = [
   ['content-uniformity', { coating: 'sugar-coated' }],
   ['density-flow', { carrLimit: { high: '20', unit: '%' }, hausnerLimit: { high: '1.25', unit: '' }, reposeLimit: { high: '40', unit: '°' } }],
   ['sieve-analysis', { sieve1: '850 µm', sieve2: '425 µm', sieve3: '250 µm', sieve4: '180 µm', sieve5: '150 µm', finesBelow: '150 µm', finesLimit: { high: '20.0', unit: '%' } }],
+  // The result blocks: in a method the masses are references to the weigh steps; here they are typed.
+  ['assay', { mode: 'external standard', response: 'peak area', responseUnit: '', stdMass: '50.00 mg', stdVolume: '100 mL', stdFactor: '10', preparations: '2',
+    sample1Mass: '250.0 mg', sample2Mass: '250.0 mg', sampleVolume: '100 mL', sample1Factor: '10', sample2Factor: '10', per: 'mass', limit: pct('98.0', '102.0') }],
+  ['assay-absorbance', { specificAbsorbance: '715', form: 'A(1 %, 1 cm)', pathLength: '1 cm', preparations: '1', sample1Mass: '25.0 mg', sampleVolume: '100 mL',
+    per: 'unit', averageWeight: '250.0 mg', labelClaim: '10 mg', limit: pct('95.0', '105.0') }],
+  ['impurities', { mode: 'area normalisation', areaUnit: '', imp1Name: 'Impurity A', imp1Low: '0.80', imp1High: '0.90', imp1Limit: { high: '0.2', unit: '%' },
+    unknownLimit: { high: '0.10', unit: '%' }, disregardLimit: '0.05', limit: { high: '1.0', unit: '%' } }],
+  ['dissolution', { medium: '0.1 M hydrochloric acid', volume: '900 mL', volumeMode: 'replace and correct', aliquot: '10 mL', time1: '30 min', responseUnit: 'AU',
+    standardConcentration: '0.0111 mg/mL', labelClaim: '10 mg', acceptance: 'dissolution IR', limit: { low: '80', unit: '%' }, temperatureLimit: { low: '36.5', high: '37.5', unit: '°C' } }],
+  ['titration', { mode: 'direct', titrant: '0.1 M sodium hydroxide', titrantMolarity: '0.1 M', equivalence: '18.02 mg', equivalenceMolarity: '0.1 M', preparations: '1',
+    sample1Mass: '500 mg', limit: pct('99.0', '101.0') }],
+  ['water-kf', { mode: 'volumetric', readingUnit: 'mL', waterEquivalent: '5.0 mg/mL', preparations: '1', sample1Mass: '200 mg', limit: { high: '0.5', unit: '%' } }],
+  ['loss-on-drying', { mode: 'loss on drying', conditions: '105 °C, 3 hours', limit: { high: '0.5', unit: '%' } }],
+  ['optical-rotation', { form: 'solution', pathLength: '1 dm', concentration: '2.0 %w/v', temperatureLimit: { low: '19.5', high: '20.5', unit: '°C' }, limit: { low: '-30', high: '-26', unit: '°' } }],
+  ['ph', { readingUnit: '', limit: { low: '5.0', high: '7.0', unit: '' } }],
+  ['relative-density', { mode: 'relative density', temperatureLimit: { low: '19.5', high: '20.5', unit: '°C' }, limit: { low: '1.010', high: '1.030', unit: '' } }],
 ];
 const using = (id: string, settings: object, options: object = {}): MasterDoc => {
   const b = findBlock({ id, version: 1 })!;

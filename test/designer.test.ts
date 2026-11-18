@@ -86,7 +86,8 @@ describe('method designer', () => {
   });
 
   it('the method skeletons are valid drafts; what they leave open is listed by the method check', () => {
-    expect(SKELETON_LIST.map((s) => s.id)).toEqual(['hplc-external-standard', 'titration', 'physical-tests']);
+    expect(SKELETON_LIST.map((s) => s.id)).toEqual(['hplc-external-standard', 'titration', 'uv-specific-absorbance', 'related-substances', 'dissolution', 'water-kf',
+      'loss-on-drying', 'physical-tests']);
     const header = method().header;
     for (const s of SKELETON_LIST) {
       const doc = masterSchema.parse({ header, stages: skeletonStages(s.id) });
@@ -97,9 +98,15 @@ describe('method designer', () => {
     const hplc = skeletonStages('hplc-external-standard');
     expect(hplc.map((s) => `${s.key} ${s.kind} ${s.count ?? ''} ${s.uses.join()}: ${s.steps.map((t) => t.key).join(' ')}`)).toEqual([
       'standard preparation  : weigh-standard dissolve-standard dilute-standard',
-      'sample replicate 2 : weigh-sample dissolve-sample dilute-sample',
-      'run normal  standard: run sst',
+      'sample normal  : weigh-sample-1 weigh-sample-2 dissolve-sample dilute-sample',
+      'run normal  standard: run sst assay',
     ]);
+    // The assay refers to the weighings and dilutions before it; its limit is the specification's.
+    expect(hplc[2]!.steps[2]!.settings).toMatchObject({ stdMass: { ref: 'standard/weigh-standard/mass' }, sample2Mass: { ref: 'sample/weigh-sample-2/mass' },
+      sample1Factor: { ref: 'sample/dilute-sample/factor' }, limit: { spec: 'limit' } });
+    // Each skeleton ends with its result step, whose reportable value is its `result`.
+    expect(SKELETON_LIST.map((s) => skeletonStages(s.id).at(-1)!.steps.at(-1)!.block.id)).toEqual(['assay', 'titration', 'assay-absorbance', 'impurities', 'dissolution',
+      'water-kf', 'loss-on-drying', 'disintegration']);
     expect(hplc[0]!.produces).toEqual({ name: 'standard solution', holdHours: 24 });
     // The weighings start with what is weighed, the unit and the usual tolerance; they are checked by a second person.
     expect(hplc[0]!.steps[0]).toMatchObject({ name: 'Weigh the reference standard', checker: true, settings: { tolerance: '10', what: 'Reference standard', unit: 'mg' } });

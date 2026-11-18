@@ -34,18 +34,21 @@ test('LIMS-01 build a method from a skeleton, fix the master-check problems, the
   await author.getByRole('button', { name: 'Create draft' }).click();
   await expect(author.getByRole('heading', { name: 'QC-M-201 · Examplol assay by titration' })).toBeVisible();
 
-  // The steps: the skeleton's sample stage (weigh, dissolve, in replicate); the result is added from the block library.
+  // The steps: the skeleton's sample stage (two weighings, dissolve) and its titration result step. Here the result is a
+  // simple check from the block library instead: the titration step is removed, and the check added.
   await author.getByRole('button', { name: 'Steps', exact: true }).click();
-  await expect(author.locator('.steps-col .olist li').first()).toContainText('Weigh the sample');
+  await expect(author.locator('.steps-col .olist li').first()).toContainText('Weigh sample 1');
+  await expect(author.locator('.steps-col .olist li')).toHaveCount(4);
+  await author.getByRole('button', { name: 'Remove Titration' }).click();
   await author.getByRole('button', { name: '+ Add a step' }).click();
   await author.getByRole('button', { name: /^Check a value against limits/ }).click();
-  await expect(author.locator('.steps-col .olist li')).toHaveCount(3);
+  await expect(author.locator('.steps-col .olist li')).toHaveCount(4);
   // Remove is there without selecting the step first: a second result step added by mistake is removed.
   await author.getByRole('button', { name: '+ Add a step' }).click();
   await author.getByRole('button', { name: /^Read a value at intervals/ }).click();
-  await expect(author.locator('.steps-col .olist li')).toHaveCount(4);
+  await expect(author.locator('.steps-col .olist li')).toHaveCount(5);
   await author.getByRole('button', { name: 'Remove Read a value at intervals' }).click();
-  await expect(author.locator('.steps-col .olist li')).toHaveCount(3);
+  await expect(author.locator('.steps-col .olist li')).toHaveCount(4);
 
   // The master check shows what is missing; its link selects the step, and the step settings take the input.
   const check = author.getByRole('complementary', { name: 'Master check' });
