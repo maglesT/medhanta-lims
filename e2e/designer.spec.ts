@@ -29,7 +29,7 @@ test('LIMS-01 build a method from a skeleton, fix the master-check problems, the
   await author.getByLabel('Method code').fill('QC-M-201');
   await author.getByLabel('Method name').fill('Examplol assay by titration');
   await author.getByLabel('Technique').selectOption('Titration');
-  await author.getByLabel('Reference').fill('Ph. Int. Examplol tablets, assay');
+  await author.getByRole('textbox', { name: 'Reference' }).fill('Ph. Int. Examplol tablets, assay');
   await author.getByText('Method skeleton: Titration').click();
   await author.getByRole('button', { name: 'Create draft' }).click();
   await expect(author.getByRole('heading', { name: 'QC-M-201 · Examplol assay by titration' })).toBeVisible();
