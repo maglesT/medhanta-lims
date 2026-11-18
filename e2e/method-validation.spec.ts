@@ -153,6 +153,9 @@ test('LIMS-02 validation journey: a linearity and accuracy validation is run, it
   await qa.page.getByRole('button', { name: 'Approve (QA)' }).click();
   await sign(qa.page);
   await expect(qa.page.locator('.greeting')).toContainText('approved');
+  const download = qa.page.waitForEvent('download');
+  await qa.page.getByRole('link', { name: 'Download the report (PDF)' }).click();
+  expect((await download).suggestedFilename()).toBe(`${reportNo}.pdf`);
   await qa.page.screenshot({ path: test.info().outputPath('validation-report-approved.png'), fullPage: true });
   await qa.ctx.close();
 

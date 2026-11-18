@@ -593,7 +593,12 @@ permission, no new engine mechanism.
 | **LIMS-02, LIMS-04: where checked** | In the method's **make-effective** step (`reviewRefusal`, `useRefusal`): the version becomes effective only with an approved report whose conclusion is met, of the kind its origin needs (a validation also counts for a pharmacopoeial method), for this version or an earlier one of the same method. Why there: one check, at the one place a method becomes usable; every analysis (release, stability, monitoring, retest) starts from an effective version, so none needs its own check, and the existing analysis code is untouched. A later version keeps its earlier validation; QA sees on the methods list which version and report it rests on, and its change control decides on revalidation (Q2 / Q14). A transferred method is used only after its approved transfer report (LIMS-04). A validation worksheet needs none. |
 | **Screens** | Methods: a Validation column (validated / verified / transferred, outside LIMS, or not yet; the report number) and "Validation reports": the list, "New report" (method version, kind, type of test, protocol number, laboratories, the reviewed worksheet analyses; "Work out the conclusion" shows each characteristic, then "Sign as prepared"), and the report screen with "Review (QC)" and "Approve (QA)". The method header has "Source" and "Used for". QC reviewers see the Methods tab. |
 
-Not in this round: a PDF of the report (the analyses' own PDFs carry the data); a published view for QMS (method status
+**Report PDF**: `GET /api/method-reports/:id/pdf` (`server/method-report-pdf.ts`, pdfmake as the CoA), made again from the stored
+report and its signatures: number, method code, version and origin, protocol (or "validated outside LIMS: paper report"),
+laboratories, per characteristic the protocol's acceptance criteria, the result with its worked figures and analysis
+number, met or not, the conclusion and the three signatures with times. "Download the report (PDF)" on the report screen.
+
+Not in this round: a published view for QMS (method status
 in the APQR, step 8 APQR views may read `method_reports`); non-linear and multivariate calibration (owner, 18 Nov 2026);
 the CDS import on the validation blocks (their responses are typed and checked by a second person, as every validation
 step has a checker).

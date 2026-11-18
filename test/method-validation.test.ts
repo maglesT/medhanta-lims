@@ -5,6 +5,8 @@ import {
   conclude, findings, kindRefusal, methodUse, reportRefusal, reportStatus, useRefusal, type ReportFacts, type ValidationStep,
 } from '../shared/engine/method-validation.js';
 import type { Stored } from '../shared/engine/values.js';
+import { storedReport } from '../server/routes/method-reports.js';
+import { methodReportDoc } from '../server/method-report-pdf.js';
 
 // Method validation, verification and transfer (plan 2.12): the report's rules (shared/engine/method-validation.ts),
 // then on the server: a validation worksheet run as an analysis, its report prepared, reviewed by QC and approved by QA,
@@ -180,6 +182,19 @@ describe('LIMS-02 method validation on the server', () => {
     await ok(signReport('reviewer', id, 'review'));
     await ok(signReport('quality', id, 'approve'));
     await ok(makeEffective(m.id));
+    // The PDF QA files: made again from the stored report and its three signatures, the same each time.
+    const pdf = await as('analyst', 'GET', `/api/method-reports/${id}/pdf`);
+    expect(pdf.statusCode).toBe(200);
+    expect(pdf.headers['content-type']).toBe('application/pdf');
+    expect(pdf.rawPayload.subarray(0, 5).toString()).toBe('%PDF-');
+    const stored = (await storedReport(t.sql, id))!;
+    const at = new Date('2026-11-18T10:00:00Z');
+    const text = JSON.stringify(methodReportDoc(stored.report, stored.signatures, 'ANALYST', at));
+    expect(text).toBe(JSON.stringify(methodReportDoc((await storedReport(t.sql, id))!.report, stored.signatures, 'ANALYST', at)));
+    for (const words of [reportNo, 'QC-M-801', 'version 1', 'in-house method', 'Protocol VP-2026-011', 'Correlation coefficient r: NLT 0.999', 'Mean recovery: 98.0 to 102.0 %',
+      'mean recovery 99.93 %', 'r = 0.99997', 'Conclusion: met', 'Prepared', 'AUTHOR', 'Reviewed (QC)', 'REVIEWER', 'Approved (QA)', 'QUALITY']) expect(text).toContain(words);
+    expect(text).toMatch(/LA26\d{5}/);
+    expect(stored.signatures.map((g) => g.meaning)).toEqual(['prepared', 'reviewed', 'approved']);
     const list = (await as('analyst', 'GET', '/api/method-reports')).json() as { methods: { code: string; status: string; reportNo: string | null }[] };
     expect(list.methods.find((x) => x.code === 'QC-M-801')).toMatchObject({ status: 'validated', reportNo });
   });
@@ -205,6 +220,10 @@ describe('LIMS-02 method validation on the server', () => {
     await ok(makeEffective(m.id));
     const list = (await as('analyst', 'GET', '/api/method-reports')).json() as { methods: { code: string; status: string }[] };
     expect(list.methods.find((x) => x.code === 'QC-M-803')?.status).toBe('verified (outside LIMS)');
+    const paper = (await storedReport(t.sql, id))!;
+    const text = JSON.stringify(methodReportDoc(paper.report, paper.signatures, 'ANALYST'));
+    expect(text).toContain('Validated outside LIMS: paper report QC/VER/2019/044');
+    expect(text).toContain('pharmacopoeial method');
   });
 });
 

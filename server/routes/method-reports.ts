@@ -5,6 +5,8 @@ import { audit } from '../audit.js';
 import { parseId, requirePermission } from '../auth.js';
 import { SignError, authenticateSigner, contentHash, sign, signBody } from '../signatures.js';
 import { loadAnalysis } from './analyses.js';
+import { render, sendPdf } from '../pdf.js';
+import { methodReportDoc, type ReportForPdf, type SignatureRow } from '../method-report-pdf.js';
 import { findBlock } from '../../shared/blocks/index.js';
 import { analysisView, openSteps, stepTitle } from '../../shared/engine/index.js';
 import type { MasterDoc } from '../../shared/master/schema.js';
@@ -33,7 +35,7 @@ const invalid = (reply: FastifyReply, issues?: z.ZodIssue[]) => reply.code(400).
 interface ReportRow {
   id: number; reportNo: string; kind: ReportKind; outside: boolean; methodMasterId: number; methodVersionId: number; methodVersionNo: number; testType: string;
   reference: string; sendingLab: string | null; receivingLab: string | null; analysisIds: number[]; inputs: unknown; outputs: unknown; conclusion: 'met' | 'not met';
-  remarks: string; personId: number; personName: string; at: Date; code: string; name: string;
+  remarks: string; personId: number; personName: string; at: Date; code: string; name: string; origin: string;
 }
 interface EventRow { id: number; reportId: number; kind: 'reviewed' | 'approved'; person: number; personName: string; at: Date }
 
@@ -42,7 +44,7 @@ async function reports(q: Sql | Tx, where: { masterId?: number; id?: number } = 
     select r.id::int, r.report_no as "reportNo", r.kind, r.outside, r.method_master_id::int as "methodMasterId", r.method_version_id::int as "methodVersionId",
       r.method_version_no as "methodVersionNo", r.test_type as "testType", r.reference, r.sending_lab as "sendingLab", r.receiving_lab as "receivingLab",
       r.analysis_ids::int[] as "analysisIds", r.inputs, r.outputs, r.conclusion, r.remarks, r.person_id::int as "personId", u.full_name as "personName", r.at,
-      v.doc->'header'->>'code' as code, v.doc->'header'->>'name' as name
+      v.doc->'header'->>'code' as code, v.doc->'header'->>'name' as name, coalesce(v.doc->'header'->>'origin', 'in-house') as origin
     from method_reports r join users u on u.id = r.person_id join master_versions v on v.id = r.method_version_id
     where (${where.masterId ?? null}::bigint is null or r.method_master_id = ${where.masterId ?? null}) and (${where.id ?? null}::bigint is null or r.id = ${where.id ?? null})
     order by r.id desc`;
@@ -53,6 +55,19 @@ async function reports(q: Sql | Tx, where: { masterId?: number; id?: number } = 
 }
 const facts = (r: ReportRow & { events: EventRow[] }): ReportFacts => ({ id: r.id, kind: r.kind, outside: r.outside, methodVersionNo: r.methodVersionNo,
   conclusion: r.conclusion, preparedBy: r.personId, events: r.events.map((e) => ({ kind: e.kind, person: e.person })) });
+
+/** The report's signatures in order: prepared, reviewed (QC), approved (QA). */
+export async function reportSignatures(q: Sql | Tx, r: { id: number; events: { id: number }[] }): Promise<SignatureRow[]> {
+  return [...await q<SignatureRow[]>`
+    select meaning, printed_name as "printedName", signed_at as "signedAt" from signatures
+    where (object_type = 'method_report' and object_id = ${r.id}) or (object_type = 'method_report_event' and object_id = any(${r.events.map((e) => e.id)}))
+    order by signed_at, id`];
+}
+/** The stored report as the PDF reads it (tests: it is made again from stored data). */
+export async function storedReport(q: Sql | Tx, id: number) {
+  const r = (await reports(q, { id }))[0];
+  return r ? { report: r as unknown as ReportForPdf, signatures: await reportSignatures(q, r) } : null;
+}
 
 /** The reports of a method, as the LIMS-02/04 check reads them (masters.ts). */
 export async function methodReportFacts(q: Sql | Tx, masterId: number): Promise<ReportFacts[]> {
@@ -213,6 +228,14 @@ export function methodReportRoutes(app: FastifyInstance, sql: Sql) {
     const can = (a: 'review' | 'approve', p: 'lims.analysis.review' | 'lims.master.approve') => (req.user!.permissions.includes(p) ? reportRefusal(a, f, req.user!.id) : 'You do not have the right for this.');
     const blocks = Object.fromEntries((r.inputs as { steps?: ValidationStep[] }).steps?.map((s) => [s.block, findBlock({ id: s.block, version: 1 })?.name ?? s.block]) ?? []);
     return { ...r, status: reportStatus(f), blocks, contentHash: contentHash('method_report', r.id, shown(r)), refusals: { review: can('review', 'lims.analysis.review'), approve: can('approve', 'lims.master.approve') } };
+  });
+
+  // The report as the document QA files: made again from the stored report and its signatures.
+  app.get<{ Params: { id: string } }>('/api/method-reports/:id/pdf', anyUser, async (req, reply) => {
+    const id = parseId(req.params.id);
+    const r = id === null ? undefined : await one(sql, id);
+    if (!r) return reply.code(404).send({ error: 'not_found' });
+    return sendPdf(reply, r.reportNo, await render(methodReportDoc(r as unknown as ReportForPdf, await reportSignatures(sql, r), req.user!.fullName, new Date(), app.demo)));
   });
 
   // QC reviews (e-signature "reviewed"), QA approves (e-signature "approved"); each a different person (LIMS-02, LIMS-04).

@@ -204,7 +204,10 @@ function ReportScreen({ me, id, onBack }: { me: Me; id: number; onBack: () => vo
           <h1>{r.reportNo} · {r.kind} of {r.code} version {r.methodVersionNo}</h1>
           <p className="greeting">{r.name} · <span className={STATUS_CHIP[r.status]}>{r.status}</span> · conclusion {metChip(r.conclusion)}</p>
         </div>
-        <button onClick={onBack}>Back to the reports</button>
+        <span className="actions-cell">
+          <a className="button" href={`/api/method-reports/${id}/pdf`} download>Download the report (PDF)</a>
+          <button onClick={onBack}>Back to the reports</button>
+        </span>
       </div>
       <div className="card">
         <p>{r.outside ? 'Validated outside LIMS: paper report' : 'Protocol'} <b>{r.reference}</b> · type of test {r.testType}</p>
