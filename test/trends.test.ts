@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { call, freshApp, login, proofFor, seedUser, type TestApp } from './helpers.js';
+import { call, freshApp, login, proofFor, seedUser, type TestApp, validatedOutside } from './helpers.js';
 import { small } from './engine-fixture.js';
 import { specSchema, type SpecDoc } from '../shared/master/spec.js';
 import {
@@ -103,6 +103,7 @@ async function effective(kind: 'method' | 'spec', doc: object) {
   for (const [who, a, x] of [['author', 'submit', {}], ['checker', 'pass', {}], ['quality', 'approve', { changeControl: 'CC-2026-081' }]] as const) {
     expect((await as(who, 'POST', `/api/master-versions/${v.id}/${a}`, { proof: proofFor(who), contentHash: await hash(who), ...x })).statusCode).toBe(200);
   }
+  await validatedOutside(t.owner, v.id);
   expect((await as('quality2', 'POST', `/api/master-versions/${v.id}/make-effective`, {})).statusCode).toBe(200);
   return v;
 }
