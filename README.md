@@ -15,11 +15,11 @@ whether they may be used, and every use is logged.
 - Calculation templates: `shared/templates/README.md`
 
 ## Status
-Build step 2 of 8 (skeleton). This repository starts from a copy of the TrueBatch Tablets engine: sign-on through
-core, permissions, audit trail, e-signatures, corrections, timers, the master/record/step engine, the calculation
-templates and the record PDF all work and are tested. The screens and master are still the tablet batch record's;
-step 3 replaces them with specifications, method masters, samples, analysis worksheets, review and the CoA, and removes
-the production blocks.
+Build step 3 of 8 done (first demo release): methods and specifications, versioned and approved with a change
+control; samples registered from MMS quarantine lots and TrueBatch completed batches, with their chain of custody;
+analyses of a sample's tests with the specification's limits in place, second-person checks and a second-person review
+with the audit trail; QC's decision and the certificate of analysis; the views `coa_v1` and `result_v1` for MMS and
+TrueBatch. Next: OOS and OOT with Deviations, lab inventory (standards, reagents, columns) and instruments (step 4).
 
 ## Develop
 Needs Node 22 and PostgreSQL 16 or later.
