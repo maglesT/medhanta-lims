@@ -2,6 +2,7 @@ import type postgres from 'postgres';
 import type { Sql } from './db.js';
 import type { LinkState, Provider } from '../shared/engine/links.js';
 import type { TrainingRead } from '../shared/engine/training.js';
+import { qualificationProblem, type QualPick, type QualRead } from '../shared/engine/qualification.js';
 
 // Links to the other Medhanta products, the Logbook way (platform PL-08, D-02). Each provider is read live through
 // its report views with this product's own login, from the URL the platform writes only while the link is on
@@ -189,6 +190,25 @@ export const truebatchClient = (l: Link) => ({
     order by completed_at, batch_number limit 500`).map(batchOf)),
 });
 
+// ---- Qualification: report.qualification_v1 (published), one row per qualified item; a machine is matched by its
+// master-data id (master_id). conditions (of a conditional qualification) through to_jsonb: null until Qualification
+// publishes it. LIMS-12: shared/engine/qualification.ts says whether it may be used.
+type QualRow = { master_id: string; code: string; name: string; status: string; next_review_due: string | null; data_as_of: string | null; conditions: string | null };
+const QUAL_COLS = `master_id::text, code, name, status, next_review_due::text, data_as_of::text, nullif(to_jsonb(q) ->> 'conditions', '') as conditions`;
+const qualOf = (r: QualRow): QualRead => ({ masterId: r.master_id, code: r.code, name: r.name, status: r.status, nextReviewDue: r.next_review_due,
+  dataAsOf: r.data_as_of, conditions: r.conditions });
+export const qualClient = (l: Link) => ({
+  status: (masterId: string) => l.read(async (q, v) => {
+    const [r] = await q<QualRow[]>`select ${q.unsafe(QUAL_COLS)} from ${v('qualification_v1')} q where master_id::text = ${masterId}
+      order by status_since desc nulls last limit 1`;
+    return r ? qualOf(r) : null;
+  }),
+  // Every item Qualification has with a master-data id, with why it may not be used today (the picker, LIMS-12).
+  picks: (today: string) => l.read(async (q, v) => (await q<QualRow[]>`select distinct on (master_id) ${q.unsafe(QUAL_COLS)} from ${v('qualification_v1')} q
+    where master_id is not null order by master_id, status_since desc nulls last limit 5000`)
+    .map((r): QualPick => { const x = qualOf(r); const problem = qualificationProblem(x.code, x, today); return { id: x.masterId, problem }; })),
+});
+
 export interface Links {
   deviations: ReturnType<typeof deviationsClient>;
   qms: ReturnType<typeof qmsClient>;
@@ -196,6 +216,7 @@ export interface Links {
   mms: ReturnType<typeof mmsClient>;
   recruitment: ReturnType<typeof recruitmentClient>;
   truebatch: ReturnType<typeof truebatchClient>;
+  qual: ReturnType<typeof qualClient>;
 }
 /** The links, from their connections (null: absent). `schema` lets tests point a provider at its own schema. */
 export function links(c: Partial<Record<Provider, Sql | null>> = {}, schema: Partial<Record<Provider, string>> = {}): Links {
@@ -206,5 +227,6 @@ export function links(c: Partial<Record<Provider, Sql | null>> = {}, schema: Par
     mms: mmsClient(link('mms', c.mms ?? null, schema.mms)),
     recruitment: recruitmentClient(link('recruitment', c.recruitment ?? null, schema.recruitment)),
     truebatch: truebatchClient(link('truebatch', c.truebatch ?? null, schema.truebatch)),
+    qual: qualClient(link('qual', c.qual ?? null, schema.qual)),
   };
 }

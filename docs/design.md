@@ -287,3 +287,36 @@ Built the Logbook way, like samples: a row and insert-only entries, the status c
 Screens: the OOS tab (open and concluded), the OOS screen (the result, phase Ia, Ib, conclusion and review, phase II,
 QA conclusion, retests, other lots of the item for the impact, history); the sample screen shows each OOS and OOT flag
 in the decision; the analysis screen links its OOS and says when it is invalidated.
+
+- Not in this round: printed labels, stability chambers (with stability, step 6).
+
+## Step 4: instruments (build step 4, 18 Nov 2026)
+LIMS-12 and plan 2.8: a machine field (an HPLC, a balance) is checked against two links when it is recorded or
+corrected (`server/pull.ts`), each the Logbook way (pulled when the link answers, by hand with a second person when it
+is absent or down).
+- **Logbook** (`equipment_status_v1`, as before): fit for use (clean, calibration and maintenance in date, not out of
+  service, the balance's daily check, as the Logbook computes it), not in use by another analysis.
+- **Qualification** (new link `qual`, `QUAL_DATABASE_URL`, manifest reads `qual: [qualification_v1]`): the row whose
+  `master_id` is the machine's master-data id (`server/links.ts` qualClient). Usable: `qualified`, and
+  `qualified_conditions` (its conditions shown with the value: Qualification's `conditions` column, read null-safely,
+  else "see Qualification before use"); refused in plain words: `requalification_needed`, `not_qualified` (any other
+  status in words); `next_review_due` before today (plant date): "its periodic review was due on …". No row while the
+  link answers: "… is not in Qualification, so it cannot be used." The rule is one pure function
+  (`shared/engine/qualification.ts`, `qualificationProblem`). What was read is kept as the source
+  `<field>.qualification` with the machine's value (PL-07; shown on the step, in QA's review list when by hand, and in
+  the PDF). Absent or down: the label question "qualified, status label checked (periodic review in date)" is asked
+  (`handFields`; also while the Logbook answers), and the hand entry makes the step need a second person. A record
+  from before the link asks it with the Logbook's label questions, as before. Rooms are not checked against
+  Qualification.
+- **Picker**: `GET /api/qual/instruments` gives Qualification's machines and why each may not be used today; while it
+  answers the machine picker offers only those that may be used and names each one left out with why
+  (`inQualification`); absent or down, every one (answered by hand).
+- **Published for the Logbook** (`db/migrations/0012`): `report.instrument_use_v1`, TrueBatch's `equipment_use_v1`
+  columns in its order (`batch_number` is the analysis number, `equipment_code`, `equipment_type`, `room_code`,
+  `step` "stage/step" keys, `started_at`, `ended_at`, `read_at`, `data_as_of`, `step_name` "Stage › Step"), then
+  `use_id` (md5 of `lims:instrument_use:<analysis id>:<code>`) and `equipment_master_id`. One row per analysis and
+  instrument (machine values only: not rooms, not inventory items). Started when first recorded on a step; ended when
+  every step round naming it is signed done or not applicable after its last recording (sent back or recorded again:
+  open again), or when the analysis is stopped or reviewed. A balance (type contains "balance") is shared: its use is
+  the weighing itself (ended when recorded), so it is never held in use by an analysis. The Logbook reads it as it
+  reads TrueBatch's view (its reader of LIMS is a Logbook change).

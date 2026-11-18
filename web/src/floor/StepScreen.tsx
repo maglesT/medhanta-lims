@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { api, ApiError, type Me } from '../api.js';
 import { SignDialog } from '../components/SignDialog.js';
 import {
-  blockOf, changed, go, headline, plainClock, plainLine, withoutVerdict, plainError, rawOf, sourceWords, stateLabel, stepLink, stepOf, stepTitle, timeLeft, tone, unitOf, useLinked, useLogbookItems, valueText, words,
+  blockOf, changed, go, headline, plainClock, plainLine, withoutVerdict, plainError, rawOf, sourceWords, stateLabel, stepLink, stepOf, stepTitle, timeLeft, tone, unitOf, useLinked, useLogbookItems, useQualItems, valueText, words,
   type AnalysisDetail, type Block, type Deviation, type BlockField, type FloorEvent, type History, type PickItem, type Step, type StepRow, type Stored, unitName,
 } from '../api-floor.js';
 import { Alerts } from './AnalysisScreen.js';
@@ -10,7 +10,8 @@ import { deviationText } from '../../../shared/engine/release.js';
 import { FieldInput } from './Fields.js';
 import { DemoSkip } from './DemoSkip.js';
 import { ReasonDialog } from './ReasonDialog.js';
-import { CERTIFICATE, fieldLabel, handEntered, LINK_OF } from '../../../shared/engine/links.js';
+import { CERTIFICATE, fieldLabel, handEntered, LINK_OF, qualKey } from '../../../shared/engine/links.js';
+import { inQualification } from '../../../shared/engine/qualification.js';
 import { itemFills } from '../../../shared/engine/items.js';
 import { askedFields, cutShort, notYetText } from '../../../shared/engine/analysis.js';
 import { plantText } from '../../../shared/plant-time.js';
@@ -99,7 +100,14 @@ export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: Ana
   const logbook = useLogbookItems(block.fields.some((f) => f.kind === 'machine' || f.kind === 'room'));
   const fits = (f: BlockField) => (f.kind === 'room' ? md.room.filter((r) => r.active && !roomRefusal(stage, r))
     : f.kind === 'machine' ? md.machine.filter((m) => m.active && !machineRefusal(stage, f, m, md.room)) : []);
-  const pickOf = (f: BlockField) => inLogbook(fits(f), logbook);
+  // LIMS-12: a machine also only while Qualification says it is qualified (while linked); each one left out says why.
+  const qual = useQualItems(block.fields.some((f) => f.kind === 'machine'));
+  const pickOf = (f: BlockField) => {
+    const lb = inLogbook(fits(f), logbook);
+    if (f.kind !== 'machine') return { ...lb, leftOut: [] as string[] };
+    const q = inQualification(lb.offered, qual);
+    return { offered: q.offered, note: lb.note, leftOut: q.leftOut };
+  };
   // A lab inventory item (LIMS-12, 13, 14): only the usable ones are offered; those left out are named with why.
   const [inv, setInv] = useState<Record<string, { items: PickItem[]; leftOut: { code: string; name: string; why: string[] }[] }>>({});
   useEffect(() => {
@@ -115,7 +123,7 @@ export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: Ana
   // An empty picker says why (once master data is read) and what the Logbook leaves out; one with choices says nothing.
   const mdRead = md.room.length > 0 && (md.machine.length > 0 || !block.fields.some((x) => x.kind === 'machine'));
   const noteFor = (f: BlockField) => (f.kind === 'item' ? (inv[f.name]?.leftOut ?? []).map((x) => `Not offered: ${x.code} ${x.name}: ${x.why.join('; ')}.`)
-    : [mdRead && !fits(f).length ? emptyNote(stage, f, md.machine, md.room) : null, pickOf(f).note]);
+    : [mdRead && !fits(f).length ? emptyNote(stage, f, md.machine, md.room) : null, pickOf(f).note, ...pickOf(f).leftOut]);
 
   const post = (action: string, body: object = {}, key = row.id) => api('POST', `/api/analyses/${d.analysis.id}/steps/${key}/${action}`, body);
   const run = async (fn: () => Promise<unknown>) => {
@@ -200,6 +208,7 @@ export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: Ana
           <FieldInput f={f} unit={unit} saved={v} picks={picksFor(f)} note={noteFor(f)} options={f.kind === 'lot' ? lots.map((l) => l.lotNumber) : []}
             disabled={!can('record')} out={outOf(f)} onSave={can('record') ? (raw) => record(f.name, raw) : undefined} />
           {src && <p className="muted small">{sourceWords(src)}</p>}
+          {row.source[qualKey(f.name)] && <p className="muted small">{sourceWords(row.source[qualKey(f.name)])}</p>}
           {!can('record') && can('correct') && <button className="big" onClick={() => setDialog({ kind: 'correct', field: f })}>Correct {f.label.toLowerCase()}</button>}
           <Replaced h={history} field={f.name} names={names} mdUnit={mdUnit} />
         </div>
@@ -216,6 +225,7 @@ export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: Ana
           {can('correct') && v !== undefined && !pulled && <button className="big" onClick={() => setDialog({ kind: 'correct', field: f })}>Correct</button>}
         </div>
         {src && <p className="muted small">{sourceWords(src)}</p>}
+        {row.source[qualKey(f.name)] && <p className="muted small">{sourceWords(row.source[qualKey(f.name)])}</p>}
         <Replaced h={history} field={f.name} names={names} mdUnit={mdUnit} />
       </div>
     );

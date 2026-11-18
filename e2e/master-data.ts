@@ -10,6 +10,8 @@ export function seedMasterData(m: FakeMaster) {
     { ...item('eq-son', 'SON-01', 'Ultrasonic bath'), kind: 'instrument', type: 'sonicator', room: 'QCL-01' },
     { ...item('eq-ovn', 'OVN-01', 'Hot air oven'), kind: 'instrument', type: 'oven', room: 'QCL-01' },
     { ...item('eq-hplc', 'HPLC-01', 'HPLC with UV detector'), kind: 'instrument', type: 'hplc', room: 'INS-01' },
+    // Due for requalification in Qualification (e2e/server.ts): never offered (the instruments journey).
+    { ...item('eq-bal2', 'BAL-02', 'Analytical balance 120 g'), kind: 'instrument', type: 'analytical balance', room: 'QCL-01' },
   );
   // The material of the samples journey.
   m.materials_.push({ ...item(E2E_MATERIAL_ID, 'RM-012', 'Demolol (active substance)'), category: 'API', unit: 'kg' });

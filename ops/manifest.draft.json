@@ -53,7 +53,8 @@
   "publishes": [
     "coa_v1",
     "result_v1",
-    "oos_v1"
+    "oos_v1",
+    "instrument_use_v1"
   ],
   "reads": {
     "master_data": [
@@ -81,6 +82,9 @@
     ],
     "truebatch": [
       "batch_fact_v1"
+    ],
+    "qual": [
+      "qualification_v1"
     ]
   },
   "source": {

@@ -97,8 +97,9 @@ test('LIMS-17 analysis journey: start, a value out of limits needs a deviation n
   await op.getByRole('button', { name: /Weigh: Sample/ }).click();
   await op.getByRole('button', { name: 'Start', exact: true }).click();
   await op.getByRole('group', { name: 'Balance' }).getByRole('button', { name: /BAL-01/ }).click();
+  // Its qualification comes from Qualification (LIMS-12): the Logbook's three label questions only.
   const labels = op.getByRole('group', { name: /^Balance: / });
-  await expect(labels).toHaveCount(4);
+  await expect(labels).toHaveCount(3);
   for (const g of await labels.all()) await g.getByRole('button', { name: 'Yes' }).click();
   await op.getByLabel('Net mass').fill('101.2');
   await op.getByLabel('Net mass').press('Enter');

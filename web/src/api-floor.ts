@@ -6,6 +6,7 @@ import type { MasterDoc, Step } from '../../shared/master/schema.js';
 import type { Action, EventKind, Payload, State, StepKey } from '../../shared/engine/state.js';
 import type { Stored, Value } from '../../shared/engine/values.js';
 import { PROVIDER_NAME, SOURCE_NAME, type Source } from '../../shared/engine/links.js';
+import type { QualPick } from '../../shared/engine/qualification.js';
 import { stepTitle as sharedStepTitle, TERMINATED_STATE } from '../../shared/engine/analysis.js';
 import { plantClock, plantText } from '../../shared/plant-time.js';
 import { statusWords } from '../../shared/engine/release.js';
@@ -75,6 +76,21 @@ export function useLogbookItems(on: boolean): string[] | null {
     if (!on) return;
     let live = true;
     void api<{ link: string; items: string[] }>('GET', '/api/logbook/items').then((r) => live && setItems(r.link === 'ok' ? r.items : null), () => {});
+    return () => { live = false; };
+  }, [on]);
+  return items;
+}
+
+/**
+ * LIMS-12: the machines Qualification has, each with why it may not be used today (shared/engine/qualification.ts,
+ * inQualification); null while the Qualification link is absent or down, or not read yet (then every one is offered).
+ */
+export function useQualItems(on: boolean): QualPick[] | null {
+  const [items, setItems] = useState<QualPick[] | null>(null);
+  useEffect(() => {
+    if (!on) return;
+    let live = true;
+    void api<{ link: string; items: QualPick[] }>('GET', '/api/qual/instruments').then((r) => live && setItems(r.link === 'ok' ? r.items : null), () => {});
     return () => { live = false; };
   }, [on]);
   return items;

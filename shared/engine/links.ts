@@ -6,11 +6,12 @@
 import type { BlockField } from '../blocks/format.js';
 
 // recruitment: the people's training (training.ts), read when a person signs a step that names one. truebatch: the
-// batches made, read for finished-product samples (shared/engine/sample.ts).
-export const PROVIDERS = ['deviations', 'qms', 'logbook', 'mms', 'recruitment', 'truebatch'] as const;
+// batches made, read for finished-product samples (shared/engine/sample.ts). qual: the Qualification product's
+// qualification_v1, read when a machine is recorded (shared/engine/qualification.ts, LIMS-12).
+export const PROVIDERS = ['deviations', 'qms', 'logbook', 'mms', 'recruitment', 'truebatch', 'qual'] as const;
 export type Provider = (typeof PROVIDERS)[number];
 export type LinkState = 'absent' | 'down' | 'ok';
-export const PROVIDER_NAME: Record<Provider, string> = { deviations: 'Deviations', qms: 'QMS', logbook: 'Logbook', mms: 'MMS', recruitment: 'Recruitment', truebatch: 'TrueBatch' };
+export const PROVIDER_NAME: Record<Provider, string> = { deviations: 'Deviations', qms: 'QMS', logbook: 'Logbook', mms: 'MMS', recruitment: 'Recruitment', truebatch: 'TrueBatch', qual: 'Qualification' };
 
 /**
  * Pulled through a link (with what was read, PL-07), or typed by hand while the link was absent or down; or taken from
@@ -33,7 +34,7 @@ const QUESTIONS: Partial<Record<BlockField['kind'], (f: BlockField) => BlockFiel
     yes(`${f.name}.clean`, `${f.label}: the status label says clean, within its clean hold`),
     yes(`${f.name}.calibrated`, `${f.label}: the calibration label is in date`),
     yes(`${f.name}.inService`, `${f.label}: not tagged out of service, maintenance in date`),
-    yes(`${f.name}.qualified`, `${f.label}: qualified (label in date)`),
+    yes(`${f.name}.qualified`, `${f.label}: qualified, status label checked (periodic review in date)`),
   ],
   room: (f) => [
     yes(`${f.name}.clean`, `${f.label}: the status label says clean, within its clean hold`),
@@ -47,14 +48,27 @@ const QUESTIONS: Partial<Record<BlockField['kind'], (f: BlockField) => BlockFiel
   ],
 };
 
+/**
+ * A machine's qualification (LIMS-12) is read from Qualification, kept as the source `<field>.qualification`: while it
+ * is pulled the "qualified" label question is not asked; while Qualification is absent or down it is asked, even when
+ * the Logbook answers. A record from before the Qualification link asks it with the Logbook's questions.
+ */
+export const qualKey = (field: string) => `${field}.qualification`;
 /** The questions a hand-entered machine, room or lot adds to the step. */
 export function handFields(fields: readonly BlockField[], source: Record<string, Source>): BlockField[] {
-  return fields.filter((f) => isHand(source[f.name])).flatMap((f) => QUESTIONS[f.kind]?.(f) ?? []);
+  return fields.flatMap((f) => {
+    const all = QUESTIONS[f.kind]?.(f) ?? [];
+    if (f.kind !== 'machine') return isHand(source[f.name]) ? all : [];
+    const q = source[qualKey(f.name)];
+    const qualHand = q ? isHand(q) : isHand(source[f.name]);
+    return all.filter((x) => (x.name === `${f.name}.qualified` ? qualHand : isHand(source[f.name])));
+  });
 }
 /** What people saw for a recorded name: a field's label, or a label question's ("machine.clean"), whatever the link is now. */
 export function fieldLabel(fields: readonly BlockField[], name: string): string {
   const f = fields.find((x) => x.name === name) ?? fields.find((x) => name.startsWith(`${x.name}.`));
   if (!f) return name;
+  if (name === qualKey(f.name)) return `${f.label}: qualification`;
   return f.name === name ? f.label : QUESTIONS[f.kind]?.(f).find((q) => q.name === name)?.label ?? name;
 }
 /** A step with a value entered by hand needs a second-person check, whatever the master says. */

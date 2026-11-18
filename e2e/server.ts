@@ -5,7 +5,7 @@ import { migrate } from '../db/migrate.js';
 import { buildApp } from '../server/app.js';
 import globalSetup from '../test/global-setup.js';
 import { TEST_DATABASE_URL, TEST_PROOF_KEY, fakeMaster, fakeSignOn, seedUser } from '../test/helpers.js';
-import { E2E_MATERIAL_ID, E2E_MMS, E2E_PORT, E2E_RECRUITMENT, E2E_SCHEMA, USERS } from './config.js';
+import { E2E_MATERIAL_ID, E2E_MMS, E2E_PORT, E2E_QUAL, E2E_RECRUITMENT, E2E_SCHEMA, USERS } from './config.js';
 import { links } from '../server/links.js';
 import { seedMasterData } from './master-data.js';
 
@@ -42,11 +42,22 @@ await rc.unsafe(`drop schema if exists ${E2E_MMS} cascade; create schema ${E2E_M
   insert into ${E2E_MMS}.lot_v1 (lot_number, kind, material_master_id, material_code, status, expiry_date, stock, unit) values
     ('RM-E1', 'material', '${E2E_MATERIAL_ID}', 'RM-012', 'quarantine', '2029-10-31', 250, 'kg');
   grant usage on schema ${E2E_MMS} to lims_app; grant select on all tables in schema ${E2E_MMS} to lims_app;`);
+// Qualification's qualification_v1 (LIMS-12): the lab instruments qualified, BAL-02 due for requalification.
+await rc.unsafe(`drop schema if exists ${E2E_QUAL} cascade; create schema ${E2E_QUAL};
+  create table ${E2E_QUAL}.qualification_v1 (item_id bigint, master_id text, code text, name text, kind text, status text, next_review_due date,
+    status_since timestamptz default now(), status_source text, read_at timestamptz default now(), data_as_of timestamptz default now());
+  insert into ${E2E_QUAL}.qualification_v1 (item_id, master_id, code, name, kind, status, next_review_due) values
+    (1, 'eq-bal', 'BAL-01', 'Analytical balance 220 g', 'equipment', 'qualified', '2099-12-31'),
+    (2, 'eq-son', 'SON-01', 'Ultrasonic bath', 'equipment', 'qualified', '2099-12-31'),
+    (3, 'eq-ovn', 'OVN-01', 'Hot air oven', 'equipment', 'qualified', '2099-12-31'),
+    (4, 'eq-hplc', 'HPLC-01', 'HPLC with UV detector', 'equipment', 'qualified', '2099-12-31'),
+    (5, 'eq-bal2', 'BAL-02', 'Analytical balance 120 g', 'equipment', 'requalification_needed', null);
+  grant usage on schema ${E2E_QUAL} to lims_app; grant select on all tables in schema ${E2E_QUAL} to lims_app;`);
 await rc.end();
 
 const sql = connect(TEST_DATABASE_URL, { role: 'lims_app', searchPath: E2E_SCHEMA });
 const linked = connect(TEST_DATABASE_URL, { role: 'lims_app', link: true });
 const app = await buildApp({ sql, signOn: fakeSignOn(), proofKey: TEST_PROOF_KEY, master,
-  links: links({ recruitment: linked, mms: linked }, { recruitment: E2E_RECRUITMENT, mms: E2E_MMS }),
+  links: links({ recruitment: linked, mms: linked, qual: linked }, { recruitment: E2E_RECRUITMENT, mms: E2E_MMS, qual: E2E_QUAL }),
   webRoot: new URL('../dist/web', import.meta.url).pathname, cookieSecure: false });
 await app.listen({ port: E2E_PORT, host: '127.0.0.1' });

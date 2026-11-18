@@ -56,8 +56,8 @@ async function completeAnalysis(browser: Browser): Promise<{ id: number; analysi
   await step(op, '0.1.0.1', 'note', { text: 'pH 7.4 on the second reading; meter calibration checked', reference: 'DEV-26-021' });
   await signed(op, '0.1.0.1', 'done');
   await signed(chk, '0.1.0.1', 'check');
-  // The balance typed by hand (no Logbook link): its status labels answered yes.
-  const labels = Object.fromEntries(['clean', 'calibrated', 'inService', 'qualified'].map((n) => [`balance.${n}`, 'yes']));
+  // The balance typed by hand (no Logbook link): its status labels answered yes (its qualification comes from Qualification).
+  const labels = Object.fromEntries(['clean', 'calibrated', 'inService'].map((n) => [`balance.${n}`, 'yes']));
   await step(op, '0.1.1.1', 'start');
   await step(op, '0.1.1.1', 'record', { values: { balance: 'eq-bal', ...labels, mass: '101.2' } });
   await signed(op, '0.1.1.1', 'done');

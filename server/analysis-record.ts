@@ -4,6 +4,7 @@
 import type { Content, TDocumentDefinitions } from 'pdfmake/interfaces.js';
 import { findBlock, type Block } from '../shared/blocks/index.js';
 import type { Step } from '../shared/master/schema.js';
+import { qualKey } from '../shared/engine/links.js';
 import { analysisView, deviations, deviationNumber, deviationText, fieldLabel, handFields, lateItems, notYetText, cutShort, stoppedText, TERMINATED_STATE, openSteps, PROVIDER_NAME, deviationStatusWords, stepTitle, headline, limitOf, withoutVerdict, statusWords, CERTIFICATE, trainingOf, trainingText, trainingTyped, skillText, type DeviationStatus, type EventKind, type Source, type Stored, type StepView, type Value } from '../shared/engine/index.js';
 import type { LoadedAnalysis } from './routes/analyses.js';
 import { pageFrame, plant, runs } from './pdf.js';
@@ -170,7 +171,7 @@ function valueLines(block: Block, v: StepView, who: (id: number | null) => strin
   const names = new Set([...block.fields, ...handFields(block.fields, v.source)].map((f) => f.name).concat(Object.keys(v.values), v.replaced.map((x) => x.field)));
   return [...names].filter((name) => v.values[name] !== undefined || v.replaced.some((x) => x.field === name)).map((name) => {
     const changes = v.replaced.filter((x) => x.field === name);
-    const now = runs(`${fieldLabel(block.fields, name)}: ${valueText(v.values[name], stockUnit)}${name in CERTIFICATE ? certificateText(v.source[name]) : sourceText(v.source[name])}`);
+    const now = runs(`${fieldLabel(block.fields, name)}: ${valueText(v.values[name], stockUnit)}${name in CERTIFICATE ? certificateText(v.source[name]) : sourceText(v.source[name])}${sourceText(v.source[qualKey(name)])}`);
     if (!changes.length) return { text: now, fontSize: 7.5 };
     return { stack: [
       { text: [...now, { text: '  CHANGED', bold: true, color: RED }], fontSize: 7.5 },

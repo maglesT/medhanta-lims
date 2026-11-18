@@ -15,7 +15,7 @@ import { inLogbook } from '../shared/engine/picks.js';
 
 let t: TestApp;
 let provider: Sql;
-const S: Record<'dv' | 'qms' | 'lb' | 'mms', string> = { dv: '', qms: '', lb: '', mms: '' };
+const S: Record<'dv' | 'qms' | 'lb' | 'mms' | 'ql', string> = { dv: '', qms: '', lb: '', mms: '', ql: '' };
 const cookies: Record<string, string> = {};
 const ids: Record<string, number> = {};
 const item = (itemId: string, c: string, name: string) => ({ itemId, code: c, name, version: 1, active: true });
@@ -25,7 +25,9 @@ beforeAll(async () => {
     for (const k of Object.keys(S) as (keyof typeof S)[]) S[k] = `${db.schema}_${k}`;
     // The planned and published views, as tables with the same columns (the providers' own contracts).
     await db.owner.unsafe(`
-      create schema ${S.dv}; create schema ${S.qms}; create schema ${S.lb}; create schema ${S.mms};
+      create schema ${S.dv}; create schema ${S.qms}; create schema ${S.lb}; create schema ${S.mms}; create schema ${S.ql};
+      create table ${S.ql}.qualification_v1 (item_id bigint, master_id text, code text, name text, kind text, status text, next_review_due date,
+        status_since timestamptz default now(), status_source text, read_at timestamptz default now(), data_as_of timestamptz default now());
       create table ${S.dv}.deviation_v1 (number text, status text, classification text, opened_at timestamptz, closed_at timestamptz, product text, analysis text,
         analysis_norm text, outcome text, read_at timestamptz default now(), data_as_of timestamptz default now(), title text, source_ref text);
       create table ${S.qms}.change_v1 (number text, status text, title text, products text, qa_approved_at timestamptz, closed_at timestamptz,
@@ -38,8 +40,8 @@ beforeAll(async () => {
         read_at timestamptz default now(), data_as_of timestamptz default now(), stock numeric, unit text);
       create table ${S.mms}.lot_test_v1 (lot_number text, report_ref text, test text, specification text, result text, value numeric, unit text, basis text,
         tested_at timestamptz, read_at timestamptz default now(), data_as_of timestamptz default now());
-      grant usage on schema ${S.dv}, ${S.qms}, ${S.lb}, ${S.mms} to lims_app;
-      grant select on all tables in schema ${S.dv}, ${S.qms}, ${S.lb}, ${S.mms} to lims_app;
+      grant usage on schema ${S.dv}, ${S.qms}, ${S.lb}, ${S.mms}, ${S.ql} to lims_app;
+      grant select on all tables in schema ${S.dv}, ${S.qms}, ${S.lb}, ${S.mms}, ${S.ql} to lims_app;
       insert into ${S.qms}.change_v1 (number, status, title, products, qa_approved_at) values
         ('CC-2026-0001', 'implementation', 'New HPLC column supplier', 'PRD-001', now()), ('CC-2026-0002', 'qa', 'Mobile phase pH', null, null),
         ('CC-2026-0003', 'rejected', 'Drop the identity test', null, now()),
@@ -65,7 +67,10 @@ beforeAll(async () => {
         ('API-OK', 'QC-26-101', 'Assay', '99.1 %', 99.1, '%', 'dried'), ('API-OK', 'QC-26-101', 'LOD', '0.4 %', 0.4, '%', 'as is'),
         ('API-OK', 'QC-26-101', 'Identity', 'complies', null, null, null), ('API-ASIS', 'QC-26-102', 'Assay', '98.0 %', 98.0, '%', 'as is');`);
     provider = connect(TEST_DATABASE_URL, { role: 'lims_app', link: true });
-    return links({ deviations: provider, qms: provider, logbook: provider, mms: provider }, { deviations: S.dv, qms: S.qms, logbook: S.lb, mms: S.mms });
+    // Every machine here is qualified (Qualification itself: test/instruments.test.ts).
+    await db.owner.unsafe(`insert into ${S.ql}.qualification_v1 (master_id, code, name, kind, status, next_review_due)
+      select x, x, x, 'equipment', 'qualified', '2099-12-31' from unnest(array['eq-str', 'eq-str2', 'eq-str3', 'eq-str4', 'eq-str5', 'eq-bal', 'eq-hplc']) x`);
+    return links({ deviations: provider, qms: provider, logbook: provider, mms: provider, qual: provider }, { deviations: S.dv, qms: S.qms, logbook: S.lb, mms: S.mms, qual: S.ql });
   });
   t.master.equipment_.push(...['', '2', '3', '4', '5'].map((n) => ({ ...item(`eq-str${n}`, `STR-0${n || 1}`, 'Magnetic stirrer'), kind: 'equipment' as const, type: 'stirrer', room: 'QCL-01' })),
     { ...item('eq-bal', 'BAL-01', 'Analytical balance'), kind: 'instrument', type: 'balance', room: 'QCL-01' },
@@ -226,10 +231,12 @@ describe('LIMS-12 Logbook: equipment and rooms fit for use', () => {
       expect((await record(c.id, '0.1.0.1', { machine: 'eq-str' })).statusCode).toBe(200);
     } finally { await restore(S.lb); }
     const s = await stepOf(c.id, '0.1.0.1');
-    expect(s.handFields.map((f) => f.name)).toEqual(['machine.clean', 'machine.calibrated', 'machine.inService', 'machine.qualified']);
+    // Qualification answers: its qualification is pulled, so the "qualified" label question is not asked.
+    expect(s.handFields.map((f) => f.name)).toEqual(['machine.clean', 'machine.calibrated', 'machine.inService']);
     expect(s.problems).toContain('Stirrer, shaker or sonicator: the calibration label is in date is not recorded');
     expect(await problems(record(c.id, '0.1.0.1', { 'machine.calibrated': 'no' }))).toEqual(['Stirrer, shaker or sonicator: the calibration label is in date: if not, do not use it; use another, or raise a deviation.']);
-    expect((await record(c.id, '0.1.0.1', handLabels('machine', 'machine'))).statusCode).toBe(200);
+    const { 'machine.qualified': _, ...labels } = handLabels('machine', 'machine');
+    expect((await record(c.id, '0.1.0.1', labels)).statusCode).toBe(200);
     expect((await sign('asha', c.id, '0.1.0.1', 'done')).statusCode).toBe(200);
     expect((await stepOf(c.id, '0.1.0.1')).state).toBe('done_awaiting_check');
     expect((await sign('asha', c.id, '0.1.0.1', 'check')).json()).toMatchObject({ error: 'own_work' });

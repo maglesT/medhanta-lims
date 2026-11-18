@@ -7,7 +7,7 @@ import { findBlock, type Block, type BlockField } from '../blocks/index.js';
 import type { Limit, MasterDoc, SettingValue, Step } from '../master/schema.js';
 import { callTemplate } from './templates.js';
 import { keyId, type StepEvent, type StepKey } from './state.js';
-import type { Source } from './links.js';
+import { qualKey, type Source } from './links.js';
 
 /** A recorded value: a number with its unit, a list of them, a text (yes/no, choice, lot, time) or a picked item (with its type, room and the room's area). */
 export type Value = { value: string; unit: string } | { value: string; unit: string }[] | string
@@ -55,6 +55,9 @@ export function currentValues(events: readonly StepEvent[]): Current {
       c.values[k] = v;
       // A value typed again replaces where it came from too.
       if (e.payload.source?.[k]) c.source[k] = e.payload.source[k]; else delete c.source[k];
+      // A machine's qualification (LIMS-12, links.ts qualKey) comes and goes with the machine.
+      const q = qualKey(k);
+      if (e.payload.source?.[q]) c.source[q] = e.payload.source[q]; else delete c.source[q];
     }
     if (e.payload.results) { c.results = e.payload.results; c.uses = e.payload.uses ?? []; }
   }

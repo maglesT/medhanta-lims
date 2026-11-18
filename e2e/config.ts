@@ -7,6 +7,8 @@ export const E2E_SCHEMA = process.env.E2E_SCHEMA ?? 'e2e';
 export const E2E_RECRUITMENT = `${E2E_SCHEMA}_rc`;
 // MMS's stand-in lot_v1 and lot_test_v1: the lots waiting to be sampled (e2e/server.ts).
 export const E2E_MMS = `${E2E_SCHEMA}_mms`;
+// Qualification's stand-in qualification_v1: the instruments' qualification (e2e/server.ts, LIMS-12).
+export const E2E_QUAL = `${E2E_SCHEMA}_ql`;
 // The material of the samples journey, as master data and MMS name it.
 export const E2E_MATERIAL_ID = '00000000-0000-4000-8000-000000000012';
 // The product of the OOS journey (TrueBatch is not linked: its batch is registered by hand).

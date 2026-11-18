@@ -3,9 +3,9 @@ import { z } from 'zod';
 import type { Sql, Tx } from '../db.js';
 import { audit } from '../audit.js';
 import { parseId, requirePermission, type SessionUser } from '../auth.js';
-import { usableItem } from '../master.js';
+import { usableItem, type MasterEquipment } from '../master.js';
 import { machineRefusal, roomRefusal } from '../../shared/engine/picks.js';
-import { handProblem, pullItem, pullLabItem, pullLot, pulledWords } from '../pull.js';
+import { handProblem, pullItem, pullLabItem, pullLot, pullQualification, pulledWords } from '../pull.js';
 import { itemFills } from '../../shared/engine/items.js';
 import { SignError, authenticateSigner, contentHash, sign, signBody } from '../signatures.js';
 import { masterVersion } from './masters.js';
@@ -158,6 +158,12 @@ async function readValues(app: FastifyInstance, tx: Tx, doc: MasterDoc, key: Ste
       const area = 'area' in item ? item.area : rooms.find((r) => r.code === room)?.area ?? null;
       out[name] = { itemId: item.itemId, code: item.code, name: item.name, version: item.version, type, room, area };
       pulled = await pullItem(app, block, f, item, analysisNo);
+      // LIMS-12: a machine is also qualified, as Qualification has it now.
+      if (f.kind === 'machine') {
+        const q = await pullQualification(app, f, item as MasterEquipment, now);
+        problems.push(...q.problems);
+        Object.assign(source, q.sources);
+      }
     } else {
       const v = readValue(f, x, '');
       if (typeof v !== 'string') { problems.push((v as { error: string }).error); continue; }
@@ -526,6 +532,13 @@ export function analysisRoutes(app: FastifyInstance, sql: Sql) {
   // these are offered (any other is refused, server/pull.ts); absent or down, every one is offered and typed by hand.
   app.get('/api/logbook/items', anyUser, async () => {
     const r = await app.links.logbook.known();
+    return { link: r.state, items: r.state === 'ok' ? r.value : [] };
+  });
+
+  // LIMS-12: the machines Qualification has (their master-data ids) and why each may not be used today, for the pick
+  // lists: while the link answers only qualified ones are offered; absent or down, every one, its label answered by hand.
+  app.get('/api/qual/instruments', anyUser, async () => {
+    const r = await app.links.qual.picks(new Date().toLocaleDateString('en-CA', { timeZone: PLANT_TZ }));
     return { link: r.state, items: r.state === 'ok' ? r.value : [] };
   });
 

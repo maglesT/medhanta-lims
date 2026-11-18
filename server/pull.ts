@@ -7,6 +7,8 @@ import { plantDate } from '../shared/plant-time.js';
 import type { Tx } from './db.js';
 import { ITEM_KIND_NAME, itemFills, labItemId, parseLabItemId, unusableText } from '../shared/engine/items.js';
 import { loadItem, plantToday } from './routes/inventory.js';
+import { qualKey } from '../shared/engine/links.js';
+import { qualificationProblem, qualificationShown } from '../shared/engine/qualification.js';
 
 // What a link gives a step value at write time (owner 15 Nov 2026, LIMS-12, TA-12): the value as read now, or a
 // refusal in plain words; when the link is absent or down, the value is typed by hand (its questions in
@@ -43,6 +45,23 @@ export async function pullItem(app: FastifyInstance, block: Block, f: BlockField
     const facts: [string, string | null][] = [['clean', 'yes'], ['cleanedOn', s.cleanedAt], ['cleanedBy', s.cleanedBy]];
     for (const [name, v] of facts) if (v && block.fields.some((x) => x.name === name)) { out.values[name] = v; out.sources[name] = source; }
   }
+  return out;
+}
+
+/**
+ * LIMS-12: a machine is used only while Qualification says it is qualified (or qualified with conditions, shown) and its
+ * periodic review is not past; one Qualification does not have is refused while the link answers. Absent or down: its
+ * "qualified" label question is answered by hand, with a second person (shared/engine/links.ts handFields). Kept as
+ * the source `<field>.qualification`.
+ */
+export async function pullQualification(app: FastifyInstance, f: BlockField, item: MasterEquipment, now: Date): Promise<Pulled> {
+  const r = await app.links.qual.status(item.itemId);
+  const out: Pulled = { source: { from: 'hand', link: 'qual', state: r.state === 'absent' ? 'absent' : 'down' }, values: {}, sources: {}, problems: [] };
+  if (r.state !== 'ok') { out.sources[qualKey(f.name)] = out.source; return out; }
+  const no = qualificationProblem(item.code, r.value, plantToday(now));
+  if (no) return refused(no);
+  out.source = { from: 'qual', asOf: r.value!.dataAsOf, shown: qualificationShown(r.value!) };
+  out.sources[qualKey(f.name)] = out.source;
   return out;
 }
 
