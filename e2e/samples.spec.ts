@@ -14,7 +14,9 @@ test('LIMS-07 a sample of a waiting MMS lot is registered, received and stored o
   const ap = await author.newPage();
   await logIn(ap, 'iss1');
   const doc = {
-    header: { of: 'material', itemId: E2E_MATERIAL_ID, code: '', name: '', type: 'Raw material', number: 'SPEC-RM-012', pharmacopoeia: 'Ph. Int.', edition: '2025' },
+    header: { of: 'material', itemId: E2E_MATERIAL_ID, code: '', name: '', type: 'Raw material', number: 'SPEC-RM-012', pharmacopoeia: 'Ph. Int.', edition: '2025',
+      // LIMS-05: a starting material is sampled by the specification's plan.
+      sampling: { plan: 'square root', equipment: 'Stainless steel sampling thief', storage: 'Amber jar, below 25 °C' } },
     tests: [{ key: 'assay', name: 'Assay', method: { masterId: 1, code: 'QC-M-001', name: 'Assay by HPLC' }, result: 'run/result/result', limitType: 'range',
       limit: { low: '98.0', high: '102.0', unit: '%' }, values: {}, use: 'release and stability' }],
   };
@@ -43,7 +45,11 @@ test('LIMS-07 a sample of a waiting MMS lot is registered, received and stored o
   await expect(dialog).toContainText('RM-012 Demolol (active substance)');
   await expect(dialog.getByLabel('Specification')).toHaveValue(String(id));
   await dialog.getByLabel('Quantity').fill('120 g');
-  await dialog.getByLabel('Containers sampled').fill('3');
+  // LIMS-05: the plan: 1 + √9 = 4 of the 9 containers received; the sampler confirms which.
+  await dialog.getByLabel('Containers received').fill('9');
+  await expect(dialog.getByLabel('Sampling plan')).toContainText('sample 4 of 9 containers (1 + √9 = 4.00, rounded up = 4)');
+  await expect(dialog.getByLabel('Sampling plan')).toContainText('Equipment: Stainless steel sampling thief');
+  await dialog.getByLabel('Container numbers sampled').fill('1, 3, 6, 9');
   await dialog.getByRole('button', { name: 'Register' }).click();
 
   // The sample screen: its number of the plant year, registered.
@@ -51,6 +57,7 @@ test('LIMS-07 a sample of a waiting MMS lot is registered, received and stored o
   await expect(heading).toContainText(/LS\d{7}/);
   await expect(heading).toContainText('Registered');
   await expect(page.getByRole('region', { name: 'The sample' })).toContainText('From MMS: MMS lot RM-E1');
+  await expect(page.getByRole('region', { name: 'The sample' })).toContainText('containers sampled: 1, 3, 6, 9');
   await expect(page.getByRole('region', { name: 'Tests' })).toContainText('Assay');
   await expect(page.getByRole('region', { name: 'Tests' })).toContainText('Limit not less than 98.0 and not more than 102.0 %');
 

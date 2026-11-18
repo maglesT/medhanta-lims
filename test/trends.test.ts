@@ -111,7 +111,7 @@ let method = { id: 0, masterId: 0 };
 let specId = 0;
 let n = 0;
 async function sampleOf() {
-  const r = await as('sampler', 'POST', '/api/samples', { source: 'mms', lotNumber: `RM81-${String(++n).padStart(3, '0')}`, byHand: true, itemId: MAT, specVersionId: specId, quantity: '30 g' });
+  const r = await as('sampler', 'POST', '/api/samples', { source: 'mms', lotNumber: `RM81-${String(++n).padStart(3, '0')}`, byHand: true, itemId: MAT, specVersionId: specId, quantity: '30 g', received: 1, sampled: [1] });
   expect(r.statusCode, r.body).toBe(200);
   const { id } = r.json() as { id: number };
   expect((await as('sampler2', 'POST', `/api/samples/${id}/check`, {})).statusCode).toBe(200);
@@ -135,7 +135,7 @@ type Detail = { decisionHash: string; approvalProblems: string[]; oot: { key: st
 const detail = async (id: number) => (await as('qcuser', 'GET', `/api/samples/${id}`)).json() as Detail;
 const approve = async (id: number) => as('qcuser', 'POST', `/api/samples/${id}/approve`, { proof: proofFor('qcuser'), contentHash: (await detail(id)).decisionHash });
 const spec = (m: number): SpecDoc => specSchema.parse({
-  header: { of: 'material', itemId: MAT, code: 'RM-081', name: 'Trendolol', type: 'Active substance', number: 'SPEC-RM-081', pharmacopoeia: 'Ph. Int.' },
+  header: { of: 'material', itemId: MAT, code: 'RM-081', name: 'Trendolol', type: 'Active substance', number: 'SPEC-RM-081', pharmacopoeia: 'Ph. Int.', sampling: { plan: 'square root' } },
   tests: [{ key: 'ph', name: 'pH', method: { masterId: m, code: 'M-PH', name: 'pH' }, result: 's0/ph/readingCheck', limitType: 'range', limit: { low: '5.0', high: '7.0', unit: '' } }],
 });
 

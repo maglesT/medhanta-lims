@@ -148,6 +148,11 @@ export function specChecks(doc: SpecDoc, methods: (masterId: number) => { doc: M
   const out: Problem[] = [];
   const error = (path: string, message: string, rule?: string) => out.push({ level: 'error', path, message, ...(rule ? { rule } : {}) });
   if (!doc.tests.length) error('tests', 'The specification has no tests');
+  // LIMS-05: a starting material or a packing material is sampled by an approved plan (US 211.84(b); Schedule M 19.6):
+  // its specification names it (1 + √N or every container, and how).
+  if (doc.header.of === 'material' && SAMPLED_BY_PLAN.includes(doc.header.type) && !doc.header.sampling?.plan) {
+    error('header.sampling', `A ${doc.header.type.toLowerCase()} is sampled by a written plan: choose the sampling plan (1 + √N containers or every container) and say how it is sampled`, 'LIMS-05');
+  }
   doc.tests.forEach((t, i) => {
     const p = `tests[${i}]`;
     if (doc.tests.findIndex((x) => x.key === t.key) !== i) error(p, `The key ${t.key} is used twice`);
@@ -190,6 +195,8 @@ export function specChecks(doc: SpecDoc, methods: (masterId: number) => { doc: M
   return out;
 }
 
+/** LIMS-05: the specification types whose material is sampled by the plan the specification names. */
+export const SAMPLED_BY_PLAN: readonly string[] = ['Raw material', 'Active substance', 'Packing material'];
 /** The specification types of starting materials (LIMS-08): their identity is tested on each container. */
 export const STARTING_MATERIALS: readonly string[] = ['Raw material', 'Active substance'];
 /**

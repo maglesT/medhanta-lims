@@ -43,7 +43,7 @@ async function effective(kind: 'method' | 'spec', doc: object) {
 const phMethod = () => small([{ role: 'Analyst', steps: [{ key: 'ph', block: { id: 'check', version: 1 }, settings: { what: 'pH', unit: '', limit: { spec: 'limit' } } }] }]);
 const waterMethod = () => small([{ role: 'Analyst', steps: [{ key: 'water', block: { id: 'check', version: 1 }, settings: { what: 'Water', unit: '%', limit: { spec: 'limit' } } }] }]);
 const spec = (ph: number, water: number): SpecDoc => specSchema.parse({
-  header: { of: 'material', itemId: MAT, code: 'RM-012', name: 'Examplol', type: 'Active substance', number: 'SPEC-RM-012', pharmacopoeia: 'Ph. Int.' },
+  header: { of: 'material', itemId: MAT, code: 'RM-012', name: 'Examplol', type: 'Active substance', number: 'SPEC-RM-012', pharmacopoeia: 'Ph. Int.', sampling: { plan: 'square root' } },
   tests: [
     { key: 'ph', name: 'pH', method: { masterId: ph, code: 'M', name: 'M' }, result: 's0/ph/readingCheck', limitType: 'release and shelf life',
       limit: { low: '5.0', high: '7.0', unit: '' }, shelfLifeLimit: { low: '4.5', high: '7.5', unit: '' } },
@@ -56,7 +56,7 @@ let methods: { ph: { id: number; masterId: number }; water: { id: number; master
 /** A sample of the spec, typed by hand (MMS is not linked here), checked by a second person; received unless told not. */
 async function sampleOf(specVersionId: number, purpose = 'release', receive = true) {
   const r = await as('sampler', 'POST', '/api/samples', { source: 'mms', lotNumber: `RM-${Math.random().toString(36).slice(2, 8)}`, byHand: true, itemId: MAT,
-    specVersionId, quantity: '50 g', purpose });
+    specVersionId, quantity: '50 g', purpose, received: 1, sampled: [1] });
   expect(r.statusCode, r.body).toBe(200);
   const { id } = r.json() as { id: number };
   expect((await as('sampler2', 'POST', `/api/samples/${id}/check`, {})).statusCode).toBe(200);

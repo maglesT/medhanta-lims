@@ -39,7 +39,7 @@ test('LIMS-30 LIMS-31 reserve and retest journey: QC approval waits for the rese
     header: { of: 'product', itemId: E2E_PRODUCT_ID, code: 'FG-DEM100', name: 'Demolol 100 mg tablets', type: 'Finished product', number: 'SPEC-FG-DEM100-R', pharmacopoeia: 'In-house', reserveQuantity: '60 tablets' },
     tests: [test1] } });
   const rm = await iss.post('/api/masters', { kind: 'spec', doc: {
-    header: { of: 'material', itemId: E2E_RETEST_ID, code: 'RM-031', name: 'Exampline hydrochloride', type: 'Active substance', number: 'SPEC-RM-031', pharmacopoeia: 'Ph. Int.' },
+    header: { of: 'material', itemId: E2E_RETEST_ID, code: 'RM-031', name: 'Exampline hydrochloride', type: 'Active substance', number: 'SPEC-RM-031', pharmacopoeia: 'Ph. Int.', sampling: { plan: 'square root' } },
     tests: [test1] } });
   const owner = connect(TEST_DATABASE_URL, { searchPath: E2E_SCHEMA });
   for (const s of ['in_review', 'approved', 'effective']) await owner`update master_versions set state = ${s} where id in (${m.id}, ${fg.id}, ${rm.id})`;

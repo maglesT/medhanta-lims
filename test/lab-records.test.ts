@@ -4,7 +4,7 @@ import type { Content, TDocumentDefinitions } from 'pdfmake/interfaces.js';
 import { call, freshApp, login, proofFor, seedUser, validatedOutside, type TestApp } from './helpers.js';
 import { small } from './engine-fixture.js';
 import { approvalProblems, type TestState } from '../shared/engine/sample.js';
-import { identityContainers, sampledProblem, samplingPlan, specSchema, testsForAnalysis, type SpecDoc } from '../shared/master/spec.js';
+import { identityContainers, sampledProblem, samplingPlan, specChecks, specSchema, testsForAnalysis, type SpecDoc } from '../shared/master/spec.js';
 import { outsideCheckRefusal, outsideEntryRefusal, outsideFigure } from '../shared/engine/outside.js';
 import { formRefusal, formState } from '../shared/engine/forms.js';
 import { blankFormDoc, labelsDoc } from '../server/labels.js';
@@ -90,6 +90,18 @@ describe('the rules', () => {
     expect(sampledProblem([1, 5, 9], 6, 20)).toBe('The plan samples 6 of 20 containers: give 6 container numbers (3 given).');
     expect(sampledProblem([1, 1, 9, 13, 17, 20], 6, 20)).toBe('A container number is given twice.');
     expect(sampledProblem([1, 5, 9, 13, 17, 21], 6, 20)).toBe('Container numbers are 1 to 20, the containers received.');
+  });
+
+  it('LIMS-05 a starting material\'s or packing material\'s specification is not reviewed or approved without its sampling plan', () => {
+    const plan = (type: string, sampling?: object, of: 'material' | 'product' = 'material') => specChecks(specSchema.parse({ ...specOf(type, false),
+      header: { ...specOf(type, false).header, of, ...(sampling ? { sampling } : {}) } }), () => null).filter((p) => p.path === 'header.sampling');
+    for (const type of ['Raw material', 'Active substance', 'Packing material']) {
+      expect(plan(type)).toEqual([{ level: 'error', path: 'header.sampling', rule: 'LIMS-05',
+        message: `A ${type.toLowerCase()} is sampled by a written plan: choose the sampling plan (1 + √N containers or every container) and say how it is sampled` }]);
+      expect(plan(type, { plan: 'square root' })).toEqual([]);
+    }
+    expect(plan('Finished product', undefined, 'product')).toEqual([]);
+    expect(plan('Intermediate')).toEqual([]);
   });
 
   it('LIMS-09 no supplier certificate replaces a test: a specification has no reduced-testing option, and every test that applies needs its own reviewed result', () => {
@@ -211,7 +223,7 @@ const planSpec = () => specSchema.parse({
   tests: [{ key: 'ph', name: 'pH', method: { masterId: ph.masterId, code: 'PH', name: 'PH method' }, result: 's0/ph/readingCheck', limitType: 'range', limit: { low: '5.0', high: '7.0', unit: '' } }],
 });
 const spec = () => specSchema.parse({
-  header: { of: 'material', itemId: MAT, code: 'RM-080', name: 'Demolactose', type: 'Raw material', number: 'SPEC-RM-080', pharmacopoeia: 'Ph. Int.' },
+  header: { of: 'material', itemId: MAT, code: 'RM-080', name: 'Demolactose', type: 'Raw material', number: 'SPEC-RM-080', pharmacopoeia: 'Ph. Int.', sampling: { plan: 'square root' } },
   tests: [
     { key: 'ph', name: 'pH', method: { masterId: ph.masterId, code: 'PH', name: 'PH method' }, result: 's0/ph/readingCheck', limitType: 'range', limit: { low: '5.0', high: '7.0', unit: '' } },
     { key: 'id', name: 'Identity (IR)', method: { masterId: ir.masterId, code: 'IR', name: 'IR method' }, result: 's0/ph/readingCheck', limitType: 'range', limit: { low: '5.0', high: '7.0', unit: '' }, identity: true },

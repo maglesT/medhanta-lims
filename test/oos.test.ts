@@ -143,7 +143,7 @@ async function effective(kind: 'method' | 'spec', doc: object) {
 }
 const phMethod = () => small([{ role: 'Analyst', steps: [{ key: 'ph', block: { id: 'check', version: 1 }, settings: { what: 'pH', unit: '', limit: { spec: 'limit' } } }] }]);
 const spec = (m: number): SpecDoc => specSchema.parse({
-  header: { of: 'material', itemId: MAT, code: 'RM-040', name: 'Demoxine', type: 'Active substance', number: 'SPEC-RM-040', pharmacopoeia: 'Ph. Int.' },
+  header: { of: 'material', itemId: MAT, code: 'RM-040', name: 'Demoxine', type: 'Active substance', number: 'SPEC-RM-040', pharmacopoeia: 'Ph. Int.', sampling: { plan: 'square root' } },
   tests: [{ key: 'ph', name: 'pH', method: { masterId: m, code: 'M', name: 'M' }, result: 's0/ph/readingCheck', limitType: 'range', limit: { low: '5.0', high: '7.0', unit: '' },
     trendLimit: { low: '5.5', high: '6.5', unit: '' } }],
 });
@@ -152,7 +152,7 @@ let specId = 0;
 
 async function sampleOf() {
   const r = await as('sampler', 'POST', '/api/samples', { source: 'mms', lotNumber: `RM-${Math.random().toString(36).slice(2, 8)}`, byHand: true, itemId: MAT,
-    specVersionId: specId, quantity: '30 g', purpose: 'release' });
+    specVersionId: specId, quantity: '30 g', purpose: 'release', received: 1, sampled: [1] });
   expect(r.statusCode, r.body).toBe(200);
   const { id } = r.json() as { id: number };
   expect((await as('sampler2', 'POST', `/api/samples/${id}/check`, {})).statusCode).toBe(200);
