@@ -916,7 +916,8 @@ describe('L19 Sampling plan size', () => {
     ['parenteral', '600', 12], // 2 % = 12, less than 20
     ['parenteral', '2000', 20], // 2 % = 40 → 20
     ['parenteral', '3', 3], // 4 needed, only 3: all
-    ['large-volume parenteral', '300', 6], // 2 % = 6
+    ['large-volume parenteral', '300', 10], // more than 100, not more than 500: 10, as other parenterals (the cap of 10 is only above 500)
+    ['large-volume parenteral', '50', 5], // 10 % = 5, at least 4
     ['large-volume parenteral', '1000', 10], // 2 % = 20 → 10
     ['antibiotic solid, bulk package under 5 g', '500', 20],
     ['antibiotic solid, bulk package 5 g or more', '500', 6],

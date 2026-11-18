@@ -1395,7 +1395,10 @@ export function l19SamplingPlan(i: L19Input): Outcome<{ readonly tests?: number;
             else { n = Math.min(pctUp(2), 20); rule = 'more than 500: 2 % or 20, whichever is less'; }
             break;
           case 'large-volume parenteral':
-            n = Math.min(pctUp(2), 10); rule = 'large-volume parenterals: 2 % or 10, whichever is less';
+            // As other parenterals; only the band above 500 containers is capped at 10 (Ph.Int 3.2 Table 3).
+            if (N <= 100) { n = Math.max(pctUp(10), 4); rule = 'not more than 100: 10 % or 4, whichever is greater'; }
+            else if (N <= 500) { n = 10; rule = 'more than 100, not more than 500: 10'; }
+            else { n = Math.min(pctUp(2), 10); rule = 'large-volume parenterals, more than 500: 2 % or 10, whichever is less'; }
             break;
           case 'antibiotic solid, bulk package under 5 g':
             n = 20; rule = 'antibiotic solids, pharmacy bulk packages under 5 g: 20';
