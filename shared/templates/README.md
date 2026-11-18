@@ -306,3 +306,63 @@ fraction, never a mass fraction); aliases g/100 mL (= % w/v) and g/100 g (= % w/
   (greater). Percentages rounded up to whole containers; never more than the batch. Table 2: liquids < 1 mL whole,
   1-40 mL half (NLT 1 mL), 40-100 mL 20 mL, > 100 mL 10 % (NLT 20 mL), antibiotic liquids 1 mL; solids < 50 mg whole,
   50-300 mg half (NLT 50 mg), 300 mg-5 g 150 mg, > 5 g 500 mg; insoluble preparations, creams, ointments 200 mg.
+
+## Lab templates, stability (`lab-stability.ts`: L15, L22-L25; build step 6)
+
+Plan 2.6 and 2b, library L15 (3b, 8b). Same rules as every template: text inputs with units, exact decimals, plain
+refusals. The Student t critical values and the F-test p-values come from the L14 functions in `lab-physchem.ts`.
+Tests: `test/templates/lab-stability.test.ts` (each worked figure checked by an independent float calculation).
+
+New units: **months** (kind "calendar time": a stability time point; never converted to days or seconds, a month has
+no fixed length; aliases month, mo); **kJ/mol, J/mol** (molar energy: ΔH for MKT).
+
+| ID | Name | Inputs | Output | Refusals |
+|---|---|---|---|---|
+| L15 | ICH Q1E shelf life | `batches` (name, points: time in months, value with unit); `criterion` lower / upper / both; `transform` none or log; `confidence` (95); `poolingLevel` (0.25); `separateMse` each batch / all batches; `extrapolation` (storage room temperature / refrigerated / frozen; significant change at accelerated, at intermediate; little or no change vs change or variability; statistics performed / not amenable; `longTerm` X) | `estimate` (months, full precision; Infinity when the bound never meets the criterion), `model` (single batch, pooled, common slope, separate), per-batch `batches` (slope, intercept, residual SD), `slopesP`, `interceptsP`, `lines` (each bound line: intercept, slope, s, df, t, side, `meets`), `limiting`; with the tree `branch`, `longTerm`, `cap`, `proposed`. Value = `proposed` when the tree is given, else the estimate | fewer than 3 time points in a batch; no criterion, lower ≥ upper, a criterion of another kind; results exactly on lines (no scatter); a batch on an exact line with its own SD; log with a value ≤ 0; a time not in months; X shorter than the data; tree answers missing |
+| L22 | Prediction interval (OOT) | `batch` (earlier results of the batch), `result` (time, value), `historical` batches (optional), `transform`, `confidence` | value = the result; `batchInterval`, `historicalInterval` (low, high, predicted, within); `oot` | fewer than 3 earlier time points and no history; no scatter; a value of another kind |
+| L23 | Mean kinetic temperature | `readings` (°C, K or °F), optional `times` (equal intervals checked), `deltaH` (83.144 kJ/mol), `limit` | MKT in °C; `kelvin`, `mean`, `highest`; `check` | fewer than 2 readings; not a temperature; ≤ 0 K; unequal or not rising times; ΔH not a molar energy or ≤ 0 |
+| L24 | Arrhenius advisory shelf life | `points` (temperature, optional %RH, `rate` such as "0.12 %/day" or `timeToLimit`), `allowedChange`, `storage` (temperature, %RH) | months to the allowed change at storage; `ea` (kJ/mol), `b` (per %RH), `lnA`, `rateAtStorage` (per month), `r2`, `advisory: true`; `shown` starts "advisory: for development decisions, not for the label (the label shelf life is ICH Q1E)" | fewer than 3 temperatures; humidity on some points only, without the storage humidity, one humidity only, fewer than 4 conditions with humidity; temperature and humidity varying together; rate ≤ 0; rate and time both or neither; a rate unit other than the allowed change's; rates not rising with temperature (Ea ≤ 0) |
+| L25 | ICH Q1D design check | `design` full / bracketing / matrixing / bracketing and matrixing; `factors` (strength, container size, fill, pack: levels with quantity and tested; formulation; same closure system; justification); `condition`; `timePoints`; `schedule` (batch, levels, times); `reduction` ("1/2", "1/3"); `fullDataBeforeApproval`; `submissionTime` (12); `variability`; `statisticallyJustified` | `pass`, `problems` (plain reasons), `notes`; value = number of problems | malformed inputs only (no factors for bracketing, a level without its quantity, no schedule for matrixing, a time not in the protocol, an unknown factor or level, a reduction not a fraction, a combination twice) |
+
+### Rules in these templates (paraphrased; no guideline text copied)
+
+- **L15 regression and bound:** least squares per batch on time in months (or ln value). The bound is that of the
+  MEAN line: ŷ(t) ∓ t × s × √(1/n + (t − x̄)² ÷ Sxx), one-sided at 95 % for one criterion, two-sided (α/2 each side)
+  for two; the time it meets the criterion is solved exactly (a quadratic), not read off a grid; 0 when already
+  outside at month 0.
+- **L15 poolability:** ANCOVA at 0.25: slopes first, F = ((SSE common slope − SSE separate) ÷ (k − 1)) ÷ MSE separate;
+  then intercepts, F = ((SSE one line − SSE common slope) ÷ (k − 1)) ÷ MSE separate (the full model's MSE for both
+  tests, as the sequential sums of squares of the usual statistical packages). Common slope: each batch its own
+  intercept, the common slope's residual SD (df N − k − 1), the earliest batch. Separate: the shortest batch, each
+  with its own residual SD (or, by choice, the separate model's pooled MSE, df N − 2k).
+- **L15 extrapolation (Q1E Appendix A):** room temperature, no significant change at accelerated: up to 2X, not
+  more than X + 12 months (little change, or statistics performed); 1.5X, not more than X + 6 (not amenable to
+  statistics). Significant change at accelerated: none at intermediate: 1.5X, not more than X + 6 (statistics) or
+  X + 3 (not amenable); significant change at intermediate: no extrapolation. Refrigerated: no significant change at
+  accelerated: 1.5X, not more than X + 6 (little change or statistics) or X + 3 (not amenable); significant change at
+  accelerated: no extrapolation. Frozen: no extrapolation. The proposed shelf life is never beyond the statistical
+  estimate, and is rounded down to whole months.
+- **L22:** prediction interval of one new result ŷ(t) ± t(1 − α/2; n − 2) × s × √(1 + 1/n + (t − x̄)² ÷ Sxx); the
+  historical batches are pooled into one line (batch-to-batch spread counts in s).
+- **L23:** USP R = 8.3144 J/(mol·K), so the default ΔH ÷ R is exactly 10 000 K; kelvin = °C + 273.15.
+- **L24:** R = 8.31446261815324 J/(mol·K) (SI). Rates in days or weeks become per month at 365.25 ÷ 12 days per month.
+  Zero-order in the attribute: time = allowed change ÷ k. No confidence interval: advisory only.
+- **L25:** bracketing: untested levels must lie between tested extremes (by the stated quantity); strengths with
+  identical or closely related formulations; container size or fill with the same closure system, not both bracketed
+  at once; packs with the stated reason for their extremes. Matrixing: every combination at the initial and final
+  time points and at the last time point before submission (12 months unless full data come before approval); long
+  term at least three points including the initial within 12 months, accelerated and intermediate at least three
+  including initial and final; intermediate tests = (1 − reduction) × combinations × intermediate time points
+  exactly; balanced within one test; each intermediate time point tested by some combination; not with large
+  variability; moderate variability needs a statistical justification. Full design: every time point.
+
+Decisions taken while building:
+
+- **Q1E multi-factor ANCOVA** (several strengths or packs as factors, with 0.25 for batch terms and 0.05 for the
+  others; library 8b) is not in L15: batches are the only grouping. A product with several strengths is evaluated per
+  strength (or the batches of all strengths given as batches).
+- **Q1E significant change** (Q1A definition) is an input judgement here (accelerated, intermediate), as is "little or
+  no change and variability"; the template applies the tree, it does not decide them from data.
+- **L25** checks a matrix on the time points; a matrix on factors (some batch × strength × pack combinations never
+  placed) is accepted as long as every tested level is scheduled; its statistical justification is the
+  `variability` answer.

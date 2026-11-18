@@ -16,7 +16,7 @@ export type Kind =
   | 'mass rate' | 'volume rate' | 'count rate' | 'current' | 'power' | 'specific energy'
   | 'relative humidity' | 'absolute humidity' | 'absolute humidity per volume' | 'log' | 'frequency' | 'rpm per Hz' | 'charge'
   | 'IU' | 'CFU' | 'activity units' | 'IU per mass' | 'CFU per mass' | 'activity units per mass' | 'mass per IU'
-  | 'absorbance';
+  | 'absorbance' | 'calendar time' | 'molar energy';
 
 export interface Unit {
   readonly symbol: string;
@@ -86,6 +86,9 @@ const TABLE: [string, Kind, Dec | string, string?][] = [
   ['U/g', 'activity units per mass', '1'], ['U/mg', 'activity units per mass', '1000'],
   ['mg/IU', 'mass per IU', '1'],
   ['AU', 'absorbance', '1'], ['mAU', 'absorbance', '0.001'], // absorbance readings (L1); a peak area is a plain number
+  // Stability (L15, L22, L24): a stability time point in calendar months, never converted to days or seconds (a
+  // month has no fixed length); an activation enthalpy (MKT, Arrhenius).
+  ['months', 'calendar time', '1'], ['kJ/mol', 'molar energy', '1'], ['J/mol', 'molar energy', '0.001'],
 ];
 
 /** Other spellings people type. */
@@ -95,6 +98,7 @@ const ALIASES: Record<string, string> = {
   '% w/w': '%w/w', '% w/v': '%w/v', '% RH': '%RH', RH: '%RH', cfu: 'CFU', 'cfu/g': 'CFU/g', 'cfu/mg': 'CFU/mg',
   M: 'mol/L', mM: 'mmol/L', 'g/100 mL': '%w/v', 'g/100mL': '%w/v', 'g/100 g': '%w/w', 'g/100g': '%w/w', 'uS/cm': 'µS/cm', 'μS/cm': 'µS/cm', '% v/v': '%v/v', 'ug/min': 'µg/min', 'mcg/min': 'µg/min', 'ug/cm2': 'µg/cm²', 'µg/cm2': 'µg/cm²',
   'kg/cm²': 'kgf/cm²', 'N/mm2': 'N/mm²', 'g/m3': 'g/m³', 'ft³/min': 'cfm', 'ft3/min': 'cfm', meq: 'mEq', mEQ: 'mEq', 'US gallon': 'US gal', 'imperial gallon': 'imp gal', 'kg/cm2': 'kgf/cm²', 'g/cm3': 'g/cm³', 'm3/h': 'm³/h', tablet: 'tablets', unit: 'units', pack: 'packs', no: 'nos', 'nos.': 'nos',
+  month: 'months', mo: 'months', 'kJ mol-1': 'kJ/mol',
   'ug/mL': 'µg/mL', 'mcg/mL': 'µg/mL', 'μg/mL': 'µg/mL', 'µg/g': 'ppm', 'ug/g': 'ppm', 'mcg/g': 'ppm', 'μg/g': 'ppm', // 1 µg/g = 1 ppm
 };
 

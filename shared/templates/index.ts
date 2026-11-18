@@ -22,3 +22,7 @@ export {
   tQuantile, fQuantile, chi2Quantile,
 } from './lab-physchem.js';
 export { l21DilutionFactor, type L21Input } from './lab-dilution.js';
+export {
+  l15ShelfLife, l22PredictionInterval, l23Mkt, l24Arrhenius, l25DesignCheck, monthsOf, fUpperP,
+  type L15Input, type L15Extrapolation, type L22Input, type L23Input, type L24Input, type L25Input, type StabilityBatch, type StabilityPoint,
+} from './lab-stability.js';
