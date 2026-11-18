@@ -1,3 +1,5 @@
+import { reserveShortfall, type ReserveNeed } from './reserve.js';
+
 /**
  * A sample (LIMS-05, LIMS-07), the Logbook way: a row (what, which lot or batch, which specification version, how much)
  * and insert-only entries. Its status is computed from the entries here, never stored. A sample registered by hand
@@ -100,9 +102,11 @@ export const ootAnswer = (events: readonly SampleEvent[], test: string, analysis
  * a reviewed result for every test that applies (LIMS-11; an invalidated analysis no longer counts, LIMS-24), every
  * result within its limit (an out-of-limit result is investigated, LIMS-23: the sample cannot be approved), no OOS of the
  * sample open and none confirmed (then only rejection is left), every out-of-trend flag answered (LIMS-25), no open
- * deviation in those analyses, and an approver who did no part of them (LIMS-41).
+ * deviation in those analyses, an approver who did no part of them (LIMS-41), and for a release sample whose specification
+ * names a reserve quantity, its lot's reserve sample logged at least at that quantity (LIMS-30; reserve: the caller
+ * passes it for release samples only).
  */
-export function approvalProblems(s: SampleFacts, events: readonly SampleEvent[], tests: readonly TestState[], person: number, oos: readonly SampleOos[] = []): string[] {
+export function approvalProblems(s: SampleFacts, events: readonly SampleEvent[], tests: readonly TestState[], person: number, oos: readonly SampleOos[] = [], reserve?: ReserveNeed): string[] {
   const d = sampleDecision(events);
   if (d) return [`The sample is already ${d}.`];
   const status = sampleStatus(s, events);
@@ -121,6 +125,8 @@ export function approvalProblems(s: SampleFacts, events: readonly SampleEvent[],
     if (r.openDeviations) out.push(`${t.name}: analysis ${r.analysisNo} has ${r.openDeviations} open deviation${r.openDeviations === 1 ? '' : 's'}.`);
     if (r.people.includes(person)) out.push(`${t.name}: you worked on analysis ${r.analysisNo}; another person approves the sample.`);
   }
+  const short = reserve ? reserveShortfall(reserve) : null;
+  if (short) out.push(short);
   return out;
 }
 

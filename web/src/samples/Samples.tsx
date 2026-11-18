@@ -9,6 +9,8 @@ import { plantText } from '../../../shared/plant-time.js';
 import { PURPOSE_LABEL, STATUS_CHIP, STATUS_LABEL, listSamples, sampleRequests, type From, type Requests, type SampleListRow, type SampleRequest } from './api-samples.js';
 import { RegisterDialog } from './RegisterDialog.js';
 import { SampleScreen } from './SampleScreen.js';
+import { ReserveList, ReserveScreen, RetestDueList } from './Reserve.js';
+import type { SamplePurpose } from '../../../shared/engine/sample.js';
 import '../designer/designer.css';
 import '../floor/floor.css';
 import './samples.css';
@@ -24,6 +26,9 @@ export function Samples({ me }: { me: Me }) {
   const [error, setError] = useState('');
   const [open, setOpen] = useState<number | null>(null);
   const [registering, setRegistering] = useState<SampleRequest | { hand: From } | null>(null);
+  // LIMS-30, LIMS-31: a reserve sample opened; the purpose of the sample being registered (a retest from the retest-due list).
+  const [reserve, setReserve] = useState<number | null>(null);
+  const [purpose, setPurpose] = useState<SamplePurpose>('release');
   const [q, setQ] = useState('');
   const load = () => {
     listSamples().then(setRows, (e) => setError(plainError(e)));
@@ -31,7 +36,8 @@ export function Samples({ me }: { me: Me }) {
   };
   useEffect(load, [sampler]);
 
-  if (open !== null) return <SampleScreen me={me} id={open} onBack={() => { setOpen(null); load(); }} />;
+  if (reserve !== null) return <ReserveScreen id={reserve} onBack={() => { setReserve(null); load(); }} />;
+  if (open !== null) return <SampleScreen me={me} id={open} onBack={() => { setOpen(null); load(); }} onOpenReserve={(r) => { setOpen(null); setReserve(r); }} />;
   const words = q.toLowerCase().split(/\s+/).filter(Boolean);
   const shown = (rows ?? []).filter((r) => words.every((w) => `${r.sampleNo} ${r.item.code} ${r.item.name} ${r.lotNo} ${r.purpose} ${r.status} ${r.registeredByName}`.toLowerCase().includes(w)));
   const waiting = (req?.requests ?? []).filter((r) => !r.sampleNo);
@@ -53,7 +59,7 @@ export function Samples({ me }: { me: Me }) {
               {(['mms', 'truebatch'] as const).map((f) => (
                 <li key={f} className={req.links[f] === 'ok' ? 'ok' : 'off'}>
                   {linkWords(f, req.links[f])}
-                  {req.links[f] !== 'ok' && <button className="link dark" onClick={() => setRegistering({ hand: f })}>Register by hand</button>}
+                  {req.links[f] !== 'ok' && <button className="link dark" onClick={() => { setPurpose('release'); setRegistering({ hand: f }); }}>Register by hand</button>}
                 </li>
               ))}
             </ul>
@@ -68,7 +74,7 @@ export function Samples({ me }: { me: Me }) {
                         <td><b>{r.code}</b><span className="cell-sub">{r.name ?? ''}</span></td>
                         <td>{PROVIDER_NAME[r.source]}<span className="cell-sub">{plantText(r.shown)}</span></td>
                         <td>{r.specs.length ? r.specs.map((s) => <span key={s.id} className="cell-line">{s.number}, version {s.versionNo}</span>) : <span className="chip chip-warn">{r.noSpec}</span>}</td>
-                        <td><button className="primary" disabled={!r.specs.length} onClick={() => setRegistering(r)} aria-label={`Register ${r.lotNo}`}>Register</button></td>
+                        <td><button className="primary" disabled={!r.specs.length} onClick={() => { setPurpose('release'); setRegistering(r); }} aria-label={`Register ${r.lotNo}`}>Register</button></td>
                       </tr>
                     ))}
                   </tbody>
@@ -79,6 +85,7 @@ export function Samples({ me }: { me: Me }) {
           </>)}
         </section>
       )}
+      {sampler && <RetestDueList onOpenSample={setOpen} onRegister={(r) => { setPurpose('retest'); setRegistering(r); }} />}
       <h2>Samples</h2>
       <input className="search" placeholder="Search by sample, item, lot, purpose, status or person" aria-label="Search samples" value={q} onChange={(e) => setQ(e.target.value)} />
       {rows === null ? <div className="skel skel-block" /> : !rows.length ? (
@@ -102,7 +109,8 @@ export function Samples({ me }: { me: Me }) {
           </table>
         </div>
       )}
-      {registering && <RegisterDialog from={registering} onCancel={() => setRegistering(null)} onDone={(id) => { setRegistering(null); setOpen(id); }} />}
+      <ReserveList onOpen={setReserve} />
+      {registering && <RegisterDialog from={registering} purpose={purpose} onCancel={() => setRegistering(null)} onDone={(id) => { setRegistering(null); setOpen(id); }} />}
     </>
   );
 }

@@ -390,3 +390,37 @@ is; it cannot be typed over, the review lists it and the PDF prints it. The pars
 - Not in this round: a direct CDS connection (later, plan question 3), UV spectrophotometer capture, the run id read
   from the file onto the instrument run step.
 
+
+## Step 6: reserve samples and retest of stored materials (build step 6, 18 Nov 2026)
+Plan 2.2 and question 5 (LIMS-30, LIMS-31). The Logbook model again: a row, insert-only entries, a status computed by
+a pure function (`shared/engine/reserve.ts`), tested. No new permission: the sampler (`lims.sample.register`) logs and
+records; a second sampler checks.
+- **Required quantity.** The specification's header has an optional `reserveQuantity` ("60 tablets": at least twice the
+  quantity for all its tests except sterility and pyrogen, US 211.170(a)), set in the specification editor. When it is
+  set, QC approval of a **release** sample is refused until a reserve sample of its lot or batch is logged with at least
+  that quantity, in that unit, not destroyed (`approvalProblems`, via `reserveShortfall`; "shall": US 211.170, EU Annex
+  19; owner, question 5). When it is not set, the decision says "the specification names no reserve quantity: the
+  reserve sample is not checked at approval". Retest, stability and investigation samples need none.
+- **Reserve sample** (`reserve_samples`, migration 0014): one per lot or batch, logged from its release sample (the
+  sample's item, lot and specification version), on the sample screen ("Log the reserve sample"): the quantity kept
+  (refused below the required quantity or in another unit), the storage location, and how long it is kept. That date is
+  **typed and checked, not computed from data LIMS does not hold**: the rule is picked (1 year after the expiry date;
+  3 years after the batch is completely distributed, for an API with a retest date, Q7 11.71; 2 years after release,
+  other starting materials, India), the date it counts from is typed, and the kept-until date must be on or after that
+  date plus the rule's years (shown in the dialog as it is typed).
+- **Entries** (`reserve_sample_events`, insert-only): the yearly visual inspection (no deterioration, or deterioration
+  with what was seen), a withdrawal (quantity in the reserve's unit, at most what is left, with its reason), the
+  destruction (with its reason; refused before the kept-until date), a second person's check of a withdrawal or the
+  destruction (not by the person who recorded it; nothing else is withdrawn or destroyed while one waits), a note.
+- **Status**: destroyed, else below the required quantity (after withdrawals), else visual inspection overdue (a year
+  after the last inspection, or after logging), else kept; with every point in words (a check waiting, a deterioration
+  seen, the kept-until date passed). Shown on the sample screen's "Reserve sample" panel, the reserve sample screen
+  (facts, status, entries, next entries) and the "Reserve samples" section of the Samples screen.
+- **Retest due (LIMS-31).** The Samples screen lists MMS's released (or approved) material lots whose retest date is
+  past or within 30, 60 or 90 days, read live through the MMS link (`lot_v1.retest_date`; nothing copied), each with its
+  effective specification, its retest sample waiting for QC (a link) or "Register the retest sample", and its last
+  decided one. The lots past their date with no retest sample are named at the top. Registering uses the normal
+  registration (purpose `retest`, the effective specification, pulled from MMS): a retest sample is only of a released
+  lot (or one still waiting to be sampled), and one at a time per lot until QC decides on it. Its decision is published as any sample's (`coa_v1`,
+  `result_v1`); MMS owns the lot's status and moves its retest date. MMS absent or down: the list says so and the retest
+  sample is registered by hand (second-person check), as any sample.

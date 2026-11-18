@@ -5,7 +5,7 @@ import { migrate } from '../db/migrate.js';
 import { buildApp } from '../server/app.js';
 import globalSetup from '../test/global-setup.js';
 import { TEST_DATABASE_URL, TEST_PROOF_KEY, fakeMaster, fakeSignOn, seedUser } from '../test/helpers.js';
-import { E2E_MATERIAL_ID, E2E_MMS, E2E_PORT, E2E_QUAL, E2E_RECRUITMENT, E2E_SCHEMA, USERS } from './config.js';
+import { E2E_MATERIAL_ID, E2E_RETEST_ID, E2E_MMS, E2E_PORT, E2E_QUAL, E2E_RECRUITMENT, E2E_SCHEMA, USERS } from './config.js';
 import { links } from '../server/links.js';
 import { seedMasterData } from './master-data.js';
 
@@ -41,6 +41,9 @@ await rc.unsafe(`drop schema if exists ${E2E_MMS} cascade; create schema ${E2E_M
     tested_at timestamptz, read_at timestamptz default now(), data_as_of timestamptz default now());
   insert into ${E2E_MMS}.lot_v1 (lot_number, kind, material_master_id, material_code, status, expiry_date, stock, unit) values
     ('RM-E1', 'material', '${E2E_MATERIAL_ID}', 'RM-012', 'quarantine', '2029-10-31', 250, 'kg');
+  -- The retest journey (LIMS-31): a released lot of RM-031 past its retest date.
+  insert into ${E2E_MMS}.lot_v1 (lot_number, kind, material_master_id, material_code, status, expiry_date, retest_date, stock, unit) values
+    ('RM-R1', 'material', '${E2E_RETEST_ID}', 'RM-031', 'released', '2030-06-30', '2026-01-31', 80, 'kg');
   grant usage on schema ${E2E_MMS} to lims_app; grant select on all tables in schema ${E2E_MMS} to lims_app;`);
 // Qualification's qualification_v1 (LIMS-12): the lab instruments qualified, BAL-02 due for requalification.
 await rc.unsafe(`drop schema if exists ${E2E_QUAL} cascade; create schema ${E2E_QUAL};

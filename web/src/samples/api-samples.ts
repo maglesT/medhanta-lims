@@ -2,6 +2,7 @@
 import { api } from '../api.js';
 import type { LinkState, SampleAction, SamplePurpose, SampleStatus, Source } from '../../../shared/engine/index.js';
 import type { SpecDoc, SpecTest } from '../../../shared/master/spec.js';
+import type { ReserveState } from '../../../shared/engine/reserve.js';
 
 export type From = 'mms' | 'truebatch';
 export interface SpecChoice { id: number; masterId: number; versionNo: number; number: string; type: string; market: string | null }
@@ -32,6 +33,9 @@ export interface SampleDetail {
   // LIMS-23, LIMS-25: the sample's OOS, and the tests whose reviewed result is out of trend with QC's answer.
   oos: { id: number; oosNo: string; testName: string; testKey: string; analysisNo: string; status: 'open' | 'confirmed' | 'invalidated'; detail: string }[];
   oot: { key: string; name: string; analysisNo: string; shown: string; trend: string; answer: SampleEntry | null }[]; ootRefusal: string | null;
+  // LIMS-30: a release sample's reserve sample (null: none logged), the specification's reserve quantity, and the decision's word when it names none.
+  reserve: { id: number; amount: string; unit: string; location: string; keptUntil: string; state: ReserveState } | null;
+  reserveRequired: string | null; reserveNote: string | null;
 }
 // A spec test's analysis: its status and, once worked out, its result (pass or fail against the test's limit).
 export interface TestResult { analysisId: number; analysisNo: string; status: string; result: { shown: string; value: string; unit: string; pass?: boolean } | null }

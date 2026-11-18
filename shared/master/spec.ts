@@ -58,6 +58,10 @@ export const specHeaderSchema = z.object({
   // IP, BP, Ph. Eur., USP, Ph. Int. or In-house, and its edition.
   pharmacopoeia: text(60).min(1),
   edition: text(60).optional(),
+  // LIMS-30: the reserve (retention) sample to keep of each lot or batch, with its unit ("60 tablets"): at least twice the
+  // quantity needed for all the tests except sterility and pyrogen (US 211.170(a)). QC approval of a release sample waits
+  // for a reserve sample of its lot logged at least at this quantity; blank: none is checked (the decision says so).
+  reserveQuantity: text(60).regex(/^\d+(\.\d+)?\s*\S.*$/, 'give the quantity with its unit, e.g. 60 tablets').optional(),
 }).strict();
 
 export const specSchema = z.object({

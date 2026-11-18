@@ -158,6 +158,11 @@ export const mmsClient = (l: Link) => ({
     select ${q.unsafe(LOT_COLS)} from ${v('lot_v1')} where kind = 'material' and material_master_id::text = ${materialId} and status = any(${LOT_USABLE})
       and (expiry_date is null or expiry_date >= ${today}::date) and (retest_date is null or retest_date >= ${today}::date)
     order by expiry_date nulls last, lot_number limit 100`).map((r) => lotOf(r))),
+  // LIMS-31: the released lots whose retest date is on or before this date (due soon, or past), for the retest-due list.
+  retestDue: (until: string) => l.read(async (q, v) => (await q<(LotRow & { stock: string | null; unit: string | null })[]>`
+    select ${q.unsafe(LOT_COLS)}, to_jsonb(l) ->> 'stock' as stock, to_jsonb(l) ->> 'unit' as unit from ${v('lot_v1')} l
+    where kind = 'material' and status = any(${LOT_USABLE}) and retest_date is not null and retest_date <= ${until}::date
+    order by retest_date, lot_number limit 500`).map((r) => ({ ...lotOf(r), stock: r.stock, unit: r.unit }))),
 });
 
 // ---- Recruitment: report.training_v1 (published, owner 17 Nov 2026), one row per person and skill; qualified is already

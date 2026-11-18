@@ -4,11 +4,12 @@ import type { Sql, Tx } from '../db.js';
 import { audit } from '../audit.js';
 import { parseId, requirePermission } from '../auth.js';
 import { usableItem } from '../master.js';
-import { LOT_WAITING, batchWaiting, type BatchRead, type LotRead } from '../links.js';
+import { LOT_USABLE, LOT_WAITING, batchWaiting, type BatchRead, type LotRead } from '../links.js';
 import { SignError, authenticateSigner, contentHash, sign, signBody } from '../signatures.js';
 import { limitText, limitWords, outOfTrend, purposeLimits, type SpecDoc } from '../../shared/master/spec.js';
 import { OOT_ANSWERS, approvalProblems, ootRefusal, rejectionRefusal, sampleDecision, type TestState } from '../../shared/engine/sample.js';
 import { oosOfSample } from './oos.js';
+import { loadReserves, openRetestSample, reserveNeed } from './reserve.js';
 import { coaDoc } from '../coa.js';
 import { render, sendPdf } from '../pdf.js';
 import { sampleTestResults, type TestResult } from './analyses.js';
@@ -17,6 +18,7 @@ import {
   type LinkState, type SampleAction, type SampleEvent, type SamplePurpose, type Source,
 } from '../../shared/engine/index.js';
 import { plantDate } from '../../shared/plant-time.js';
+import { plantToday } from './inventory.js';
 
 // Samples (LIMS-05, LIMS-07): registered from an MMS lot or a TrueBatch batch waiting to be sampled (pull, don't type),
 // or by hand while that link is absent or down (then checked by a second person, LIMS-50); then received, stored or
@@ -41,7 +43,7 @@ class SampleError extends Error {
 }
 
 /** The effective specifications of a material (by its master-data id) or a product (by its code) (LIMS-01). */
-async function effectiveSpecs(q: Sql | Tx, of: Of, key: string) {
+export async function effectiveSpecs(q: Sql | Tx, of: Of, key: string) {
   return q<{ id: number; masterId: number; versionNo: number; header: SpecDoc['header'] }[]>`
     select id::int, master_id::int as "masterId", version_no as "versionNo", doc->'header' as header from master_versions
     where kind = 'spec' and state = 'effective' and doc->'header'->>'of' = ${of}
@@ -57,7 +59,7 @@ async function releaseSample(q: Sql | Tx, of: Of, lotNo: string) {
   return r?.sampleNo ?? null;
 }
 
-const lotShown = (l: LotRead) => `MMS lot ${l.lotNumber}: ${l.materialCode ?? '—'}, ${l.status.replaceAll('_', ' ')}, expiry ${l.expiryDate ? plantDate(l.expiryDate) : '—'}, retest ${l.retestDate ? plantDate(l.retestDate) : '—'}${l.stock ? `, ${l.stock} ${l.unit ?? ''} in stock`.trimEnd() : ''}`;
+export const lotShown = (l: LotRead) => `MMS lot ${l.lotNumber}: ${l.materialCode ?? '—'}, ${l.status.replaceAll('_', ' ')}, expiry ${l.expiryDate ? plantDate(l.expiryDate) : '—'}, retest ${l.retestDate ? plantDate(l.retestDate) : '—'}${l.stock ? `, ${l.stock} ${l.unit ?? ''} in stock`.trimEnd() : ''}`;
 const batchShown = (b: BatchRead) => `TrueBatch batch ${b.batchNumber}: ${b.productCode ?? '—'}${b.productName ? ` ${b.productName}` : ''}, ${b.status.replaceAll('_', ' ').toLowerCase()}, completed ${b.completedAt ?? '—'}${b.quantity ? `, ${b.quantity} made` : ''}`;
 
 async function loadSample(q: Sql | Tx, id: number): Promise<{ s: SampleRow; events: EventRow[] } | null> {
@@ -188,7 +190,10 @@ export function sampleRoutes(app: FastifyInstance, sql: Sql) {
         if (b.source === 'mms') {
           const l = read.value as LotRead | null;
           if (!l) throw new SampleError(409, 'not_found', [`Lot ${lotNo} is not in MMS.`]);
-          if (!LOT_WAITING.includes(l.status)) throw new SampleError(409, 'not_waiting', [`Lot ${lotNo} is ${l.status.replaceAll('_', ' ')} in MMS: only a lot in quarantine or under test waits to be sampled.`]);
+          // LIMS-31: a retest sample may also be of a released lot (by its retest date); any other only of a lot waiting to be sampled.
+          if (!LOT_WAITING.includes(l.status) && !(b.purpose === 'retest' && LOT_USABLE.includes(l.status))) throw new SampleError(409, 'not_waiting', [b.purpose === 'retest'
+            ? `Lot ${lotNo} is ${l.status.replaceAll('_', ' ')} in MMS: only a released lot, or one waiting to be sampled, is retested.`
+            : `Lot ${lotNo} is ${l.status.replaceAll('_', ' ')} in MMS: only a lot in quarantine or under test waits to be sampled.`]);
           if (!l.materialMasterId) throw new SampleError(409, 'not_found', [`MMS names no material for lot ${lotNo}.`]);
           const m = usableItem(await app.master.materials(), l.materialMasterId, 'material');
           item = { of, itemId: m.itemId, code: m.code, name: m.name };
@@ -214,6 +219,9 @@ export function sampleRoutes(app: FastifyInstance, sql: Sql) {
         // 3. one release sample per lot or batch
         const twice = b.purpose === 'release' ? await releaseSample(tx, of, lotNo) : null;
         if (twice) throw new SampleError(409, 'already_sampled', [`${what === 'lot' ? 'Lot' : 'Batch'} ${lotNo} already has its release sample ${twice}.`]);
+        // LIMS-31: one retest sample of a lot at a time, until QC decides on it
+        const retest = b.purpose === 'retest' && of === 'material' ? await openRetestSample(tx, lotNo) : null;
+        if (retest) throw new SampleError(409, 'already_sampled', [`Lot ${lotNo} already has its retest sample ${retest}, waiting for QC's decision.`]);
         // 4. the number of the plant year, never reused
         const [c] = await tx<{ n: number; yy: string }[]>`
           insert into sample_counters (year, last_no) values (extract(year from now() at time zone ${PLANT_TZ})::int, 1)
@@ -262,6 +270,10 @@ export function sampleRoutes(app: FastifyInstance, sql: Sql) {
       select id::int as "versionId", master_id::int as "masterId", version_no as "versionNo", doc->'header'->>'code' as code, doc->'header'->>'name' as name
       from master_versions where kind = 'method' and state = 'effective' and master_id = any(${methodIds}) order by doc->'header'->>'code'` : [];
     const user = req.user!;
+    // LIMS-30: a release sample's reserve sample (its lot's), and what the decision needs of it.
+    const release = l.s.purpose === 'release';
+    const [reserve] = release ? await loadReserves(sql, plantToday(new Date()), { sampleId: l.s.id }) : [];
+    const need = release && v ? await reserveNeed(sql, l.s.id, v.doc) : undefined;
     const may = user.permissions.includes('lims.sample.register');
     const refusals = Object.fromEntries(SAMPLE_ACTION_NAMES.map((a) => [a, may ? sampleRefusal(a, facts(l.s), l.events, user.id) : 'You do not have the right to record sample entries.']));
     return {
@@ -279,7 +291,11 @@ export function sampleRoutes(app: FastifyInstance, sql: Sql) {
       ootRefusal: user.permissions.includes('lims.qc.approve') ? null : 'Answering an out-of-trend flag needs the QC approval permission.',
       decision: sampleDecision(l.events), decisionHash: v ? decisionHash(l.s, l.events, testStates(v.doc, l.s.purpose, results)) : null,
       approvalProblems: !v ? ['The sample has no specification.'] : !user.permissions.includes('lims.qc.approve') ? ['QC approval needs the QC approval permission.']
-        : approvalProblems(facts(l.s), l.events, testStates(v.doc, l.s.purpose, results), user.id, oos),
+        : approvalProblems(facts(l.s), l.events, testStates(v.doc, l.s.purpose, results), user.id, oos, need),
+      // LIMS-30: the reserve sample (null: none logged), and what the decision says when the specification names no quantity.
+      reserve: reserve ? { id: reserve.row.id, amount: reserve.row.amount, unit: reserve.row.unit, location: reserve.row.location, keptUntil: reserve.row.keptUntil, state: reserve.state } : null,
+      reserveRequired: v?.doc.header.reserveQuantity ?? null,
+      reserveNote: release && v && !need?.required ? 'The specification names no reserve quantity: the reserve sample is not checked at approval.' : null,
       rejectionRefusal: user.permissions.includes('lims.qc.approve') ? rejectionRefusal(l.events) : 'Rejection needs the QC approval permission.',
     };
   });
@@ -340,7 +356,8 @@ export function sampleRoutes(app: FastifyInstance, sql: Sql) {
           if (!l) throw new SampleError(404, 'not_found');
           const [v] = await tx<{ doc: SpecDoc }[]>`select doc from master_versions where id = ${l.s.specVersionId}`;
           const tests = testStates(v!.doc, l.s.purpose, await sampleTestResults(tx, id, app));
-          const problems = decision === 'approve' ? approvalProblems(facts(l.s), l.events, tests, user.id, await oosOfSample(tx, id)) : [rejectionRefusal(l.events)].filter((x): x is string => !!x);
+          const need = l.s.purpose === 'release' ? await reserveNeed(tx, id, v!.doc) : undefined;
+          const problems = decision === 'approve' ? approvalProblems(facts(l.s), l.events, tests, user.id, await oosOfSample(tx, id), need) : [rejectionRefusal(l.events)].filter((x): x is string => !!x);
           if (problems.length) throw new SampleError(problems.some((p) => p.includes('another person approves')) ? 403 : 409, 'not_ready', problems);
           if (b.contentHash !== decisionHash(l.s, l.events, tests)) throw new SampleError(409, 'content_changed', ['The sample or its results changed since you opened it.']);
           let coaNo: string | undefined;

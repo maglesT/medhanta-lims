@@ -10,7 +10,7 @@ import { SAMPLE_PURPOSES, type SamplePurpose } from '../../../shared/engine/samp
 import { plantText } from '../../../shared/plant-time.js';
 import { PURPOSE_LABEL, registerSample, specsFor, type From, type SampleRequest, type SpecChoice } from './api-samples.js';
 
-export function RegisterDialog({ from, onDone, onCancel }: { from: SampleRequest | { hand: From }; onDone: (id: number) => void; onCancel: () => void }) {
+export function RegisterDialog({ from, onDone, onCancel, purpose: initial = 'release' }: { from: SampleRequest | { hand: From }; onDone: (id: number) => void; onCancel: () => void; purpose?: SamplePurpose }) {
   const hand = 'hand' in from ? from.hand : null;
   const source: From = hand ?? (from as SampleRequest).source;
   const what = source === 'mms' ? 'lot' : 'batch';
@@ -21,7 +21,7 @@ export function RegisterDialog({ from, onDone, onCancel }: { from: SampleRequest
   const [specId, setSpecId] = useState<number | null>(hand ? null : (from as SampleRequest).specs[0]?.id ?? null);
   const [quantity, setQuantity] = useState('');
   const [containers, setContainers] = useState('');
-  const [purpose, setPurpose] = useState<SamplePurpose>('release');
+  const [purpose, setPurpose] = useState<SamplePurpose>(initial);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 

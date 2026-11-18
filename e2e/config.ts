@@ -11,6 +11,8 @@ export const E2E_MMS = `${E2E_SCHEMA}_mms`;
 export const E2E_QUAL = `${E2E_SCHEMA}_ql`;
 // The material of the samples journey, as master data and MMS name it.
 export const E2E_MATERIAL_ID = '00000000-0000-4000-8000-000000000012';
+// The material of the retest journey (LIMS-31): a released lot past its retest date in MMS.
+export const E2E_RETEST_ID = '00000000-0000-4000-8000-000000000031';
 // The product of the OOS journey (TrueBatch is not linked: its batch is registered by hand).
 export const E2E_PRODUCT_ID = '00000000-0000-4000-8000-000000000101';
 // Invented test people and the Medhanta LIMS permissions core gives them.

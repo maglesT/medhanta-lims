@@ -7,6 +7,7 @@ import { IssueDialog } from '../floor/IssueDialog.js';
 import { SignDialog } from '../components/SignDialog.js';
 import { testText } from '../designer/describe.js';
 import type { SampleAction } from '../../../shared/engine/sample.js';
+import { ReservePanel } from './Reserve.js';
 import { PURPOSE_LABEL, STATUS_CHIP, STATUS_LABEL, answerOot, coaLink, decide, getSample, sampleEntry, type SampleDetail, type SampleEntry } from './api-samples.js';
 
 const ENTRY_WORDS: Record<SampleEntry['kind'], string> = {
@@ -26,7 +27,7 @@ const FORMS: Partial<Record<SampleAction, { title: string; button: string; field
 };
 const BUTTON: Record<SampleAction, string> = { check: 'Check (second person)', receive: 'Receive', store: 'Store', 'hand-over': 'Hand over', dispose: 'Dispose of', note: 'Add note' };
 
-export function SampleScreen({ me, id, onBack }: { me: Me; id: number; onBack: () => void }) {
+export function SampleScreen({ me, id, onBack, onOpenReserve }: { me: Me; id: number; onBack: () => void; onOpenReserve?: (id: number) => void }) {
   const [d, setD] = useState<SampleDetail | null>(null);
   const [error, setError] = useState('');
   const [form, setForm] = useState<SampleAction | null>(null);
@@ -58,6 +59,7 @@ export function SampleScreen({ me, id, onBack }: { me: Me; id: number; onBack: (
         </dl>
       </section>
       {d.spec && <Tests d={d} me={me} />}
+      <ReservePanel d={d} me={me} reload={load} onOpen={(r) => onOpenReserve?.(r)} />
       {d.spec && <Decision d={d} me={me} reload={load} />}
       <section className="dash-panel samples-waiting" aria-label="Chain of custody">
         <div className="panel-head"><h2>Chain of custody</h2></div>

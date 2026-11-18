@@ -91,6 +91,8 @@ export function SpecEditor({ me, versionId, onBack, onOpen }: { me: Me; versionI
                   <label>Pharmacopoeia<input aria-label="Pharmacopoeia" value={h.pharmacopoeia} onChange={(e) => change({ ...doc, header: { ...h, pharmacopoeia: e.target.value } })} /></label>
                   <label>Edition<input aria-label="Edition" value={h.edition ?? ''} onChange={(e) => change({ ...doc, header: e.target.value ? { ...h, edition: e.target.value } : (({ edition: _, ...x }) => x)(h) })} /></label>
                   <label>Market<input aria-label="Market" value={h.market ?? ''} onChange={(e) => change({ ...doc, header: e.target.value ? { ...h, market: e.target.value } : (({ market: _, ...x }) => x)(h) })} /></label>
+                  <label>Reserve quantity<input aria-label="Reserve quantity" placeholder="e.g. 60 tablets: twice the test quantity, except sterility and pyrogen" value={h.reserveQuantity ?? ''}
+                    onChange={(e) => change({ ...doc, header: e.target.value ? { ...h, reserveQuantity: e.target.value } : (({ reserveQuantity: _, ...x }) => x)(h) })} /></label>
                 </div>
               </div>
               {doc.tests.map((t, i) => (
