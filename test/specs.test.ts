@@ -66,6 +66,16 @@ describe('specification checks (LIMS-01)', () => {
     expect(specChecks(spec([test1(), test1()]), lookup(assayMethod())).map((p) => p.message)).toEqual(['The key assay is used twice']);
   });
 
+  it('LIMS-01 a spec limit in a unit of another kind than the method\'s result is refused (a pH limit in %, an assay limit in minutes)', () => {
+    const ph = assayMethod();
+    ph.stages[3]!.steps.find((x) => x.key === 'result')!.settings.unit = '';
+    const t = test1({ result: 'drying/lod/constant', limit: { low: '5.0', high: '7.0', unit: '%' } });
+    expect(specChecks(spec([t]), lookup(ph)).map((p) => [p.path, p.rule])).toEqual([['tests[0].limit', 'LIMS-01']]);
+    expect(specChecks(spec([{ ...t, limit: { low: '5.0', high: '7.0', unit: '' } }]), lookup(ph))).toEqual([]);
+    const minutes = test1({ limit: { low: '95.0', high: '105.0', unit: 'min' } });
+    expect(specChecks(spec([minutes]), lookup(assayMethod())).map((p) => p.message)[0]).toMatch(/^Assay: /);
+  });
+
   it('LIMS-01 a limit the templates cannot read is refused', () => {
     expect(specChecks(spec([test1({ limit: { low: '105.0', high: '95.0', unit: '%' } })]), lookup(assayMethod())).map((p) => p.message)[0]).toMatch(/^Assay: /);
   });

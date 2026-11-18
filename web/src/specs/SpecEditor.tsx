@@ -197,8 +197,10 @@ function TestCard({ t, n, methods, problems, onChange, onRemove }: {
 function LimitInput({ label, type, value, alert, onChange }: { label: string; type: SpecTest['limitType']; value?: Limit; alert?: boolean; onChange: (l: Limit | undefined) => void }) {
   const l = value ?? { unit: '%' };
   const put = (x: Partial<Limit>) => {
-    const next = Object.fromEntries(Object.entries({ ...l, ...x }).filter(([, y]) => y !== undefined && y !== '')) as Limit;
-    onChange(next.low || next.high ? { ...next, unit: next.unit ?? l.unit } : undefined);
+    // The unit is kept as chosen, '' (no unit, e.g. pH) included; only empty numbers are left out.
+    const n = { ...l, ...x };
+    const next = Object.fromEntries(Object.entries(n).filter(([k, y]) => k !== 'unit' && y !== undefined && y !== '')) as Omit<Limit, 'unit'>;
+    onChange(next.low || next.high ? { ...next, unit: n.unit ?? '' } as Limit : undefined);
   };
   const low = type !== 'not more than';
   const high = type !== 'not less than';

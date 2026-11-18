@@ -10,7 +10,7 @@ import { z } from 'zod';
 import { findBlock } from '../blocks/index.js';
 import { c1WithinLimits } from '../templates/index.js';
 import { keySchema, limitSchema, type Limit, type MasterDoc, type SettingValue } from './schema.js';
-import type { Problem } from './checks.js';
+import { masterChecks, type Problem } from './checks.js';
 
 const text = (max = 200) => z.string().trim().max(max);
 
@@ -151,6 +151,14 @@ export function specChecks(doc: SpecDoc, methods: (masterId: number) => { doc: M
     const m = methods(t.method.masterId);
     if (!m) return void error(`${p}.method`, `${t.name}: method ${t.method.code} has no approved or effective version`, 'LIMS-01');
     if (!resultsOf(m.doc).some((x) => x.ref === t.result)) error(`${p}.result`, `${t.name}: method ${t.method.code} has no result ${t.result}`);
+    // The method with this test's values in place passes its own checks: a limit in a unit of another kind than the
+    // result it checks (a pH limit in %) is refused here (LIMS-01), for release and for stability.
+    for (const purpose of ['release', 'stability'] as const) {
+      if (purpose === 'stability' && t.limitType !== 'release and shelf life') continue;
+      for (const pr of masterChecks(applySpec(m.doc, t, purpose)).filter((x) => x.rule === 'LIMS-01' && /unit|kind/i.test(x.message))) {
+        error(`${p}.${purpose === 'stability' ? 'shelfLifeLimit' : 'limit'}`, `${t.name}: ${pr.message}`, 'LIMS-01');
+      }
+    }
     for (const n of specNames(m.doc)) {
       if (n.name === 'limit') {
         if (t.limitType === 'conforms' || t.limitType === 'report only') error(`${p}.limit`, `${t.name}: method ${t.method.code} checks its result against a limit; a ${t.limitType} test cannot give one`);
