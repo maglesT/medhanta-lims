@@ -168,6 +168,16 @@ describe('method designer', () => {
     expect(em.join(' ')).toContain('Adverse trend: 2 alert or action results in the last 4 samplings.');
   });
 
+  it('LIMS-02 safety net: a change that no plain line shows is listed under "Other changes", never "No changes"', () => {
+    const next = method();
+    const prev = method();
+    (prev.header as Record<string, unknown>).someFutureField = 'A';
+    (next.header as Record<string, unknown>).someFutureField = 'B';
+    const other = diffMasters(prev, next).find((s) => s.key === 'other');
+    expect(other?.lines.map((l) => [l.was, l.text])).toEqual([['header.someFutureField: A', 'header.someFutureField: B']]);
+    expect(diffMasters(method(), method()).some((s) => s.key === 'other')).toBe(false);
+  });
+
   it('an author\'s answer to a warning is kept in the method document with the warning as answered', () => {
     const prev = method();
     const warning: Problem = { level: 'warning', path: 'stages[0].steps[0]', message: 'Is the standard dried first?', question: { key: 'dried/weigh-std', options: ['yes', 'no'], needsReason: true } };

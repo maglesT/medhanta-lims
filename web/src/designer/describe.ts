@@ -157,5 +157,22 @@ export function diffMasters(prev: AnyDoc, next: AnyDoc, units?: Units): DiffSect
     return { key: s.key, title: s.title, change: !old ? 'added' : lines.some((l) => l.change !== 'same') ? 'changed' : 'same', lines };
   });
   for (const s of before.values()) if (!after.some((x) => x.key === s.key)) out.push({ ...s, change: 'removed', lines: s.lines.map((l) => ({ ...l, change: 'removed' })) });
+  // Safety net: a change no plain line shows (a field without its own line) is still listed, so nobody signs a version
+  // whose change they cannot see.
+  if (out.every((s) => s.change === 'same')) {
+    const paths = changedPaths(prev, next);
+    if (paths.length) out.push({ key: 'other', title: 'Other changes', change: 'changed', lines: paths.map((p) => ({ key: p.path, text: `${p.path}: ${p.now}`, change: 'changed', was: `${p.path}: ${p.was}` })) });
+  }
+  return out;
+}
+
+const shown = (v: unknown) => (v === undefined ? '(not set)' : typeof v === 'string' ? v : JSON.stringify(v));
+/** The paths where two documents differ (at most 20), with the value before and after. */
+export function changedPaths(a: unknown, b: unknown, path = '', out: { path: string; was: string; now: string }[] = []): { path: string; was: string; now: string }[] {
+  if (out.length >= 20 || JSON.stringify(a) === JSON.stringify(b)) return out;
+  const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null;
+  if (isObj(a) && isObj(b) && Array.isArray(a) === Array.isArray(b)) {
+    for (const k of [...new Set([...Object.keys(a), ...Object.keys(b)])]) changedPaths(a[k], b[k], path ? `${path}.${k}` : k, out);
+  } else out.push({ path: path || '(document)', was: shown(a), now: shown(b) });
   return out;
 }
