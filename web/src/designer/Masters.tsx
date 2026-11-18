@@ -62,7 +62,7 @@ export function Masters({ me }: { me: Me }) {
                       <button onClick={() => setOpen(r.id)}>Open</button>
                       {author && <button onClick={() => setCreating({ copyOf: r })} disabled={!md}>Copy</button>}
                       {author && r.state === 'effective' && !pending(r.masterId) && <button onClick={() => void addVersion(r)}>New version</button>}
-                      {can(me, 'analysis.perform') && r.state === 'effective' && <button className="primary" onClick={() => setIssuing(r)}>Start an analysis</button>}
+                      {can(me, 'analysis.perform') && r.state === 'effective' && <button className="primary" onClick={() => setIssuing(r)}>Start a trial analysis</button>}
                     </span>
                   </td>
                 </tr>

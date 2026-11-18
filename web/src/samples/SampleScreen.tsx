@@ -1,8 +1,9 @@
 // One sample (LIMS-07): its facts as registered, its specification and tests (read-only), its chain of custody, and
 // the next entries this person may add. Disposal is an e-signature with its reason and method.
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { plantTime, type Me } from '../api.js';
-import { plainError, sourceWords } from '../api-floor.js';
+import { can, plantTime, type Me } from '../api.js';
+import { analysisLink, plainError, sourceWords } from '../api-floor.js';
+import { IssueDialog } from '../floor/IssueDialog.js';
 import { SignDialog } from '../components/SignDialog.js';
 import { testText } from '../designer/describe.js';
 import type { SampleAction } from '../../../shared/engine/sample.js';
@@ -25,7 +26,7 @@ const FORMS: Partial<Record<SampleAction, { title: string; button: string; field
 };
 const BUTTON: Record<SampleAction, string> = { check: 'Check (second person)', receive: 'Receive', store: 'Store', 'hand-over': 'Hand over', dispose: 'Dispose of', note: 'Add note' };
 
-export function SampleScreen({ id, onBack }: { me: Me; id: number; onBack: () => void }) {
+export function SampleScreen({ me, id, onBack }: { me: Me; id: number; onBack: () => void }) {
   const [d, setD] = useState<SampleDetail | null>(null);
   const [error, setError] = useState('');
   const [form, setForm] = useState<SampleAction | null>(null);
@@ -55,8 +56,8 @@ export function SampleScreen({ id, onBack }: { me: Me; id: number; onBack: () =>
           <dt>Registered</dt><dd>{s.registeredByName}, {plantTime(s.registeredAt)}</dd>
           {d.spec && (<><dt>Specification</dt><dd>{d.spec.header.number}, version {d.spec.versionNo} · {d.spec.header.pharmacopoeia}{d.spec.header.edition ? ` ${d.spec.header.edition}` : ''}{d.spec.state !== 'effective' ? ` (now ${d.spec.state})` : ''}</dd></>)}
         </dl>
-        {d.spec && <ol className="spec-tests" aria-label="Tests">{d.spec.tests.map((t, i) => <li key={t.key}>{testText(t, i).replace(/^\d+\. /, '')}</li>)}</ol>}
       </section>
+      {d.spec && <Tests d={d} me={me} />}
       <section className="dash-panel samples-waiting" aria-label="Chain of custody">
         <div className="panel-head"><h2>Chain of custody</h2></div>
         <ol className="custody">
@@ -123,5 +124,44 @@ function EntryForm({ action, sampleNo, onSubmit, onCancel }: { action: SampleAct
         </div>
       </form>
     </div>
+  );
+}
+
+/**
+ * The specification's tests (LIMS-11): each with its limit, whether it applies to this sample, its analyses (status and
+ * result once worked out, pass or fail against the limit), and the methods to start an analysis by, once the sample is
+ * in QC.
+ */
+function Tests({ d, me }: { d: SampleDetail; me: Me }) {
+  const [starting, setStarting] = useState<SampleDetail['methods'][number] | null>(null);
+  const inQc = ['received', 'stored', 'handed over'].includes(d.status);
+  const may = can(me, 'analysis.perform');
+  return (
+    <section className="dash-panel samples-waiting" aria-label="Tests">
+      <div className="panel-head"><h2>Tests</h2><span className="muted">{d.spec!.header.number}, version {d.spec!.versionNo}</span></div>
+      <div className="table-wrap">
+        <table className="masters">
+          <thead><tr><th>Test</th><th>Analyses and results</th></tr></thead>
+          <tbody>
+            {d.spec!.tests.map((t, i) => (
+              <tr key={t.key} className={t.applies ? '' : 'muted'}>
+                <td><b>{t.name}</b><span className="cell-sub">{testText(t, i).replace(/^\d+\. [^:]*: /, '')}{t.applies ? '' : ' · not for this sample'}</span></td>
+                <td>{t.analyses.length ? t.analyses.map((a) => (
+                  <div key={a.analysisId}><a href={analysisLink(a.analysisId)}>{a.analysisNo}</a> · {a.status}
+                    {a.result && <> · <b>{a.result.value} {a.result.unit}</b>{a.result.pass !== undefined && <span className={`chip ${a.result.pass ? 'chip-ok' : 'chip-bad'}`}>{a.result.pass ? 'within limits' : 'out of limits'}</span>}</>}
+                  </div>)) : <span className="muted">{t.applies ? 'not started' : '—'}</span>}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {may && d.methods.length > 0 && (
+        <div className="actions-row">
+          {inQc ? d.methods.map((m) => <button key={m.masterId} onClick={() => setStarting(m)}>Start {m.code} {m.name}</button>)
+            : <p className="muted small">Analyses start once QC has received the sample.</p>}
+        </div>
+      )}
+      {starting && <IssueDialog row={{ id: starting.versionId, versionNo: starting.versionNo, header: { code: starting.code, name: starting.name } }} sampleId={d.sample.id} sampleNo={d.sample.sampleNo} onCancel={() => setStarting(null)} />}
+    </section>
   );
 }

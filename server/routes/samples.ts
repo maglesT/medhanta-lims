@@ -6,7 +6,8 @@ import { parseId, requirePermission } from '../auth.js';
 import { usableItem } from '../master.js';
 import { LOT_WAITING, batchWaiting, type BatchRead, type LotRead } from '../links.js';
 import { SignError, authenticateSigner, contentHash, sign, signBody } from '../signatures.js';
-import type { SpecDoc } from '../../shared/master/spec.js';
+import { purposeLimits, type SpecDoc } from '../../shared/master/spec.js';
+import { sampleTestResults } from './analyses.js';
 import {
   PROVIDER_NAME, SAMPLE_ACTIONS, SAMPLE_ACTION_NAMES, SAMPLE_PURPOSES, isHand, sampleRefusal, sampleStatus,
   type LinkState, type SampleAction, type SampleEvent, type SamplePurpose, type Source,
@@ -224,13 +225,21 @@ export function sampleRoutes(app: FastifyInstance, sql: Sql) {
     if (!l) return reply.code(404).send({ error: 'not_found' });
     const [v] = await sql<{ id: number; masterId: number; versionNo: number; state: string; doc: SpecDoc }[]>`
       select id::int, master_id::int as "masterId", version_no as "versionNo", state, doc from master_versions where id = ${l.s.specVersionId}`;
+    const results = await sampleTestResults(sql, l.s.id);
+    const methodIds = [...new Set((v?.doc.tests ?? []).filter((t) => t.use === 'release and stability' || t.use === purposeLimits(l.s.purpose)).map((t) => t.method.masterId))];
+    const methods = methodIds.length ? await sql<{ versionId: number; masterId: number; versionNo: number; code: string; name: string }[]>`
+      select id::int as "versionId", master_id::int as "masterId", version_no as "versionNo", doc->'header'->>'code' as code, doc->'header'->>'name' as name
+      from master_versions where kind = 'method' and state = 'effective' and master_id = any(${methodIds}) order by doc->'header'->>'code'` : [];
     const user = req.user!;
     const may = user.permissions.includes('lims.sample.register');
     const refusals = Object.fromEntries(SAMPLE_ACTION_NAMES.map((a) => [a, may ? sampleRefusal(a, facts(l.s), l.events, user.id) : 'You do not have the right to record sample entries.']));
     return {
       sample: l.s, status: sampleStatus(facts(l.s), l.events), events: l.events,
       spec: v ? { id: v.id, masterId: v.masterId, versionNo: v.versionNo, state: v.state, header: v.doc.header,
-        tests: v.doc.tests } : null,
+        // Each test with whether it applies to this sample's purpose, and its analyses with their results (LIMS-11).
+        tests: v.doc.tests.map((t) => ({ ...t, applies: (t.use === 'release and stability' || t.use === purposeLimits(l.s.purpose)), analyses: results[t.key] ?? [] })) } : null,
+      // The methods this sample's tests are done by: their effective versions, to start an analysis from.
+      methods,
       actions: SAMPLE_ACTION_NAMES.filter((a) => refusals[a] === null), refusals, contentHash: sampleHash(l.s, l.events),
     };
   });

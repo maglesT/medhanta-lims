@@ -51,7 +51,8 @@ test('LIMS-07 a sample of a waiting MMS lot is registered, received and stored o
   await expect(heading).toContainText(/LS\d{7}/);
   await expect(heading).toContainText('Registered');
   await expect(page.getByRole('region', { name: 'The sample' })).toContainText('From MMS: MMS lot RM-E1');
-  await expect(page.getByRole('list', { name: 'Tests' })).toContainText('Assay: Limit not less than 98.0 and not more than 102.0 %');
+  await expect(page.getByRole('region', { name: 'Tests' })).toContainText('Assay');
+  await expect(page.getByRole('region', { name: 'Tests' })).toContainText('Limit not less than 98.0 and not more than 102.0 %');
 
   await page.getByRole('button', { name: 'Receive' }).click();
   await page.getByLabel('Condition on receipt').fill('Sealed, labelled, 3 containers');

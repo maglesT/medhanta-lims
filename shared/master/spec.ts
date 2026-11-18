@@ -161,3 +161,12 @@ export function specChecks(doc: SpecDoc, methods: (masterId: number) => { doc: M
   });
   return out;
 }
+
+/** Which limits a sample's purpose is tested against: stability samples the shelf-life ones, the others release. */
+export const purposeLimits = (purpose: string): 'release' | 'stability' => (purpose === 'stability' ? 'stability' : 'release');
+
+/** The tests of a specification done by a method that apply to a sample's purpose (release tests, or stability tests). */
+export function testsFor(doc: SpecDoc, methodMasterId: number, purpose: string): SpecTest[] {
+  const on = purposeLimits(purpose);
+  return doc.tests.filter((t) => t.method.masterId === methodMasterId && (t.use === 'release and stability' || t.use === on));
+}

@@ -22,7 +22,7 @@ async function issueAnalysis(page: Page, step: object = {}): Promise<{ id: numbe
   await owner.end();
   await page.goto('/');
   await page.getByRole('button', { name: 'Methods' }).click();
-  await page.getByRole('row', { name: /QC-M-050/ }).last().getByRole('button', { name: 'Start an analysis' }).click();
+  await page.getByRole('row', { name: /QC-M-050/ }).last().getByRole('button', { name: 'Start a trial analysis' }).click();
   await expect(page.getByRole('dialog', { name: 'Start an analysis' })).toContainText('QC-M-050 · Demolol tablets: pH and sample weighing, version 1');
   await page.getByRole('button', { name: 'Next: sign' }).click();
   await sign(page);

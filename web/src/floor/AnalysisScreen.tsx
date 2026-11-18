@@ -56,6 +56,8 @@ export function AnalysisHeader({ d }: { d: AnalysisDetail }) {
         <span className="bno">{d.analysis.analysisNo}</span>
         <h1>{h.name}</h1>
         <div className="meta">
+          {d.sample ? <span>Sample <b>{d.sample.sampleNo}</b> · {d.sample.item.code} {d.sample.item.name} · {d.sample.lotNo} · {d.sample.spec.number} v{d.sample.spec.versionNo}: {d.sample.tests.map((t) => t.name).join(', ')}</span>
+            : <span><b>Trial analysis</b> (no sample: its results are not results of a sample)</span>}
           <span>Method <b>{h.code}</b></span>
           <span>Technique <b>{h.technique}</b></span>
           <span>Method version <b>{d.master.versionNo}</b></span>

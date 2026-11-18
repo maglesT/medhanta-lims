@@ -29,6 +29,8 @@ export interface StageRow { index: number; key: string; name: string; open: bool
 export interface Deviation { note: number; step: string; reference: string; text: string; open: boolean; status?: string; closedAt?: string | null; filed?: boolean; typed?: boolean }
 export interface AnalysisDetail {
   now: string;
+  // The sample the analysis is for, and the spec tests it covers (null: trial or method work).
+  sample: { id: number; sampleNo: string; lotNo: string; purpose: string; item: { code: string; name: string }; spec: { number: string; versionNo: number }; tests: { key: string; name: string }[] } | null;
   analysis: { id: number; analysisNo: string; issuedAt: string; status: string; open: string[]; late: string[]; deviations: Deviation[]; people: number[]; contentHash: string; actions: string[]; deviationsLink: string;
     stopped: { personName: string; at: string; payload: { reason?: string } } | null };
   master: { id: number; versionNo: number; doc: MasterDoc };

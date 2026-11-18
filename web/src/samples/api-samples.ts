@@ -24,9 +24,12 @@ export interface SampleDetail {
   sample: { id: number; sampleNo: string; purpose: SamplePurpose; lotNo: string; item: SampleItem; source: Source; quantity: string; containers: number | null;
     registeredByName: string; registeredAt: string };
   status: SampleStatus; events: SampleEntry[];
-  spec: { id: number; versionNo: number; state: string; header: SpecDoc['header']; tests: SpecTest[] } | null;
+  spec: { id: number; versionNo: number; state: string; header: SpecDoc['header']; tests: (SpecTest & { applies: boolean; analyses: TestResult[] })[] } | null;
+  methods: { versionId: number; masterId: number; versionNo: number; code: string; name: string }[];
   actions: SampleAction[]; refusals: Record<SampleAction, string | null>; contentHash: string;
 }
+// A spec test's analysis: its status and, once worked out, its result (pass or fail against the test's limit).
+export interface TestResult { analysisId: number; analysisNo: string; status: string; result: { shown: string; value: string; unit: string; pass?: boolean } | null }
 export interface RegisterInput {
   source: From; lotNumber?: string; batchNumber?: string; byHand?: boolean; itemId?: string; specVersionId: number;
   quantity: string; containers?: number; purpose: SamplePurpose;

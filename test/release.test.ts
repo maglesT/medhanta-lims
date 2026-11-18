@@ -154,7 +154,7 @@ describe('the review list', () => {
     const events = [ev('started', '0.1.0.1'), reading('0.1.0.1', { readingCheck: notPassed }), ev('done', '0.1.0.1'), ev('started', '0.1.0.2'), reading('0.1.0.2', { readingCheck: notPassed })];
     const { steps } = openSteps(d, events, at(1000));
     expect(steps.map((v) => [v.id, v.notYet, cutShort(true, v, steps), cutShort(false, v, steps)])).toEqual([['0.1.0.1', 'readingCheck', false, false], ['0.1.0.2', 'readingCheck', true, false]]);
-    const record = (analysisEvents: AnalysisEvent[]) => JSON.stringify(analysisRecordDoc({ analysis: { id: 1, analysisNo: 'LA2600099', masterVersionId: 1, issuedBy: 1, issuedAt: at(0) }, doc: d,
+    const record = (analysisEvents: AnalysisEvent[]) => JSON.stringify(analysisRecordDoc({ analysis: { id: 1, analysisNo: 'LA2600099', masterVersionId: 1, issuedBy: 1, issuedAt: at(0), sampleId: null, tests: [] }, sample: null, doc: d,
       events: events.map((e) => ({ ...e, personName: 'ANALYST A' })), analysisEvents: analysisEvents.map((b) => ({ ...b, personName: 'REVIEWER R' })), now: at(1000), versionNo: 1, issuedByName: 'ANALYST A', signatures: [] }, 'QC'));
     const ended = record([be('stopped', { reason: 'The oven broke down' })]);
     expect(ended).toContain('The oven broke down');
