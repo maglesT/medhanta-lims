@@ -195,6 +195,18 @@ export function percent(q: Q, what: string): { v: Dec; text: string } {
   return { v: to(p, '%'), text: p.text };
 }
 
+/**
+ * Whether an optional group of inputs (a basis correction, a VS in excess, a factor) is given: any of its values is.
+ * A method step that leaves the group's optional settings out passes the group with every value left out; that is
+ * the same as not giving the group.
+ */
+export function given<T>(x: T | undefined): x is T {
+  if (x === undefined || x === null) return false;
+  if (Array.isArray(x)) return x.some((y) => given(y));
+  if (typeof x === 'object' && !isResult(x) && !(x instanceof Dec)) return Object.values(x as object).some((y) => given(y));
+  return true;
+}
+
 /** A value computed earlier in the same analysis (any template's result), used as an input. */
 export interface ResultValue {
   readonly ok: true;

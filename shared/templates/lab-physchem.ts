@@ -7,7 +7,9 @@
  * nothing rounded inside a calculation; pharmacopoeia rounding only when a limit is checked (C1).
  * Pharmacopoeia rules are paraphrased; no chapter text is copied.
  */
-import { checkOf, Dec, fmt, HUNDRED, needKind, ONE, parse, percent, refuse, run, sameKind, show, shownNumber, to, unitOf, ZERO, type Outcome, type Parsed, type Q } from './core.js';
+import { checkOf, Dec, fmt, given, HUNDRED, needKind, ONE, parse, percent, refuse, run, sameKind, show, shownNumber, to, unitOf, ZERO, type Outcome, type Parsed, type Q } from './core.js';
+import { standardSolution, type L1Standard } from './lab-assay.js';
+import { c6StagedTest, type C6Input } from './staged.js';
 import { checkLimit, type Check, type Limit } from './rounding.js';
 import { noFurtherChange, readSeries, stats, type ChangeLimit, type Series, type Stats } from './series.js';
 import { ethanolDensity } from './mixing.js';
@@ -53,7 +55,9 @@ export interface Basis {
 }
 
 function applyBasis(v: Dec, b: Basis | undefined): { v: Dec; line: string } {
-  if (b === undefined) return { v, line: '' };
+  // A basis whose settings were all left out is no basis.
+  if (!given(b)) return { v, line: '' };
+  if (b.as === undefined) refuse('The sample\'s loss on drying, water or loss on ignition is given, but no basis: say which basis the result is on, or leave it out');
   if (b.sampleAlreadyDried === true && (b.as === 'dried' || b.as === 'ignited')) {
     refuse(`The sample was dried before weighing, so the result is already on the ${b.as} basis: correcting it with the LOD again counts the loss twice (safety rule S3). Remove the basis correction, or weigh the sample as it is`);
   }
@@ -107,17 +111,39 @@ export interface L5Stage {
   readonly times: readonly { readonly time: Q; readonly aliquot: Q }[];
 }
 
+/**
+ * The acceptance of the test by C6 on this run's own per-vessel results (a later calculation sees only the mean):
+ * immediate release S1-S3 and the delayed-release buffer stage B1-B3 with Q the lower bound of `limit`; the
+ * delayed-release acid stage A1-A3 with its upper bound (default 10 %); extended release L1-L3 with one range per time
+ * point. The vessel sets are the dissolution stages of `byTime` (6, then 6 more, then 12 more). Left out when not given.
+ */
+export interface L5Acceptance {
+  readonly test?: 'dissolution IR' | 'dissolution DR acid' | 'dissolution DR buffer' | 'dissolution ER';
+  readonly limit?: Limit;
+  readonly ranges?: readonly Limit[];
+}
+
 export interface L5Input {
   /** The labelled content per unit (tablet, capsule, dose, patch): a mass, never a delivery rate. */
   readonly labelClaim: Q;
-  /** The standard: its response (or replicate responses, averaged) and its concentration as L1 works it out. */
-  readonly standard: { readonly responses: readonly Q[]; readonly concentration: Q };
-  /** Dilution factor of the sample before measuring (default 1). */
-  readonly dilution?: string;
+  /**
+   * The standard: its response (or replicate responses, averaged) and its concentration as L1 works it out, or the
+   * standard as prepared (weighed amount, potency and its basis, flask and dilution), from which it is worked out here.
+   */
+  readonly standard: { readonly responses: readonly Q[]; readonly concentration?: Q; readonly prepared?: L1Standard };
+  /** Dilution factor of the sample before measuring (default 1): a plain number, or the dilute step's factor. */
+  readonly dilution?: Q;
   readonly volumeMode: VolumeMode;
   readonly stages: readonly L5Stage[];
-  /** One entry per vessel: its responses at every time point, stage after stage. */
-  readonly vessels: readonly { readonly name?: string; readonly responses: readonly Q[] }[];
+  /** One entry per vessel: its responses at every time point, stage after stage (or `byTime`). */
+  readonly vessels?: readonly { readonly name?: string; readonly responses: readonly Q[] }[];
+  /**
+   * The responses as a step records them: for each time point, for each dissolution stage (6 vessels, 6 more, 12 more)
+   * the responses of its vessels, in the same vessel order at every time point. A time point the method does not have
+   * is left empty.
+   */
+  readonly byTime?: readonly (readonly (readonly Q[])[])[];
+  readonly acceptance?: L5Acceptance;
   /** % of label claim (default), the amount released per unit, or per area (transdermal: give `area`). */
   readonly express?: '% of label claim' | 'amount per unit' | 'amount per area';
   readonly area?: Q;
@@ -139,6 +165,10 @@ export interface L5Point {
 }
 
 export interface L5Extra {
+  /** With an acceptance: the stage decision (C6). */
+  readonly decision?: 'pass' | 'next stage' | 'fail';
+  readonly stageReached?: number;
+  readonly nextStageUnits?: number;
   readonly points: readonly L5Point[];
   readonly vessels: readonly { readonly name: string; readonly results: readonly Dec[]; readonly amounts: readonly Dec[] }[];
   /** For C6 IR/DR: atTime[k] = every vessel's result at time point k, as text (full precision). */
@@ -166,16 +196,33 @@ export function l5Dissolution(i: L5Input): Outcome<L5Extra> {
       needKind(area, ['area'], 'The area');
       positive(area, 'The area');
     }
+    if ((i.vessels === undefined) === (i.byTime === undefined)) refuse('Give the vessel responses either per vessel or per time point, not both');
     if (i.standard.responses.length === 0) refuse('Give the standard response');
     const sr = i.standard.responses.map((q, n) => parse(q, `Standard response ${n + 1}`));
     sameKind(sr, 'The standard responses');
     const stdResp = sr.reduce((s, p) => s.plus(to(p, sr[0]!.unit)), ZERO).div(sr.length);
     if (!stdResp.isPositive() || stdResp.isZero()) refuse('The standard response must be more than zero');
-    const sc = parse(i.standard.concentration, 'The standard concentration');
-    needKind(sc, ['mass concentration'], 'The standard concentration');
-    positive(sc, 'The standard concentration');
-    const cStd = to(sc, 'mg/mL');
-    const dil = i.dilution === undefined ? ONE : plain(i.dilution, 'The sample dilution').v;
+    const prepared = given(i.standard.prepared) ? i.standard.prepared : undefined;
+    if ((i.standard.concentration === undefined) === (prepared === undefined)) refuse('Give the standard\'s concentration, or the standard as prepared (weighed amount, potency, flask and dilution), one of them');
+    let cStd: Dec;
+    let scText: string;
+    if (prepared !== undefined) {
+      const st = standardSolution(prepared);
+      cStd = st.c;
+      scText = `${num(st.c, 'mg/mL')} mg/mL (${st.line})`;
+    } else {
+      const sc = parse(i.standard.concentration as Q, 'The standard concentration');
+      needKind(sc, ['mass concentration'], 'The standard concentration');
+      positive(sc, 'The standard concentration');
+      cStd = to(sc, 'mg/mL');
+      scText = sc.text;
+    }
+    let dil = ONE;
+    if (i.dilution !== undefined) {
+      const dp = parse(i.dilution, 'The sample dilution');
+      needKind(dp, ['number', 'count'], 'The sample dilution');
+      dil = dp.v;
+    }
     if (!dil.isPositive() || dil.isZero()) refuse('The sample dilution must be more than zero');
     if (i.stages.length === 0) refuse('Give at least one stage with its time points');
 
@@ -215,9 +262,33 @@ export function l5Dissolution(i: L5Input): Outcome<L5Extra> {
       reportIdx = steps.findIndex((x) => to(x.time, 'min').eq(want));
       if (reportIdx < 0) refuse(`The reported time point ${i.reportAt} is not one of the time points`);
     }
-    if (i.vessels.length === 0) refuse('Give the results of at least one vessel');
+    // The vessel sets (dissolution stages) and each vessel's responses at every time point.
+    let sets: number[] = [];
+    let given5: readonly { readonly name?: string; readonly responses: readonly Q[] }[];
+    if (i.byTime !== undefined) {
+      if (i.byTime.slice(steps.length).some((t) => t.some((v) => v.length > 0))) refuse(`Responses are given for more time points than the method has (${steps.length})`);
+      const used = i.byTime.slice(0, steps.length);
+      if (used.length < steps.length) refuse(`Give the responses at each of the ${steps.length} time points`);
+      used.forEach((t, k) => { if (t.length === 0 || t.every((v) => v.length === 0)) refuse(`Give the vessel responses at ${steps[k]!.time.text}`); });
+      sets = (used[0] ?? []).map((v) => v.length);
+      used.forEach((t, k) => {
+        const here = t.map((v) => v.length);
+        if (here.join() !== sets.join()) refuse(`At ${steps[k]!.time.text} the vessels are ${here.join(' + ')}, at ${steps[0]!.time.text} ${sets.join(' + ')}: every time point needs the same vessels`);
+      });
+      const n = sets.reduce((a, b) => a + b, 0);
+      given5 = Array.from({ length: n }, (_, vn) => {
+        let set = 0;
+        let left = vn;
+        while (left >= (sets[set] ?? 0)) { left -= sets[set] ?? 0; set += 1; }
+        return { responses: used.map((t) => (t[set] as readonly Q[])[left] as Q) };
+      });
+    } else {
+      given5 = i.vessels ?? [];
+      sets = [given5.length];
+    }
+    if (given5.length === 0) refuse('Give the results of at least one vessel');
 
-    const vessels = i.vessels.map((ves, vn) => {
+    const vessels = given5.map((ves, vn) => {
       const name = ves.name ?? `vessel ${vn + 1}`;
       if (ves.responses.length !== steps.length) refuse(`${name} needs ${steps.length} responses (one per time point); ${ves.responses.length} were given`);
       let V = ZERO;
@@ -268,13 +339,50 @@ export function l5Dissolution(i: L5Input): Outcome<L5Extra> {
     const atTime = steps.map((_, k) => vessels.map((v) => (v.results[k] ?? ZERO).toString()));
     const perVessel = vessels.map((v) => v.results.map((x) => x.toString()));
     const modes = [...new Set(steps.map((s) => s.mode))].join(' / ');
-    const head = `${i.label ? `${i.label}: ` : ''}${vessels.length} vessel${vessels.length === 1 ? '' : 's'}; C = response ÷ ${fmt(stdResp, 4)} × ${sc.text}${dil.eq(1) ? '' : ` × ${dil.toString()}`}; volume ${modes}`;
+    const head = `${i.label ? `${i.label}: ` : ''}${vessels.length} vessel${vessels.length === 1 ? '' : 's'}; C = response ÷ ${fmt(stdResp, 4)} × ${scText}${dil.eq(1) ? '' : ` × ${dil.toString()}`}; volume ${modes}`;
     const stageLines = i.stages.length > 1
       ? `; ${i.stages.map((g, s) => (s === 0 ? `${g.name} ${parse(g.volume as Q, 'volume').text}` : g.change === 'add medium' ? `${g.name}: + ${parse(g.added as Q, 'added').text}` : `${g.name}: drained, ${parse(g.volume as Q, 'volume').text}${g.earlier === 'add earlier amount' ? ', earlier amount added' : ', this stage only'}`)).join(', ')}`
       : `; ${parse(i.stages[0]!.volume as Q, 'volume').text}`;
     const pts = points.map((p) => `${p.stage === steps[0]!.stage.name && i.stages.length === 1 ? '' : `${p.stage} `}${p.time}: mean ${show(p.mean, unit, dp)} (${fmt(p.min, dp)}-${fmt(p.max, dp)})`).join('; ');
     const reported = points[reportIdx]!;
-    return { ok: true, value: reported.mean, unit, points, vessels, atTime, perVessel, shown: `${head}${stageLines}. ${pts}${express === '% of label claim' ? ` (of ${claim.text})` : ''}` };
+    const shown = `${head}${stageLines}. ${pts}${express === '% of label claim' ? ` (of ${claim.text})` : ''}`;
+    const acc = given(i.acceptance) ? i.acceptance : undefined;
+    if (acc === undefined) return { ok: true, value: reported.mean, unit, points, vessels, atTime, perVessel, shown };
+    // C6 on the vessels' own results, set by set (the stages of the test).
+    if (acc.test === undefined) refuse('A dissolution limit is given, but not the acceptance test (immediate, extended or delayed release)');
+    if (express !== '% of label claim') refuse('The stage rules of the dissolution test apply to the % of label claim dissolved');
+    const bySet = <X>(xs: readonly X[]): X[][] => {
+      const out: X[][] = [];
+      let at = 0;
+      for (const n of sets) { out.push(xs.slice(at, at + n)); at += n; }
+      return out;
+    };
+    const bound = (which: 'low' | 'high'): string | undefined => {
+      if (acc.limit === undefined) return undefined;
+      if (acc.limit.unit !== '%') refuse(`The dissolution limit is in % of label claim; "${acc.limit.unit}" was given`);
+      return acc.limit[which];
+    };
+    let c6: C6Input;
+    if (acc.test === 'dissolution ER') {
+      const ranges = acc.ranges ?? [];
+      if (ranges.length !== steps.length) refuse(`Extended release needs one range for each time point (${steps.length}); ${ranges.length} were given`);
+      ranges.forEach((r) => { if (r.unit !== '%') refuse(`The ranges are in % of label claim; "${r.unit}" was given`); });
+      c6 = { test: acc.test, ranges: ranges.map((r, k) => ({ time: steps[k]!.time.text, ...(r.low === undefined ? {} : { low: r.low }), ...(r.high === undefined ? {} : { high: r.high }) })),
+        stages: bySet(perVessel) };
+    } else if (acc.test === 'dissolution DR acid') {
+      const max = bound('high');
+      c6 = { test: acc.test, ...(max === undefined ? {} : { max }), stages: bySet(atTime[reportIdx]!) };
+    } else {
+      const q = bound('low');
+      if (q === undefined) refuse('Q is the lower limit of the % dissolved ("not less than Q %"): give the limit with its lowest value');
+      c6 = { test: acc.test, Q: q, stages: bySet(atTime[reportIdx]!) };
+    }
+    const d = c6StagedTest(c6);
+    if (!d.ok) refuse(d.message);
+    return {
+      ok: true, value: reported.mean, unit, points, vessels, atTime, perVessel, shown: `${shown}. ${d.shown}`,
+      decision: d.decision, stageReached: d.stageReached, ...(d.nextStageUnits === undefined ? {} : { nextStageUnits: d.nextStageUnits }), check: d.check,
+    };
   });
 }
 
@@ -346,8 +454,15 @@ function vsOf(vs: Vs, what: string, tc: Dec | undefined): { V: Dec; M: Dec; text
   return { V: v, M: to(M, 'mol/L').times(f.v), text: `${V.text} of ${M.text} × ${f.text}`, volume: V.text, of: `of ${M.text} × ${f.text}` };
 }
 
-export function l6Titration(i: L6Input): Outcome {
+export function l6Titration(input: L6Input): Outcome {
   return run(() => {
+    // Optional groups whose settings were all left out are not given (a direct titration: no VS in excess).
+    const i: L6Input = {
+      ...input,
+      excess: given(input.excess) ? input.excess : undefined,
+      aliquot: given(input.aliquot) ? input.aliquot : undefined,
+      temperatureCorrection: given(input.temperatureCorrection) ? input.temperatureCorrection : undefined,
+    } as L6Input;
     const report = i.report ?? '%';
     const sample = parse(i.sample, 'The sample');
     positive(sample, 'The sample');
@@ -464,7 +579,7 @@ export type L7Input = {
 );
 
 function driftOf(dr: { rate: Q; time: Q } | undefined): { mg: Dec; text: string } {
-  if (dr === undefined) return { mg: ZERO, text: '' };
+  if (!given(dr)) return { mg: ZERO, text: '' };
   const rate = parse(dr.rate, 'The drift');
   needKind(rate, ['mass rate'], 'The drift (e.g. "8 µg/min")');
   notNegative(rate, 'The drift');
@@ -586,7 +701,7 @@ export function l8MassLoss(i: L8Input): Outcome<{ readonly sampleMass: Dec; read
     const check = checkOf(value, unit, i.limit).check;
     let cm: Check | undefined;
     let cmLine = '';
-    if (i.constantMass !== undefined) {
+    if (given(i.constantMass)) {
       if (afters.length < 2) refuse('Constant mass needs at least two successive weighings after drying or ignition');
       const prev = afters[afters.length - 2]!;
       const r = noFurtherChange(prev.text, after.text, i.constantMass);
@@ -633,6 +748,8 @@ export type L10Input = { readonly decimals?: number; readonly limit?: Limit } & 
       readonly form: 'solution' | 'neat liquid' | 'solution by mass';
       /** solution: g per 100 mL ("2.000 g/100 mL", "%w/v" or mg/mL). */
       readonly concentration?: Q;
+      /** solution: or the substance weighed and the volume it is dissolved in, c = mass ÷ volume × 100 (g per 100 mL). */
+      readonly sample?: { readonly mass?: Q; readonly volume?: Q };
       /** solution by mass: g per 100 g ("%w/w"). */
       readonly massPercent?: Q;
       /** neat liquid, solution by mass: relative density (a plain number) or density. */
@@ -679,13 +796,30 @@ export function l10Reading(i: L10Input): Outcome<{ readonly decision?: 'pass' | 
           positive(p, 'The relative density');
           return p;
         };
+        const weighed = given(i.sample) ? i.sample : undefined;
+        if (weighed !== undefined && i.form !== 'solution') refuse(`The ${i.form} form is not made up from a weighed amount in a flask: leave out the sample mass and volume`);
         if (i.form === 'solution') {
-          if (i.concentration === undefined) refuse('A solution needs its concentration (g per 100 mL)');
-          const c = parse(i.concentration, 'The concentration');
-          needKind(c, ['mass concentration'], 'The concentration (g per 100 mL)');
-          positive(c, 'The concentration');
-          value = HUNDRED.times(a.v).div(ldm.times(to(c, '%w/v')));
-          line = `100 × ${a.text} ÷ (${fmt(ldm, 4)} dm × ${fmt(to(c, '%w/v'), 4)} g/100 mL)`;
+          if ((i.concentration === undefined) === (weighed === undefined)) refuse('A solution needs its concentration (g per 100 mL), or the mass weighed and the volume it is dissolved in: one of them');
+          let cw: Dec;
+          let cText = '';
+          if (weighed !== undefined) {
+            if (weighed.mass === undefined || weighed.volume === undefined) refuse('Give both the mass weighed and the volume it is dissolved in');
+            const m = parse(weighed.mass, 'The mass weighed');
+            const vol = parse(weighed.volume, 'The volume');
+            needKind(m, ['mass'], 'The mass weighed');
+            needKind(vol, ['volume'], 'The volume');
+            positive(m, 'The mass weighed');
+            positive(vol, 'The volume');
+            cw = to(m, 'g').div(to(vol, 'mL')).times(HUNDRED);
+            cText = ` (${m.text} in ${vol.text})`;
+          } else {
+            const c = parse(i.concentration as Q, 'The concentration');
+            needKind(c, ['mass concentration'], 'The concentration (g per 100 mL)');
+            positive(c, 'The concentration');
+            cw = to(c, '%w/v');
+          }
+          value = HUNDRED.times(a.v).div(ldm.times(cw));
+          line = `100 × ${a.text} ÷ (${fmt(ldm, 4)} dm × ${fmt(cw, 4)} g/100 mL${cText})`;
         } else if (i.form === 'neat liquid') {
           const dd = dens();
           const dv = dd.unit.kind === 'number' ? dd.v : to(dd, 'g/mL');

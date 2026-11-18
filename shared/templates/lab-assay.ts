@@ -7,7 +7,7 @@
  * S1 absorptivity form, S3 basis applied twice, S4 correction factor against response factor, S7 label per volume.
  */
 import {
-  checkOf, Dec, decimalsOf, defaultDecimals, fmt, HUNDRED, needKind, ONE, parse, parseAny, percent, refuse, run, sameKind, show,
+  checkOf, Dec, decimalsOf, defaultDecimals, fmt, given, HUNDRED, needKind, ONE, parse, parseAny, percent, refuse, run, sameKind, show,
   shownNumber, to, unitOf, ZERO, type Outcome, type Parsed, type Q, type ResultValue,
 } from './core.js';
 import { checkLimit, roundHalfUp, writtenDecimals, type Check, type Limit } from './rounding.js';
@@ -83,6 +83,11 @@ export interface Dilution {
   /** The flask the weighed amount (or the sample volume, or the whole units) is dissolved in. Not given for a solution of declared strength. */
   readonly volume?: Q;
   readonly steps?: readonly { readonly aliquot: Q; readonly to: Q }[];
+  /**
+   * The overall factor of the further dilutions instead of their steps (a plain number, e.g. "10", or the dilute
+   * step's factor, L21), where the analyst confirmed the dilutions in a dilute step.
+   */
+  readonly factor?: Q;
 }
 
 interface DilutionOut {
@@ -107,6 +112,14 @@ function readDilution(d: Dilution | undefined, what: string, needVolume: boolean
     refuse(`${what}: a solution of declared strength is not dissolved again; give only the further dilutions (aliquot and the volume it is made up to)`);
   }
   let ratio = ONE;
+  if (d?.factor !== undefined) {
+    if ((d.steps ?? []).length > 0) refuse(`${what}: give the further dilutions either as their steps or as one dilution factor, not both (they would count twice)`);
+    const f = parse(d.factor, `${what}, the dilution factor`);
+    needKind(f, ['number', 'count'], `${what}, the dilution factor`);
+    if (f.v.lt(ONE)) refuse(`${what}: a dilution factor is at least 1 (the volume made up to ÷ the aliquot); "${f.text}" was given`);
+    parts.push(`dilution factor ${n(f.v, '')}`);
+    return { volume, ratio: f.v, text: parts.join(' × ') };
+  }
   (d?.steps ?? []).forEach((s, k) => {
     const a = parse(s.aliquot, `${what}, dilution ${k + 1}, the aliquot`);
     const t = parse(s.to, `${what}, dilution ${k + 1}, the volume made up to`);
@@ -131,8 +144,8 @@ export interface L1Standard {
   /** The standard's own loss on drying / water, when its potency is on the dried / anhydrous basis and it is used as it is. */
   readonly lod?: Q;
   readonly water?: Q;
-  /** The standard is dried before weighing (the method says so): its potency on the dried basis is used directly. */
-  readonly driedBeforeUse?: boolean;
+  /** The standard is dried before weighing (the method says so): its potency on the dried basis is used directly. A recorded yes / no counts. */
+  readonly driedBeforeUse?: boolean | 'yes' | 'no';
   /** Not weighed: the declared content of a reference solution or a prepared standard solution (mg/mL, µg/mL, % w/v). */
   readonly declared?: Q;
   readonly dilution?: Dilution;
@@ -164,7 +177,7 @@ function standardConcentration(s: L1Standard | undefined, what = 'The standard')
   const p = percent(s.potency, `${what}, the potency`);
   if (!p.v.isPositive() || p.v.isZero()) refuse(`${what}: the potency must be more than zero`);
   const basis = s.potencyBasis ?? 'as is';
-  const dried = s.driedBeforeUse === true;
+  const dried = s.driedBeforeUse === true || s.driedBeforeUse === 'yes';
   let used = p.v;
   let potLine = p.text;
   const twice = (x: string): never =>
@@ -189,6 +202,11 @@ function standardConcentration(s: L1Standard | undefined, what = 'The standard')
   const d = readDilution(s.dilution, what, true);
   const c = to(m, 'mg').times(used).div(HUNDRED).div(d.volume.times(d.ratio));
   return { c, line: `standard ${m.text} × ${potLine} ÷ 100 ÷ (${d.text}) = ${withUnit(c, 'mg/mL')}` };
+}
+
+/** The concentration of a weighed (or declared) standard in its final solution, mg/mL, with its worked line (used by L5). */
+export function standardSolution(s: L1Standard, what = 'The standard'): { c: Dec; line: string } {
+  return standardConcentration(s, what);
 }
 
 // ---------------------------------------------------------------- L1 Assay by external standard
@@ -262,8 +280,10 @@ export interface L1Input extends L1Measurement {
   readonly per: 'mass' | 'unit' | 'volume';
   /** Result unit: per mass default %, per unit default mg, per volume default mg/mL. */
   readonly unit?: string;
-  /** Per mass only: the content on a basis (L3) with the sample's own LOD / water / solvents. */
+  /** Per mass only: the content on a basis (L3) with the sample's own LOD / water / solvents. Left out when nothing in it is given. */
   readonly onBasis?: BasisCorrection;
+  /** Per unit: the label claim per unit (from the specification); the result is then the % of label claim (L2). */
+  readonly labelClaim?: Q;
   /** Specific absorbance: IU per mg of the pure substance (retinol), for a result in IU. */
   readonly iuPerMg?: Q;
   readonly decimals?: number;
@@ -279,6 +299,8 @@ export interface L1Extra {
   readonly curve?: { readonly slope: Dec; readonly intercept: Dec; readonly r: Dec };
   /** Amount of analyte found in the sample taken, mg (IU in the IU mode). */
   readonly amount: Dec;
+  /** With a label claim: the content per unit before it is put as a % of label claim. */
+  readonly perUnit?: Dec;
 }
 
 interface Measured {
@@ -489,6 +511,9 @@ const PER_DEFAULT = { mass: '%', unit: 'mg', volume: 'mg/mL' } as const;
 
 /** L1 core: the result and the worked line, without the outer run(). */
 function l1(i: L1Input): { value: Dec; unit: string; shown: string; extra: L1Extra } {
+  const onB = given(i.onBasis) ? i.onBasis : undefined;
+  if (onB !== undefined && onB.basis === undefined) refuse('The sample\'s loss on drying, water, solvents or loss on ignition is given, but no basis: say which basis the result is on (dried, anhydrous …), or leave them out');
+  if (i.labelClaim !== undefined && i.per !== 'unit') refuse('A label claim is per unit: give the result per unit (a result per mass of substance is not a % of label claim)');
   const m = measure(i);
   const s = readSample(i.sample);
   const amount = m.c.times(s.d.volume).times(s.d.ratio); // mg in the sample taken
@@ -515,14 +540,14 @@ function l1(i: L1Input): { value: Dec; unit: string; shown: string; extra: L1Ext
       const pct = amount.div(to(s.p, 'mg')).times(HUNDRED);
       value = to({ v: pct, unit: unitOf('%'), text: '' }, u);
       lines.push(`${amountLine} ÷ ${s.p.text} × 100 = ${withUnit(pct, '%')}`);
-      if (i.onBasis !== undefined) {
-        const b = onBasis(value, withUnit(value, u.symbol), i.onBasis);
+      if (onB !== undefined) {
+        const b = onBasis(value, withUnit(value, u.symbol), onB);
         value = b.v;
-        lines.push(`on the ${i.onBasis.basis} basis: ${b.line} = ${withUnit(value, u.symbol)}`);
+        lines.push(`on the ${onB.basis} basis: ${b.line} = ${withUnit(value, u.symbol)}`);
       }
     }
   } else if (i.per === 'unit') {
-    if (i.onBasis !== undefined) refuse('A content per unit is not put on a basis; the basis applies to a content per mass of substance');
+    if (onB !== undefined) refuse('A content per unit is not put on a basis; the basis applies to a content per mass of substance');
     let perUnit: Dec;
     const total = iu !== undefined ? amount.times(iu) : amount;
     const tu = iu !== undefined ? 'IU' : 'mg';
@@ -542,8 +567,17 @@ function l1(i: L1Input): { value: Dec; unit: string; shown: string; extra: L1Ext
     if (iu !== undefined) needKind({ v: ONE, unit: u, text: u.symbol }, ['IU'], 'The result unit');
     else needKind({ v: ONE, unit: u, text: u.symbol }, ['mass'], 'The result unit per unit');
     value = to({ v: perUnit, unit: unitOf(tu), text: '' }, u);
+    if (i.labelClaim !== undefined) {
+      // L2: the content per unit ÷ the label claim × 100.
+      const lc = l2LabelClaim({ content: { ok: true, value, unit: u.symbol }, labelClaim: i.labelClaim });
+      if (!lc.ok) refuse(lc.message);
+      lines.push(`${withUnit(value, u.symbol)} ÷ label claim ${parse(i.labelClaim, 'The label claim').text} × 100 = ${withUnit(lc.value, '%')} of label claim`);
+      const extra: L1Extra = { sampleConcentration: m.c, amount: iu !== undefined ? amount.times(iu) : amount, perUnit: value,
+        ...(m.cStd === undefined ? {} : { standardConcentration: m.cStd }), ...(m.curve === undefined ? {} : { curve: m.curve }) };
+      return { value: lc.value, unit: '%', shown: lines.join('; '), extra };
+    }
   } else {
-    if (i.onBasis !== undefined) refuse('A content per volume is not put on a basis');
+    if (onB !== undefined) refuse('A content per volume is not put on a basis');
     if (iu !== undefined) refuse('A result in IU per volume is not supported; give the result per mass or per unit');
     needKind({ v: ONE, unit: u, text: u.symbol }, ['mass concentration'], 'The result unit per volume');
     let perMl: Dec;
@@ -698,9 +732,22 @@ export interface L4Named {
   readonly limit?: Limit;
 }
 
+/**
+ * The peak table as a step records it: the relative retention times and the areas as two lists in the same order
+ * (peak k = rrts[k], areas[k]), and the principal peak's area on its own (area normalisation). Named impurities are
+ * found by their RRT windows; the factors are the named impurities'.
+ */
+export interface L4Table {
+  readonly rrts: readonly Q[];
+  readonly areas: readonly Q[];
+  readonly principal?: Q;
+}
+
 export interface L4Input {
   readonly mode: 'area normalisation' | 'external standard';
-  readonly peaks: readonly L4Peak[];
+  /** The peaks (or `table`). */
+  readonly peaks?: readonly L4Peak[];
+  readonly table?: L4Table;
   readonly references?: readonly L4Reference[];
   /** External standard with a reference standard: the test solution (mass and dilution, or its concentration). */
   readonly sample?: { readonly mass: Q; readonly dilution: Dilution } | { readonly concentration: Q };
@@ -714,6 +761,7 @@ export interface L4Input {
   readonly reportingThreshold?: string;
   /** Limit for any unspecified (unknown) impurity. */
   readonly unknownLimit?: Limit;
+  // A reference list whose entries were all left out (a method in the area normalisation mode) is no reference.
   /** "Not more than N peaks above x %". */
   readonly countRule?: { readonly above: string; readonly notMoreThan: number };
   readonly decimals?: number;
@@ -741,10 +789,12 @@ export interface L4Extra {
   readonly countCheck?: Check;
   /** false when any limit (named, unknown, group, count, total) fails. */
   readonly allPass: boolean;
+  /** Every individual limit (named and unknown impurities, groups, the count rule), when there is one: fails when any fails. */
+  readonly limitsCheck?: Check;
 }
 
 function readFactor(f: Factor | undefined, what: string): { v: Dec; kind: Factor['kind'] } | undefined {
-  if (f === undefined) return undefined;
+  if (!given(f)) return undefined;
   if (typeof f !== 'object' || (f.kind !== 'correction factor' && f.kind !== 'relative response factor')) {
     refuse(`${what}: safety rule S4: say whether the factor is a correction factor (the area is multiplied by it) or a relative response factor (the area is divided by it); applying the wrong one changes the result by the factor squared`);
   }
@@ -763,8 +813,25 @@ const inWindow = (rrt: Dec, low: string, high: string, what: string): boolean =>
  * standard), correction / relative response factors (S4), excluded peaks, split peaks summed by name, RRT windows,
  * groups, reporting threshold, total, largest unknown and "not more than N peaks above x %".
  */
-export function l4Impurities(i: L4Input): Outcome<L4Extra> {
+/** The peaks of the table form: RRT k with area k; the principal peak first. */
+function tablePeaks(t: L4Table): L4Peak[] {
+  if (t.rrts.length !== t.areas.length) refuse(`The peak table has ${t.rrts.length} relative retention times and ${t.areas.length} areas: give one RRT for each area, in the same order`);
+  const rrt = (q: Q, k: number): string => {
+    const x = typeof q === 'string' ? q.trim().split(/\s+/)[0] ?? '' : q.value;
+    if (!PLAIN.test(x.trim())) refuse(`Peak ${k + 1}: the relative retention time must be a plain decimal (for example "0.85"); "${x}" was given`);
+    return x.trim();
+  };
+  return [
+    ...(t.principal === undefined ? [] : [{ name: 'principal peak', area: t.principal, principal: true }]),
+    ...t.areas.map((area, k) => ({ rrt: rrt(t.rrts[k] as Q, k), area })),
+  ];
+}
+
+export function l4Impurities(input: L4Input): Outcome<L4Extra> {
   return run(() => {
+    if ((input.peaks === undefined) === (input.table === undefined)) refuse('Give the peaks of the chromatogram, either as peaks or as the peak table (RRTs and areas)');
+    const i = { ...input, peaks: input.peaks ?? tablePeaks(input.table as L4Table), ...(input.references?.length ? {} : { references: undefined }),
+      named: (input.named ?? []).filter((x) => given(x.name)) };
     if (i.peaks.length === 0) refuse('Give the peaks of the chromatogram');
     const named = i.named ?? [];
     const names = new Set<string>();
@@ -953,6 +1020,14 @@ export function l4Impurities(i: L4Input): Outcome<L4Extra> {
     }
     const totalCheck = checkOf(total, '%', i.limit);
     const allPass = [...impurities.map((m) => m.check), ...groups.map((g) => g.check), countCheck, totalCheck.check].every((c) => c === undefined || c.pass);
+    const individual = [
+      ...impurities.filter((m) => m.check !== undefined).map((m) => `${m.name}: ${m.check!.shown}`),
+      ...groups.filter((g) => g.check !== undefined).map((g) => `${g.name}: ${g.check!.shown}`),
+      ...(countCheck === undefined ? [] : [countCheck.shown]),
+    ];
+    const indPass = [...impurities.map((m) => m.check), ...groups.map((g) => g.check), countCheck].every((c) => c === undefined || c.pass);
+    const limitsCheck: Check | undefined = individual.length === 0 ? undefined
+      : { pass: indPass, level: indPass ? 'pass' : 'fail', rounded: indPass ? 'pass' : 'fail', shown: `Individual limits: ${individual.join('; ')}` };
 
     const shown = [
       lead,
@@ -966,6 +1041,7 @@ export function l4Impurities(i: L4Input): Outcome<L4Extra> {
       ok: true, value: total, unit: '%', shown, impurities, disregarded, excluded, groups,
       ...(largestUnknown === undefined ? {} : { largestUnknown }),
       ...(countCheck === undefined ? {} : { countCheck }),
+      ...(limitsCheck === undefined ? {} : { limitsCheck }),
       allPass, ...totalCheck,
     };
   });

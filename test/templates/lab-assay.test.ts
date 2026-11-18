@@ -689,7 +689,7 @@ describe('L4 Impurities: area normalisation', () => {
   });
 
   it('L4: a factor on the peak and on the impurity is refused', () => {
-    const peaks = NORM.peaks.map((p) => (p.name === 'impurity A' ? { ...p, factor: { kind: 'correction factor' as const, value: '2' } } : p));
+    const peaks = NORM.peaks!.map((p) => (p.name === 'impurity A' ? { ...p, factor: { kind: 'correction factor' as const, value: '2' } } : p));
     expect(refused(l4Impurities({ ...NORM, peaks, named: [{ name: 'impurity A', factor: { kind: 'correction factor', value: '2' } }] }))).toMatch(/give it once/);
   });
 
@@ -758,7 +758,7 @@ describe('L4 Impurities: area normalisation', () => {
     [{ peaks: [{ principal: true, area: '1000' }, { rrt: '1.2', area: '10', excluded: ' ' }] }, /excluded without a reason/],
     [{ peaks: [{ principal: true, area: '1000' }, { rrt: '1.2', area: '-1' }] }, /cannot be negative/],
     [{ peaks: [{ principal: true, area: '1000 mg' }] }, /must be a number; "1000 mg" is a mass/],
-    [{ peaks: [{ principal: true, area: '1000' }], references: [] }, /uses no reference solution/],
+    [{ peaks: [{ principal: true, area: '1000' }], references: [{ name: 'R', responses: ['100'], percentOfTest: '1 %' }] }, /uses no reference solution/],
     [{ peaks: [{ principal: true, area: '0' }] }, /total peak area is zero/],
     [{ peaks: [{ principal: true, area: '1000' }, { rrt: '1.2', area: '10' }], named: [{ name: 'X', rrtLow: '1.1', rrtHigh: '1.3' }, { name: 'Y', rrtLow: '1.15', rrtHigh: '1.25' }] }, /must not overlap/],
     [{ peaks: [{ principal: true, area: '1000' }], named: [{ name: 'X' }, { name: 'X' }] }, /defined twice/],
@@ -791,13 +791,13 @@ describe('L4 Impurities: external standard', () => {
 
   it('L4 diluted reference: with a correction factor of 1.4 on impurity B', () => {
     // B 1000 × 1.4 = 1400 ÷ 5000 × 1.0 = 0.28 %
-    const r = ok(l4Impurities({ ...DIL, peaks: [...DIL.peaks, { name: 'impurity B', area: '1000', factor: { kind: 'correction factor', value: '1.4' } }] }));
+    const r = ok(l4Impurities({ ...DIL, peaks: [...DIL.peaks!, { name: 'impurity B', area: '1000', factor: { kind: 'correction factor', value: '1.4' } }] }));
     expect(r.impurities.find((m) => m.name === 'impurity B')?.percent.toFixed(3)).toBe('0.280');
   });
 
   it('L4 diluted reference: disregard limit (0.05 %) applied to the % of each peak', () => {
     // a peak of 200 → 200 ÷ 5000 × 1.0 = 0.04 %: disregarded
-    const r = ok(l4Impurities({ ...DIL, disregardLimit: '0.05', peaks: [...DIL.peaks, { rrt: '1.6', area: '200' }] }));
+    const r = ok(l4Impurities({ ...DIL, disregardLimit: '0.05', peaks: [...DIL.peaks!, { rrt: '1.6', area: '200' }] }));
     expect(r.disregarded).toHaveLength(1);
     expect(r.value.toFixed(3)).toBe('0.600');
   });
@@ -1112,3 +1112,81 @@ describe('L templates in the engine registry', () => {
     expect(callTemplate('L1', BASE).ok).toBe(true);
   });
 });
+
+// ================================================================ inputs added for the result blocks (build step 3)
+describe('L1 and L4: the inputs a result block passes', () => {
+  // The sample's further dilutions (5 mL to 50 mL) as one factor 10, as the dilute step gives it (L21, in "units").
+  const byFactor = (factor: unknown) => ({ ...SAMPLE, dilution: { volume: '100 mL', factor } });
+
+  it('L1 a dilution factor gives the same result as its steps: 20 %', () => {
+    expect(ok(L1({ sample: byFactor('10') as L1Input['sample'] })).value.toFixed(6)).toBe('20.000000');
+    expect(ok(L1({ sample: byFactor({ value: '10.000', unit: 'units' }) as L1Input['sample'] })).value.toFixed(6)).toBe('20.000000');
+    expect(ok(L1({ sample: byFactor('10') as L1Input['sample'] })).shown).toContain('(100 mL × dilution factor 10)');
+    expect(ok(L1({ standard: { ...STD, dilution: { volume: '100 mL', factor: '10' } } })).value.toFixed(6)).toBe('20.000000');
+  });
+
+  it('L1 a dilution factor is refused with the steps too, below 1, or in a unit of another kind', () => {
+    expect(refused(L1({ sample: { ...SAMPLE, dilution: { ...SAMPLE.dilution, factor: '10' } } }))).toMatch(/not both \(they would count twice\)/);
+    expect(refused(L1({ sample: byFactor('0.5') as L1Input['sample'] }))).toMatch(/a dilution factor is at least 1/);
+    expect(refused(L1({ sample: byFactor('10 mL') as L1Input['sample'] }))).toMatch(/dilution factor/);
+  });
+
+  it('L1 per unit with the label claim: the % of label claim (L2)', () => {
+    // 50 mg found in 250.0 mg of powder × 250.0 mg average weight = 50 mg per tablet ÷ 50 mg = 100 %.
+    const r = ok(L1({ per: 'unit', labelClaim: '50 mg' }));
+    expect([r.value.toFixed(4), r.unit, r.perUnit?.toFixed(4)]).toEqual(['100.0000', '%', '50.0000']);
+    expect(r.shown).toContain('50 mg ÷ label claim 50 mg × 100 = 100 % of label claim');
+    expect(refused(L1({ labelClaim: '50 mg' }))).toMatch(/A label claim is per unit/);
+  });
+
+  it('L1 a basis group left out entirely is no basis; its values without the basis are refused', () => {
+    expect(ok(L1({ onBasis: {} as never })).value.toFixed(6)).toBe('20.000000');
+    expect(refused(L1({ onBasis: { lod: '0.5 %' } as never }))).toMatch(/but no basis/);
+  });
+
+  it('L1 a recorded "yes" for a standard dried before use counts (safety rule S3 still applies)', () => {
+    const std = { ...STD, potencyBasis: 'dried' as const };
+    expect(ok(L1({ standard: { ...std, driedBeforeUse: 'yes' } })).value.toFixed(6)).toBe('20.000000');
+    expect(refused(L1({ standard: { ...std, driedBeforeUse: 'yes', lod: '1.0 %' } }))).toMatch(/safety rule S3/);
+    expect(refused(L1({ standard: { ...std, driedBeforeUse: 'no' } }))).toMatch(/give its loss on drying/);
+  });
+
+  // The area-normalisation example as a peak table: principal 100000; RRT 0.85 200; RRT 1.20 300.
+  const TABLE: L4Input = { mode: 'area normalisation', table: { rrts: ['0.85', '1.20'], areas: ['200', '300'], principal: '100000' } };
+
+  it('L4 the peak table: RRT k with area k, the principal peak on its own', () => {
+    // Total 100500: 200 ÷ 100500 × 100 = 0.19900 %; 300 ÷ 100500 × 100 = 0.29851 %; total 0.49751 %.
+    const r = ok(l4Impurities(TABLE));
+    expect(r.value.toFixed(5)).toBe('0.49751');
+    expect(r.impurities.map((m) => m.name)).toEqual(['unknown at RRT 0.85', 'unknown at RRT 1.20']);
+    // Readings with a unit from a step count by their value.
+    expect(ok(l4Impurities({ ...TABLE, table: { rrts: [{ value: '0.85', unit: '' }, { value: '1.20', unit: '' }], areas: [{ value: '200', unit: '' }, { value: '300', unit: '' }], principal: { value: '100000', unit: '' } } })).value.toFixed(5)).toBe('0.49751');
+  });
+
+  it('L4 the peak table is refused with the peaks too, with unequal lists, or an RRT that is not a plain decimal', () => {
+    expect(refused(l4Impurities({ ...TABLE, peaks: [{ area: '1', principal: true }] }))).toMatch(/either as peaks or as the peak table/);
+    expect(refused(l4Impurities({ ...TABLE, table: { ...TABLE.table!, rrts: ['0.85'] } }))).toMatch(/1 relative retention times and 2 areas/);
+    expect(refused(l4Impurities({ ...TABLE, table: { ...TABLE.table!, rrts: ['0.85', 'x'] } }))).toMatch(/Peak 2: the relative retention time must be a plain decimal/);
+  });
+
+  it('L4 named impurities in the table by their windows; an entry without a name is none; a factor left out entirely is none', () => {
+    const named = [{ name: 'impurity A', rrtLow: '0.80', rrtHigh: '0.90', limit: { high: '0.15', unit: '%' }, factor: {} as never }, { rrtLow: '1.1' } as never];
+    const r = ok(l4Impurities({ ...TABLE, named }));
+    expect(r.impurities.map((m) => `${m.name} ${m.kind}`)).toEqual(['impurity A named', 'unknown at RRT 1.20 unknown']);
+    // impurity A 0.19900 % → 0.20 % > 0.15 %: its own limit fails; the individual limits fail with it.
+    expect(r.limitsCheck).toMatchObject({ pass: false, shown: expect.stringMatching(/^Individual limits: impurity A: .*OUT OF LIMITS/) });
+    expect(r.check).toBeUndefined();
+    expect(failedKeys(r)).toEqual(['limitsCheck']);
+    // Without individual limits there is no such check.
+    expect(ok(l4Impurities(TABLE)).limitsCheck).toBeUndefined();
+  });
+
+  it('L4 a reference list left empty (area normalisation) is no reference', () => {
+    expect(ok(l4Impurities({ ...TABLE, references: [] })).value.toFixed(5)).toBe('0.49751');
+  });
+});
+
+/** The keys of the checks in a result that failed (as the engine finds them). */
+function failedKeys(r: object): string[] {
+  return Object.entries(r).filter(([k, v]) => /check$/i.test(k) && (v as { pass?: boolean } | null)?.pass === false).map(([k]) => k);
+}

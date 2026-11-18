@@ -244,6 +244,25 @@ Decisions taken while building:
 - **S1 in L1:** the template cannot tell A(1 %, 1 cm) from the absorptivity by the number alone, so the form is a
   required input; a figure taken in the wrong form gives a result 10 times off, which the limit then fails.
 
+## Inputs the result blocks pass (build step 3)
+
+A block's optional settings left out leave an optional group of inputs with every value left out (`given` in
+`core.ts`): such a group (a basis, a VS in excess, an aliquot, a drift, a constant-mass rule, a factor, an acceptance)
+counts as not given; its values given without its key (a LOD without the basis) are refused. Additive inputs:
+
+- **L1**: a dilution as one `factor` (a plain number or the dilute step's L21 factor) instead of its steps, never
+  both, at least 1; `labelClaim` (per unit): the result is the % of label claim (L2), the mg per unit kept as
+  `perUnit`; a standard dried before use may be a recorded "yes"/"no".
+- **L4**: the peak table `table` (RRTs and areas as two lists in the same order, the principal peak's area on its
+  own) instead of `peaks`; a reference list left empty is none; `limitsCheck` fails when any individual, group or
+  count limit fails (so the step shows it, beside the total's `check`).
+- **L5**: responses `byTime` (per time point, per vessel set: 6, 6 more, 12 more) instead of `vessels`; the standard
+  `prepared` (weighed amount, potency, flask and dilution, as L1) instead of its concentration; the dilution as a
+  plain number or the dilute step's factor; `acceptance`: the C6 stage rules applied to the vessels' own results
+  (immediate release and delayed-release buffer with Q = the limit's lower bound; acid stage with its upper bound;
+  extended release with one range per time point), giving `decision`, `stageReached`, `nextStageUnits` and `check`.
+- **L10** specific rotation of a solution: the mass weighed and its `volume` instead of the concentration.
+
 ## Lab templates, physical-chemical (`lab-physchem.ts`: L5-L8, L10, L14, L17, L19)
 
 The LIMS library v1 (section 3b). Same rules as every template above: text inputs with units, exact decimals, plain

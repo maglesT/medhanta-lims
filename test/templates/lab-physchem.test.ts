@@ -996,3 +996,101 @@ describe('L5-L19 in the template registry', () => {
     expect(r.ok && r.value.toFixed(2)).toBe('100.04');
   });
 });
+
+// ================================================================ inputs added for the result blocks (build step 3)
+describe('L5-L10: the inputs a result block passes', () => {
+  // The example run, one vessel, as the dissolution step records it: per time point, per vessel set.
+  const byTime = (sets: string[][][]) => base({ vessels: undefined, byTime: sets });
+
+  it('L5 responses per time point give the same results as per vessel', () => {
+    const r = ok(l5Dissolution(byTime([[['0.300']], [['0.450']], [['0.520']], []])));
+    expect(r.vessels[0]!.results.map((x) => x.toFixed(1))).toEqual(['54.0', '81.6', '95.1']);
+    // Two vessels, in the same order at every time point.
+    const two = ok(l5Dissolution(byTime([[['0.300', '0.310']], [['0.450', '0.460']], [['0.520', '0.530']]])));
+    expect(two.perVessel.length).toBe(2);
+    expect(two.atTime[0]!.map((x) => d(x).toFixed(1))).toEqual(['54.0', '55.8']);
+  });
+
+  it('L5 per time point: refused for a time point the method does not have, a time point left empty, or unequal vessel sets', () => {
+    expect(refused(l5Dissolution(byTime([[['0.300']], [['0.450']], [['0.520']], [['0.6']]])))).toMatch(/more time points than the method has \(3\)/);
+    expect(refused(l5Dissolution(byTime([[['0.300']], [], [['0.520']]])))).toBe('Give the vessel responses at 20 min');
+    expect(refused(l5Dissolution(byTime([[['0.300', '0.310']], [['0.450']], [['0.520', '0.530']]])))).toMatch(/every time point needs the same vessels/);
+    expect(refused(l5Dissolution(base({ byTime: [[['0.3']]] })))).toMatch(/either per vessel or per time point/);
+  });
+
+  it('L5 the standard as prepared: 25.00 mg of 99.0 % in 50 mL, diluted 50 times = 0.0099 mg/mL', () => {
+    // C = response ÷ 0.500 × 0.0099 × 50: the example's results × 0.99 (95.1 % → 94.149 %).
+    const r = ok(l5Dissolution(base({ standard: { responses: ['0.500'], prepared: { mass: '25.00 mg', potency: '99.0 %', dilution: { volume: '50 mL', factor: '50' } } } })));
+    expect(r.value.toFixed(3)).toBe('94.149');
+    expect(r.shown).toContain('0.0099 mg/mL (standard 25.00 mg × 99.0 % ÷ 100 ÷ (50 mL × dilution factor 50)');
+    expect(refused(l5Dissolution(base({ standard: { responses: ['0.500'], concentration: '0.01 mg/mL', prepared: { mass: '25.00 mg' } } })))).toMatch(/one of them/);
+    // A prepared standard left out entirely is none.
+    expect(ok(l5Dissolution(base({ standard: { responses: ['0.500'], concentration: '0.01 mg/mL', prepared: {} } }))).value.toFixed(1)).toBe('95.1');
+  });
+
+  it('L5 the sample dilution as the dilute step gives it (a factor in "units")', () => {
+    expect(ok(l5Dissolution(base({ dilution: { value: '50.000', unit: 'units' } }))).value.toFixed(1)).toBe('95.1');
+  });
+
+  // Six vessels at one time point (30 min), C = the response: % = response × 900 ÷ 500 × 100 = response × 180.
+  const six = (rs: string, more?: string) => base({
+    vessels: undefined, stages: [{ name: 'medium', volume: '900 mL', times: [{ time: '30 min', aliquot: '10 mL' }] }],
+    byTime: [[rs.split(' ').map((x) => x), ...(more ? [more.split(' ')] : [])]],
+  });
+
+  it('L5 with the acceptance: C6 on the vessels\' own results, set by set; Q is the lower limit as written', () => {
+    // 0.500 × 180 = 90 % in every vessel ≥ Q + 5 = 85 %.
+    const pass = ok(l5Dissolution({ ...six('0.500 0.500 0.500 0.500 0.500 0.500'), acceptance: { test: 'dissolution IR', limit: { low: '80', unit: '%' } } }));
+    expect([pass.decision, pass.stageReached, pass.check?.pass]).toEqual(['pass', 1, true]);
+    // One at 0.450 (81 %): test 6 more; with 6 more at 0.470 (84.6 %): mean of 12 = (2.95 + 2.82) × 180 ÷ 12 = 86.55 % ≥ 80 %: S2 passes.
+    const next = ok(l5Dissolution({ ...six('0.500 0.500 0.500 0.500 0.500 0.450'), acceptance: { test: 'dissolution IR', limit: { low: '80', unit: '%' } } }));
+    expect([next.decision, next.nextStageUnits, next.check?.pass]).toEqual(['next stage', 6, false]);
+    const s2 = ok(l5Dissolution({ ...six('0.500 0.500 0.500 0.500 0.500 0.450', '0.470 0.470 0.470 0.470 0.470 0.470'), acceptance: { test: 'dissolution IR', limit: { low: '80', unit: '%' } } }));
+    expect([s2.decision, s2.stageReached, s2.value.toFixed(2)]).toEqual(['pass', 2, '86.55']);
+  });
+
+  it('L5 the acceptance is refused without its test, without Q, with a limit not in %, or with ranges that do not match the time points', () => {
+    const r = six('0.500 0.500 0.500 0.500 0.500 0.500');
+    expect(refused(l5Dissolution({ ...r, acceptance: { limit: { low: '80', unit: '%' } } }))).toMatch(/not the acceptance test/);
+    expect(refused(l5Dissolution({ ...r, acceptance: { test: 'dissolution IR', limit: { high: '80', unit: '%' } } }))).toMatch(/Q is the lower limit/);
+    expect(refused(l5Dissolution({ ...r, acceptance: { test: 'dissolution IR', limit: { low: '8', unit: 'mg' } } }))).toMatch(/in % of label claim/);
+    expect(refused(l5Dissolution({ ...r, acceptance: { test: 'dissolution ER', ranges: [] } }))).toMatch(/one range for each time point \(1\)/);
+    // An acceptance left out entirely is none.
+    expect(ok(l5Dissolution({ ...r, acceptance: { ranges: [] } })).check).toBeUndefined();
+  });
+
+  it('L5 acid stage (A1) by its upper limit, extended release (L1) by the ranges', () => {
+    // 0.050 × 180 = 9 %: none above 10 %.
+    expect(ok(l5Dissolution({ ...six('0.050 0.050 0.050 0.050 0.050 0.050'), acceptance: { test: 'dissolution DR acid', limit: { high: '10', unit: '%' } } })).decision).toBe('pass');
+    // The example's three time points for 6 equal vessels: 54.0, 81.6, 95.1 %; ranges 45-65, 70-90, NLT 85.
+    const v = ['0.300', '0.450', '0.520'].map((x) => [Array(6).fill(x) as string[]]);
+    const er = ok(l5Dissolution({ ...byTime(v), acceptance: { test: 'dissolution ER', ranges: [{ low: '45', high: '65', unit: '%' }, { low: '70', high: '90', unit: '%' }, { low: '85', unit: '%' }] } }));
+    expect([er.decision, er.check?.pass]).toEqual(['pass', true]);
+  });
+
+  it('L6 optional groups left out entirely (a VS in excess, an aliquot, a temperature correction, a basis) are none', () => {
+    const direct = { mode: 'direct' as const, sample: '500.0 mg', titrant: { volume: '47.475 mL', molarity: '0.1 M', factor: '1.000' }, equivalence: { mass: '10.00 mg', molarity: '0.1 M' } };
+    // 47.475 × 0.1 ÷ 0.1 × 10.00 = 474.75 mg ÷ 500.0 mg = 94.95 %.
+    const r = ok(l6Titration({ ...direct, excess: {} as never, aliquot: {} as never, temperatureCorrection: {} as never, basis: {} as never }));
+    expect(r.value.toFixed(2)).toBe('94.95');
+    expect(refused(l6Titration({ ...direct, basis: { loss: '0.5 %' } as never }))).toMatch(/but no basis/);
+  });
+
+  it('L7 a drift left out entirely is none; L8 a constant-mass rule left out entirely is none', () => {
+    const kf = ok(l7WaterKf({ mode: 'volumetric', sample: '200.0 mg', volume: '1.20 mL', factor: '5.012 mg/mL', drift: {} as never }));
+    expect(kf.value.toFixed(4)).toBe('3.0072');
+    const lod = ok(l8MassLoss({ mode: 'loss on drying', tare: '25.1234 g', before: '26.1240 g', after: ['26.1195 g'], constantMass: {} as never }));
+    expect(lod.constantMass).toBeUndefined();
+  });
+
+  it('L10 specific rotation of a solution from the mass weighed and its flask: 2.000 g in 100.0 mL, 2 dm, +2.10° = +52.5°', () => {
+    const rot = { mode: 'specific rotation' as const, angle: '2.10 °', pathLength: '2 dm', form: 'solution' as const };
+    const r = ok(l10Reading({ ...rot, sample: { mass: '2.000 g', volume: '100.0 mL' } }));
+    expect(r.value.toFixed(2)).toBe('52.50');
+    expect(r.shown).toContain('g/100 mL (2.000 g in 100.0 mL)');
+    expect(ok(l10Reading({ ...rot, concentration: '2.000 %w/v', sample: {} })).value.toFixed(2)).toBe('52.50');
+    expect(refused(l10Reading({ ...rot, concentration: '2.000 %w/v', sample: { mass: '2.000 g', volume: '100.0 mL' } }))).toMatch(/one of them/);
+    expect(refused(l10Reading({ ...rot, sample: { mass: '2.000 g' } }))).toMatch(/both the mass weighed and the volume/);
+    expect(refused(l10Reading({ ...rot, form: 'neat liquid', density: '1.0', sample: { mass: '2.000 g', volume: '100.0 mL' } }))).toMatch(/not made up from a weighed amount/);
+  });
+});
