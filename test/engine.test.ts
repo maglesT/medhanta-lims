@@ -31,9 +31,9 @@ describe('stepState', () => {
 });
 
 describe('the action table', () => {
-  const op = { id: 1, permissions: ['truebatch_api.batch.operate'] };
-  const checker = { id: 2, permissions: ['truebatch_api.batch.check'] };
-  const qa = { id: 3, permissions: ['truebatch_api.qa.release'] };
+  const op = { id: 1, permissions: ['lims.batch.operate'] };
+  const checker = { id: 2, permissions: ['lims.batch.check'] };
+  const qa = { id: 3, permissions: ['lims.qa.release'] };
   const ctx = (state: State, events: StepEvent[], user = op, flow: 'none' | 'optional-with-reason' | 'qa-hold' = 'none') => ({ state, events, flow, user });
   const ok = (a: Action, c: ReturnType<typeof ctx>) => refusal(a, c)?.error ?? 'allowed';
 
@@ -59,7 +59,7 @@ describe('the action table', () => {
   });
 
   it('TA-08 the checker cannot be the performer, nor anyone who started, recorded or corrected the step', () => {
-    const both = { id: 1, permissions: ['truebatch_api.batch.operate', 'truebatch_api.batch.check'] };
+    const both = { id: 1, permissions: ['lims.batch.operate', 'lims.batch.check'] };
     const done = [ev('started', '0.1.0.1', { person: 7 }), ev('value', '0.1.0.1', { person: 1 }), ev('done', '0.1.0.1', { person: 7 })];
     expect(refusal('check', ctx('done_awaiting_check', done, both))?.error).toBe('own_work');
     expect(refusal('send-back', ctx('done_awaiting_check', done, both))?.error).toBe('own_work');

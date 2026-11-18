@@ -220,7 +220,7 @@ function myWork(l: LoadedBatch, user: SessionUser) {
   for (const v of steps) {
     // TA-08: the checker's own list holds only steps the person was not involved in.
     if (!refusal('check', context(l.doc, v, user))) badges.push({ kind: 'check', step: v.id, stage: stageName(v.key.stage), title: title(v) });
-    if (v.needsResign && user.permissions.includes('truebatch_api.batch.operate')) badges.push({ kind: 'resign', step: v.id, stage: stageName(v.key.stage), title: title(v) });
+    if (v.needsResign && user.permissions.includes('lims.batch.operate')) badges.push({ kind: 'resign', step: v.id, stage: stageName(v.key.stage), title: title(v) });
   }
   // A periodic check's badge names the check: "Coding check due in 59 min".
   const check = (t: Timer) => (t.kind === 'periodic' ? stepTitle(l.doc, l.doc.stages[t.key.stage]!.steps[t.key.step]!) : t.label);
@@ -232,7 +232,7 @@ function myWork(l: LoadedBatch, user: SessionUser) {
   }
   if (!batchRefusal('production-approve', bv, user)) badges.push({ kind: 'approve', stage: '', title: 'Production approval' });
   const now = steps.find((s) => s.state === 'in_progress') ?? steps.find((s) => s.state === 'open');
-  const operates = user.permissions.includes('truebatch_api.batch.operate') && bv.status === 'in production';
+  const operates = user.permissions.includes('lims.batch.operate') && bv.status === 'in production';
   if (!operates && !badges.length) return null;
   return {
     id: l.batch.id, batchNo: l.batch.batchNo, productCode: l.doc.header.productCode, productName: l.doc.header.productName, status: bv.status,
@@ -303,7 +303,7 @@ export function batchRoutes(app: FastifyInstance, sql: Sql) {
   const anyUser = { preHandler: requirePermission() };
 
   // TA-03: issue a batch from an effective master version, with the next number of the year (never reused).
-  app.post('/api/batches', { preHandler: requirePermission('truebatch_api.batch.issue') }, async (req, reply) => {
+  app.post('/api/batches', { preHandler: requirePermission('lims.batch.issue') }, async (req, reply) => {
     const b = z.object({ masterVersionId: z.number().int().positive(), proof: z.string().min(1).max(2000) }).safeParse(req.body);
     if (!b.success) return reply.code(400).send({ error: 'invalid' });
     const user = req.user!;
@@ -368,8 +368,8 @@ export function batchRoutes(app: FastifyInstance, sql: Sql) {
 
   // To review: for QC the production-approved batches, for QA the QC-approved ones (TA-21), oldest decision first; for
   // QA also the batches still in production, which QA may terminate.
-  app.get('/api/batches/to-review', { preHandler: requirePermission('truebatch_api.qc.approve', 'truebatch_api.qa.release') }, async (req) => {
-    const qa = req.user!.permissions.includes('truebatch_api.qa.release');
+  app.get('/api/batches/to-review', { preHandler: requirePermission('lims.qc.approve', 'lims.qa.release') }, async (req) => {
+    const qa = req.user!.permissions.includes('lims.qa.release');
     const ids = await sql<{ id: number }[]>`
       select b.id::int from batches b
       where (${qa} or exists (select 1 from batch_events e where e.batch_id = b.id and e.kind = 'production_approved'))
@@ -380,7 +380,7 @@ export function batchRoutes(app: FastifyInstance, sql: Sql) {
       const l = (await loadBatch(sql, id))!;
       const bv = view(l, (await deviationsRead(app, l)).read);
       const waiting = bv.status === 'production approved' ? 'QC' : bv.status === 'QC approved' ? 'QA' : 'production';
-      if (!req.user!.permissions.includes(waiting === 'QC' ? 'truebatch_api.qc.approve' : 'truebatch_api.qa.release')) continue;
+      if (!req.user!.permissions.includes(waiting === 'QC' ? 'lims.qc.approve' : 'lims.qa.release')) continue;
       const last = l.batchEvents.filter((e) => e.kind !== 'deviation_closed').at(-1);
       out.push({ id, batchNo: l.batch.batchNo, productCode: l.doc.header.productCode, productName: l.doc.header.productName, status: bv.status, waiting,
         since: last?.at ?? l.batch.issuedAt, by: last?.personName ?? '', openDeviations: bv.deviations.filter((d) => d.open).length,

@@ -46,7 +46,7 @@ const invalid = (reply: FastifyReply, issues?: z.ZodIssue[]) =>
 
 export function masterRoutes(app: FastifyInstance, sql: Sql) {
   const anyUser = { preHandler: requirePermission() };
-  const author = { preHandler: requirePermission('truebatch_api.master.author') };
+  const author = { preHandler: requirePermission('lims.master.author') };
 
   app.get('/api/blocks', anyUser, async () => BLOCKS);
 
@@ -128,11 +128,11 @@ export function masterRoutes(app: FastifyInstance, sql: Sql) {
 // ---- Review and approval (TA-02) ----
 
 export const REVIEW_ACTIONS = {
-  submit: { from: 'draft', to: 'in_review', event: 'submitted', meaning: 'prepared', needs: ['truebatch_api.master.author'] },
-  pass: { from: 'in_review', to: null, event: 'passed', meaning: 'checked', needs: ['truebatch_api.master.check'] },
-  return: { from: 'in_review', to: 'draft', event: 'returned', meaning: null, needs: ['truebatch_api.master.check', 'truebatch_api.master.approve'] },
-  approve: { from: 'in_review', to: 'approved', event: 'approved', meaning: 'approved', needs: ['truebatch_api.master.approve'] },
-  'make-effective': { from: 'approved', to: 'effective', event: 'effective', meaning: null, needs: ['truebatch_api.master.approve'] },
+  submit: { from: 'draft', to: 'in_review', event: 'submitted', meaning: 'prepared', needs: ['lims.master.author'] },
+  pass: { from: 'in_review', to: null, event: 'passed', meaning: 'checked', needs: ['lims.master.check'] },
+  return: { from: 'in_review', to: 'draft', event: 'returned', meaning: null, needs: ['lims.master.check', 'lims.master.approve'] },
+  approve: { from: 'in_review', to: 'approved', event: 'approved', meaning: 'approved', needs: ['lims.master.approve'] },
+  'make-effective': { from: 'approved', to: 'effective', event: 'effective', meaning: null, needs: ['lims.master.approve'] },
 } as const satisfies Record<string, { from: MasterState; to: MasterState | null; event: string; meaning: Meaning | null; needs: Permission[] }>;
 export type ReviewAction = keyof typeof REVIEW_ACTIONS;
 const REVIEW_NAMES = Object.keys(REVIEW_ACTIONS) as ReviewAction[];
@@ -229,7 +229,7 @@ const reviewBodies = {
 
 function reviewRoutes(app: FastifyInstance, sql: Sql) {
   const anyUser = { preHandler: requirePermission() };
-  const reviewer = { preHandler: requirePermission('truebatch_api.master.author', 'truebatch_api.master.check', 'truebatch_api.master.approve') };
+  const reviewer = { preHandler: requirePermission('lims.master.author', 'lims.master.check', 'lims.master.approve') };
 
   // What a reviewer sees: the events (who did what, when), the comments, the previous version for the changes view,
   // the hash a signer signs, and the actions open to this person (with why the others are not).

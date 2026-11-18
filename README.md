@@ -1,4 +1,4 @@
-# TrueBatch API
+# Medhanta LIMS
 
 An electronic batch record for tablet manufacturing, from dispensing to QA release of bulk tablets, on the Medhanta
 platform. Built the way the Medhanta Logbook is built: one app, plain SQL, a small set of rules checked once in the app.
@@ -30,8 +30,8 @@ screens: `docs/packing-design.md`, its rules TB-P1 to TB-P9 in `docs/rules.md`. 
 points, migrations, the views it publishes) and `ops/packing.*`.
 
 ```sh
-export DATABASE_URL=postgres://truebatch_api_owner:dev@localhost:5432/truebatch_packing_dev DB_APP_ROLE=truebatch_packing_app
-export TRUEBATCH_API_DATABASE_URL=postgres://...   # optional: TrueBatch API' published views (released bulk batches)
+export DATABASE_URL=postgres://lims_owner:dev@localhost:5432/truebatch_packing_dev DB_APP_ROLE=truebatch_packing_app
+export LIMS_DATABASE_URL=postgres://...   # optional: Medhanta LIMS' published views (released bulk batches)
 npm run migrate:packing
 npm run dev:packing        # API on :3001
 npm run dev:packing-web    # UI on :5174 (proxies /api)
@@ -42,9 +42,9 @@ Needs Node 22 and PostgreSQL 16.
 
 ```sh
 npm install
-export DATABASE_URL=postgres://truebatch_api_owner:dev@localhost:5432/truebatch_api_dev DB_APP_ROLE=truebatch_api_app
+export DATABASE_URL=postgres://lims_owner:dev@localhost:5432/lims_dev DB_APP_ROLE=lims_app
 # Medhanta core: people, sign-in, TrueBatch permissions and master data are managed there
-export MASTER_DATA_DATABASE_URL=postgres://truebatch_api_app:...@<core db>:5432/master_data   # read through its report views
+export MASTER_DATA_DATABASE_URL=postgres://lims_app:...@<core db>:5432/master_data   # read through its report views
 # Optional links, each set by the platform only while the link is on:
 # DEVIATIONS_DATABASE_URL, QMS_DATABASE_URL, LOGBOOK_DATABASE_URL, MMS_DATABASE_URL
 export OIDC_ISSUER=https://<core domain>/oidc OIDC_CLIENT_SECRET=... OIDC_REDIRECT_URI=http://localhost:3000/cb
@@ -55,30 +55,30 @@ npm run ci         # typecheck, tests, build, rule-to-test check — run before 
 npm run test:e2e   # browser tests (Playwright; once: npx playwright install chromium)
 ```
 
-Tests use `TEST_DATABASE_URL` (default `postgres://truebatch_api_owner:dev@localhost:5432/truebatch_api_test`); each test file
+Tests use `TEST_DATABASE_URL` (default `postgres://lims_owner:dev@localhost:5432/lims_test`); each test file
 gets its own schema. The test login must be able to create roles and databases (the platform test makes its own).
 
 ## On the platform
 `ops/manifest.draft.json` is the draft of the product's platform manifest (permissions, back-channel logout, the
-views it reads from master data and the four linked products, and the views it publishes). The app reads its database from `TRUEBATCH_API_DATABASE_URL` and runs as the restricted login
-`truebatch_api_app`, which cannot change or delete audit rows or signatures. Migrations run as the database owner.
+views it reads from master data and the four linked products, and the views it publishes). The app reads its database from `LIMS_DATABASE_URL` and runs as the restricted login
+`lims_app`, which cannot change or delete audit rows or signatures. Migrations run as the database owner.
 
 ## Demo installations
-The platform sets `TRUEBATCH_DEMO=1` only for the demo customer's installation of either product, never for a plant's
-(`server/demo.ts`). Then every screen shows a DEMO banner, and a person with `truebatch_api.demo.skip` (packing:
+The platform sets `LIMS_DEMO=1` only for the demo customer's installation of either product, never for a plant's
+(`server/demo.ts`). Then every screen shows a DEMO banner, and a person with `lims.demo.skip` (packing:
 `truebatch_packing.demo.skip`) sees "Skip wait (demo)" on a step that waits (a minimum time, the next periodic check, a
 hold time running, a mixing time below its lower limit), which ends that wait at once. To prepare a demo from a
 terminal in the product's container:
 
 ```sh
-node dist/server/demo-skip.js TA260004 [stage] --as <username>           # TrueBatch API
+node dist/server/demo-skip.js LA260004 [stage] --as <username>           # Medhanta LIMS
 node dist/packing/server/demo-skip.js TP260001 [stage] --as <username>   # TrueBatch Tablets Packing
 ```
 
 It skips every wait running now in the batch, or in one stage (its key, name or number), as the named demo person
 (someone who has signed in once). Each skip is an insert-only step event `demo_wait_skipped` with who, when and which
 wait, shown in the step history, QA's review and the batch record PDF as "DEMO: wait skipped by … at …"; the engine
-counts that wait as satisfied, nothing else changes. Without `TRUEBATCH_DEMO=1` the button is absent, the route answers
+counts that wait as satisfied, nothing else changes. Without `LIMS_DEMO=1` the button is absent, the route answers
 403 and the command exits non-zero.
 
 ## Conventions

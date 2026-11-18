@@ -28,21 +28,21 @@ beforeAll(async () => {
       create schema ${schema};
       create table ${schema}.training_v1 (person_id uuid, person_login text, person_name text, skill_code text, skill_title text, trained_on date,
         valid_until date, qualified boolean, approved_at timestamptz, read_at timestamptz default now(), data_as_of timestamptz default now());
-      grant usage on schema ${schema} to truebatch_api_app;
-      grant select on all tables in schema ${schema} to truebatch_api_app;
+      grant usage on schema ${schema} to lims_app;
+      grant select on all tables in schema ${schema} to lims_app;
       insert into ${schema}.training_v1 (person_login, person_name, skill_code, skill_title, trained_on, valid_until, qualified) values
         ('asha', 'Asha', 'SOP-STR-004', 'Operating the stirrer', '2026-01-10', '2027-01-09', true),
         ('meera', 'Meera', 'SOP-STR-004', 'Operating the stirrer', '2026-02-01', '2027-01-31', true),
         ('ravi', 'Ravi', 'SOP-STR-004', 'Operating the stirrer', '2024-01-10', '2025-01-09', false),
         ('ravi', 'Ravi', 'SOP-GRN-001', 'Granulation', '2026-01-10', '2027-01-09', true);`);
-    provider = connect(TEST_DATABASE_URL, { role: 'truebatch_api_app', link: true });
+    provider = connect(TEST_DATABASE_URL, { role: 'lims_app', link: true });
     return links({ recruitment: provider }, { recruitment: schema });
   });
   const item = (itemId: string, code: string, name: string) => ({ itemId, code, name, version: 1, active: true });
   t.master.products_.push({ ...item('p', 'P', 'P'), strength: null, dosageForm: 'tablet' });
   t.master.materials_.push({ ...item('m', 'M', 'M'), category: null, unit: 'kg' });
-  const people = { author: ['truebatch_api.master.author'], issuer: ['truebatch_api.batch.issue'], asha: ['truebatch_api.batch.operate', 'truebatch_api.batch.check'],
-    ravi: ['truebatch_api.batch.check'], kiran: ['truebatch_api.batch.check'], meera: ['truebatch_api.batch.check', 'truebatch_api.batch.operate'], qaperson: ['truebatch_api.qa.release'] } as const;
+  const people = { author: ['lims.master.author'], issuer: ['lims.batch.issue'], asha: ['lims.batch.operate', 'lims.batch.check'],
+    ravi: ['lims.batch.check'], kiran: ['lims.batch.check'], meera: ['lims.batch.check', 'lims.batch.operate'], qaperson: ['lims.qa.release'] } as const;
   for (const [name, perms] of Object.entries(people)) {
     await seedUser(t.owner, name, [...perms]);
     cookies[name] = (await login(t.app, name)).cookie;
@@ -59,8 +59,8 @@ const act = (who: string, id: number, key: string, action: string, body: object 
 const hashOf = async (id: number, key: string) => ((await as('asha', 'GET', `/api/batches/${id}`)).json() as { steps: { id: string; contentHash: string }[] }).steps.find((s) => s.id === key)!.contentHash;
 const sign = async (who: string, id: number, action: 'done' | 'check', extra: object = {}) =>
   act(who, id, '0.1.0.1', action, { proof: proofFor(who), contentHash: await hashOf(id, '0.1.0.1'), ...extra });
-const cut = () => t.owner.unsafe(`revoke select on all tables in schema ${schema} from truebatch_api_app`);
-const restore = () => t.owner.unsafe(`grant select on all tables in schema ${schema} to truebatch_api_app`);
+const cut = () => t.owner.unsafe(`revoke select on all tables in schema ${schema} from lims_app`);
+const restore = () => t.owner.unsafe(`grant select on all tables in schema ${schema} to lims_app`);
 /** A batch of one check step that names the training, recorded and ready to sign. */
 async function batch(training: object | null = SKILL) {
   const doc = small([{ steps: [{ checker: true, ...(training ? { training } : {}) },

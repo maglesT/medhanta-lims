@@ -16,7 +16,7 @@ export async function start(product: Product, webRoot?: string) {
   const signOn = oidcSignOn({ issuer: config.OIDC_ISSUER, clientId: config.OIDC_CLIENT_ID, clientSecret: config.OIDC_CLIENT_SECRET,
     redirectUri: config.OIDC_REDIRECT_URI });
   // Signing proofs (PL-05) stay valid across a restart and between instances: the key is derived from the client secret.
-  const proofKey = createHash('sha256').update(`truebatch-api-signing-proof:${config.OIDC_CLIENT_SECRET}`).digest();
+  const proofKey = createHash('sha256').update(`medhanta-lims-signing-proof:${config.OIDC_CLIENT_SECRET}`).digest();
   const md = connect(config.MASTER_DATA_DATABASE_URL);
   // The optional links: a connection only for a provider whose link is on.
   const linked = (url?: string) => (url ? connect(url, { link: true }) : null);

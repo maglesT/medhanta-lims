@@ -143,7 +143,7 @@ describe('designer findings of the 17 Nov 2026 run', () => {
     expect(st.groups[1]!.options).toEqual(['Cyclotron vault', 'Dispensing']);
   });
 
-  it('a small quantity reads in g; the unit lists offer every unit of the unit table (ported from TrueBatch API)', () => {
+  it('a small quantity reads in g; the unit lists offer every unit of the unit table (ported from Medhanta LIMS)', () => {
     expect(qtyText({ ok: true, value: '0.0025', unit: 'kg', shown: '' })).toBe('2.500 g');
     expect(qtyText({ ok: true, value: '1.2625', unit: 'kg', shown: '' })).toBe('1.263 kg');
     expect(qtyText({ ok: false, message: 'x' })).toBe('—');

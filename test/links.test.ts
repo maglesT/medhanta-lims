@@ -39,8 +39,8 @@ beforeAll(async () => {
         read_at timestamptz default now(), data_as_of timestamptz default now(), stock numeric, unit text);
       create table ${S.mms}.lot_test_v1 (lot_number text, report_ref text, test text, specification text, result text, value numeric, unit text, basis text,
         tested_at timestamptz, read_at timestamptz default now(), data_as_of timestamptz default now());
-      grant usage on schema ${S.dv}, ${S.qms}, ${S.lb}, ${S.mms} to truebatch_api_app;
-      grant select on all tables in schema ${S.dv}, ${S.qms}, ${S.lb}, ${S.mms} to truebatch_api_app;
+      grant usage on schema ${S.dv}, ${S.qms}, ${S.lb}, ${S.mms} to lims_app;
+      grant select on all tables in schema ${S.dv}, ${S.qms}, ${S.lb}, ${S.mms} to lims_app;
       insert into ${S.qms}.change_v1 (number, status, title, products, qa_approved_at) values
         ('CC-2026-0001', 'implementation', 'New supplier of lactose', 'PRD-001', now()), ('CC-2026-0002', 'qa', 'Press speed', null, null),
         ('CC-2026-0003', 'rejected', 'Drop the coating', null, now()),
@@ -65,7 +65,7 @@ beforeAll(async () => {
       insert into ${S.mms}.lot_test_v1 (lot_number, report_ref, test, result, value, unit, basis) values
         ('API-OK', 'QC-26-101', 'Assay', '99.1 %', 99.1, '%', 'dried'), ('API-OK', 'QC-26-101', 'LOD', '0.4 %', 0.4, '%', 'as is'),
         ('API-OK', 'QC-26-101', 'Identity', 'complies', null, null, null), ('API-ASIS', 'QC-26-102', 'Assay', '98.0 %', 98.0, '%', 'as is');`);
-    provider = connect(TEST_DATABASE_URL, { role: 'truebatch_api_app', link: true });
+    provider = connect(TEST_DATABASE_URL, { role: 'lims_app', link: true });
     return links({ deviations: provider, qms: provider, logbook: provider, mms: provider }, { deviations: S.dv, qms: S.qms, logbook: S.lb, mms: S.mms });
   });
   t.master.products_.push({ ...item('prd-1', 'PRD-001', 'Examplol 100 mg film-coated tablets'), strength: '100 mg', dosageForm: 'tablet' },
@@ -77,9 +77,9 @@ beforeAll(async () => {
     { ...item('eq-rmg', 'RMG-01', 'Granulator'), kind: 'equipment', type: 'granulator', room: 'GRN-01' });
   t.master.rooms_.push({ ...item('rm-1', 'GRN-01', 'Granulation room 1'), area: 'granulation', grade: 'D' });
   const people = {
-    author: ['truebatch_api.master.author'], checker: ['truebatch_api.master.check'], quality: ['truebatch_api.master.approve'], quality2: ['truebatch_api.master.approve'],
-    issuer: ['truebatch_api.batch.issue'], asha: ['truebatch_api.batch.operate', 'truebatch_api.batch.check'], ravi: ['truebatch_api.batch.check'],
-    meera: ['truebatch_api.qa.release'], mona: ['truebatch_api.qa.release', 'truebatch_api.batch.operate'],
+    author: ['lims.master.author'], checker: ['lims.master.check'], quality: ['lims.master.approve'], quality2: ['lims.master.approve'],
+    issuer: ['lims.batch.issue'], asha: ['lims.batch.operate', 'lims.batch.check'], ravi: ['lims.batch.check'],
+    meera: ['lims.qa.release'], mona: ['lims.qa.release', 'lims.batch.operate'],
   } as const;
   for (const [name, perms] of Object.entries(people)) {
     ids[name] = await seedUser(t.owner, name, [...perms]);
@@ -93,8 +93,8 @@ afterAll(async () => {
 });
 
 const as = (who: string, method: 'GET' | 'POST', url: string, body?: object) => call(t.app, cookies[who]!, method, url, body);
-const cut = (schema: string) => t.owner.unsafe(`revoke select on all tables in schema ${schema} from truebatch_api_app`);
-const restore = (schema: string) => t.owner.unsafe(`grant select on all tables in schema ${schema} to truebatch_api_app`);
+const cut = (schema: string) => t.owner.unsafe(`revoke select on all tables in schema ${schema} from lims_app`);
+const restore = (schema: string) => t.owner.unsafe(`grant select on all tables in schema ${schema} to lims_app`);
 async function issue(doc: ReturnType<typeof small>) {
   const res = await as('author', 'POST', '/api/masters', { doc });
   expect(res.statusCode).toBe(200);
@@ -139,7 +139,7 @@ describe('the link client: absent, down (refused or not answering) and ok', () =
     }
     const gone = links({ deviations: provider, qms: provider, logbook: provider, mms: provider }, { deviations: 'nope', qms: 'nope', logbook: 'nope', mms: 'nope' });
     expect((await Promise.all(reads(gone))).map((r) => r.state)).toEqual(['down', 'down', 'down', 'down']);
-    const nowhere = connect('postgres://truebatch_api_app:x@127.0.0.1:1/x', { link: true });
+    const nowhere = connect('postgres://lims_app:x@127.0.0.1:1/x', { link: true });
     expect((await Promise.all(reads(links({ deviations: nowhere, qms: nowhere, logbook: nowhere, mms: nowhere })))).map((r) => r.state)).toEqual(['down', 'down', 'down', 'down']);
     await nowhere.end();
   });
@@ -387,12 +387,12 @@ describe('TA-12 MMS: only released, in-date lots of the material; certificate va
     expect(await uses('BAL-01')).toEqual([]);
   });
 
-  it('TA-12 a weighing takes no more of a lot than MMS shows available: its stock less what TrueBatch API already dispensed (signed) from it', async () => {
+  it('TA-12 a weighing takes no more of a lot than MMS shows available: its stock less what Medhanta LIMS already dispensed (signed) from it', async () => {
     // API-OK: 25 kg in MMS; 10.150 kg dispensed above (signed done); the other batch's weighing is not signed yet.
     const third = await issue(granulation());
     await act('asha', third.id, '0.1.0.1', 'start');
     expect(await problems(record(third.id, '0.1.0.1', { lot: 'API-OK', balance: 'eq-bal', gross: '16.000', tare: '0.850' }))).toEqual([
-      'Lot API-OK has 14.85 kg available in MMS (25 kg in stock less 10.15 kg already used in TrueBatch API): 15.15 kg cannot be taken from it. Take at most 14.85 kg, or another lot.']);
+      'Lot API-OK has 14.85 kg available in MMS (25 kg in stock less 10.15 kg already used in Medhanta LIMS): 15.15 kg cannot be taken from it. Take at most 14.85 kg, or another lot.']);
     expect((await record(third.id, '0.1.0.1', { lot: 'API-OK', balance: 'eq-bal', gross: '15.000', tare: '0.850' })).statusCode).toBe(200);
   });
 });
@@ -431,7 +431,7 @@ describe('TA-21 Deviations: the deviation number and its status come from the De
     const events = [ev('started', '0.1.0.1', { min: 1 }), ev('done', '0.1.0.1', { min: 2 }), ev('checked', '0.1.0.1', { person: 2, min: 3 }),
       ev('note', '0.1.0.1', { min: 4, payload: { text: 'pH', reference: 'DEV-26-001' } })];
     const approved: BatchEvent[] = [{ id: 1, kind: 'production_approved', payload: {}, person: 3, at: at(5) }, { id: 2, kind: 'qc_approved', payload: { reportNo: 'QC-1' }, person: 4, at: at(6) }];
-    const qa = { id: 9, permissions: ['truebatch_api.qa.release'] };
+    const qa = { id: 9, permissions: ['lims.qa.release'] };
     const release = (status: string) => batchRefusal('release', batchView(doc, events, approved, at(10), new Map([['DEV-26-001', { status, closedAt: null }]])), qa)?.problems ?? null;
     expect(release('investigation')).toEqual(['Deviation DEV-26-001 (Stage 0 › Check a value against limits: pH) is still open in the Deviations system (under investigation): it is closed there first']);
     expect(release('closed')).toBeNull();
@@ -545,7 +545,7 @@ describe('the views TrueBatch publishes', () => {
     expect(facts.length).toBe(batches.length);
     const notes = await t.owner.unsafe(`select source_ref, step, note, reference, status from ${r}.deviation_note_v1 where reference is not null order by note_id`);
     expect(notes.map((n) => [n.reference, n.status])).toEqual([['DEV-26-0001', 'open'], ['DEV-PAPER-7', 'closed']]);
-    expect(notes[0]!.source_ref).toMatch(/^truebatch_api:note:\d+$/);
+    expect(notes[0]!.source_ref).toMatch(/^lims:note:\d+$/);
     // A deviation filed from a note is titled with where it was written, in words, not the master's keys.
     expect(notes[0]!.step).toBe('Stage 0 › Check a value against limits: pH');
   });

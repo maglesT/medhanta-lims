@@ -7,13 +7,13 @@ import { loadBatch, type LoadedBatch } from './routes/batches.js';
 import type { Product } from './product.js';
 import { keyId, skipKey, skippable, timers, type Timer } from '../shared/engine/index.js';
 
-// Demo installations only. The platform sets TRUEBATCH_DEMO=1 only for the demo customer's installation, never for a
-// plant's: every screen then says DEMO, and a person with the demo permission (truebatch_api.demo.skip)
+// Demo installations only. The platform sets LIMS_DEMO=1 only for the demo customer's installation, never for a
+// plant's: every screen then says DEMO, and a person with the demo permission (lims.demo.skip)
 // may end a running wait at once (a minimum time, a periodic check, a hold time, a mixing
 // time: its lower limit then counts as met, shared/engine/values.ts evaluate). Each skip is one insert-only step event,
 // shown in the step history, QA's review and the batch record PDF. Anywhere else the button is absent, the route
 // answers 403 and the terminal command exits non-zero.
-export const isDemo = (env: NodeJS.ProcessEnv = process.env) => env.TRUEBATCH_DEMO === '1';
+export const isDemo = (env: NodeJS.ProcessEnv = process.env) => env.LIMS_DEMO === '1';
 
 const closed = (l: LoadedBatch) => l.batchEvents.some((e) => ['production_approved', 'released', 'rejected'].includes(e.kind));
 
@@ -31,7 +31,7 @@ async function skipWait(tx: Tx, l: LoadedBatch, t: Timer, person: number): Promi
 
 /** POST /api/batches/:id/demo-skip { timer }: the "Skip wait (demo)" button. */
 export function demoRoutes(app: FastifyInstance, sql: Sql) {
-  app.post<{ Params: { id: string } }>('/api/batches/:id/demo-skip', { preHandler: requirePermission('truebatch_api.demo.skip') }, async (req, reply) => {
+  app.post<{ Params: { id: string } }>('/api/batches/:id/demo-skip', { preHandler: requirePermission('lims.demo.skip') }, async (req, reply) => {
     if (!app.demo) return reply.code(403).send({ error: 'not_demo', problems: ['This is not a demo installation: waits run on the server clock.'] });
     const id = parseId(req.params.id);
     const body = z.object({ timer: z.string().min(1).max(100) }).safeParse(req.body);
@@ -74,7 +74,7 @@ export async function skipWaits(sql: Sql, batchNo: string, stage: string | undef
  * Returns the exit code: 0 done, 1 wrong use or refused, 2 not a demo installation.
  */
 export async function demoSkipCommand(product: Product, argv: string[], env: NodeJS.ProcessEnv, log: (line: string) => void = console.log): Promise<number> {
-  if (!isDemo(env)) { log(`Refused: ${product.name} here is not a demo installation (TRUEBATCH_DEMO is not 1).`); return 2; }
+  if (!isDemo(env)) { log(`Refused: ${product.name} here is not a demo installation (LIMS_DEMO is not 1).`); return 2; }
   const as = argv.indexOf('--as');
   const person = as < 0 ? undefined : argv[as + 1];
   const [batchNo, stage] = argv.filter((_, i) => as < 0 || (i !== as && i !== as + 1));

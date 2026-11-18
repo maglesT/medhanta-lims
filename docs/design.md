@@ -1,10 +1,10 @@
-# TrueBatch API: design decisions
+# Medhanta LIMS: design decisions
 
 Owner decisions of 15 November 2026. Built the Logbook way (the platform Logbook is the model for structure, patterns
 and size), not the Batchwright way.
 
 ## Product
-- **One product per dosage form.** TrueBatch API covers manufacturing, from dispensing to QA release of bulk
+- **One product per dosage form.** Medhanta LIMS covers manufacturing, from dispensing to QA release of bulk
   tablets. Packing is a separate product, "TrueBatch Tablets Packing", in this repository on the same engine
   (`docs/packing-design.md`).
 
@@ -153,7 +153,7 @@ answering) or **ok**.
   (`shared/engine/plain.ts`, owner 17 Nov 2026). Times are shown to the minute.
 - A master version is stored as one JSON document.
 - The designer is forms and ordered lists.
-- Server timers as the Logbook does them. In a demo installation only (`TRUEBATCH_DEMO=1`, set by the platform for the
+- Server timers as the Logbook does them. In a demo installation only (`LIMS_DEMO=1`, set by the platform for the
   demo customer alone) a person with the demo permission may end a running wait at once; the skip is an insert-only
   step event the timers count as the wait satisfied (owner, 15 November 2026; README "Demo installations"). A mixing
   time (T13 from a start timer to an end timer) is such a wait too: once skipped, its lower limit counts as met, the

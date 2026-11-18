@@ -74,8 +74,8 @@ export interface ActionRule {
   notInvolved?: boolean;
 }
 
-const OPERATE: Permission[] = ['truebatch_api.batch.operate'];
-const CHECK: Permission[] = ['truebatch_api.batch.check'];
+const OPERATE: Permission[] = ['lims.batch.operate'];
+const CHECK: Permission[] = ['lims.batch.check'];
 const ALL: State[] = ['waiting', 'open', 'in_progress', 'done_awaiting_check', 'done', 'checked', 'not_applicable'];
 
 /** Which action is allowed in which state, and by which permission. */
@@ -88,9 +88,9 @@ export const ACTIONS: Record<Action, ActionRule> = {
   'send-back': { event: 'sent_back', from: ['done_awaiting_check'], permissions: CHECK, reason: true, notInvolved: true },
   correct: { event: 'corrected', from: ['in_progress', 'done_awaiting_check', 'done', 'checked'], permissions: OPERATE, reason: true },
   'not-applicable': { event: 'not_applicable', from: ['open', 'in_progress'], permissions: OPERATE, meaning: 'performed', reason: true },
-  'release-hold': { event: 'qa_released_hold', from: ['done', 'checked'], permissions: ['truebatch_api.qa.release'], meaning: 'released' },
+  'release-hold': { event: 'qa_released_hold', from: ['done', 'checked'], permissions: ['lims.qa.release'], meaning: 'released' },
   // A deviation note; anyone working on the batch, in any state.
-  note: { event: 'note', from: ALL, permissions: ['truebatch_api.batch.operate', 'truebatch_api.batch.check', 'truebatch_api.batch.supervise', 'truebatch_api.qa.release'] },
+  note: { event: 'note', from: ALL, permissions: ['lims.batch.operate', 'lims.batch.check', 'lims.batch.supervise', 'lims.qa.release'] },
 };
 
 export interface Refused { status: 403 | 409; error: string; message: string }

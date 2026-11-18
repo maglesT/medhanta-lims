@@ -15,7 +15,7 @@ import { demoRoutes } from './demo.js';
 import type { SignOn } from './signon.js';
 import { ConnectionOff, NotUsable, type Master } from './master.js';
 import { links as noLinks, type Links } from './links.js';
-import { INJECTABLES, type Product } from './product.js';
+import { LIMS, type Product } from './product.js';
 
 export const VERSION = '0.1.0';
 
@@ -38,11 +38,11 @@ export interface AppOptions {
   batchPrefix?: string;
   // The product (server/product.ts).
   product?: Product;
-  // A demo installation (TRUEBATCH_DEMO=1, server/demo.ts): the screens say DEMO and waits may be skipped.
+  // A demo installation (LIMS_DEMO=1, server/demo.ts): the screens say DEMO and waits may be skipped.
   demo?: boolean;
 }
 
-export async function buildApp({ sql, signOn, master, links = noLinks(), proofKey = randomBytes(32), logger = false, webRoot, cookieSecure = true, product = INJECTABLES,
+export async function buildApp({ sql, signOn, master, links = noLinks(), proofKey = randomBytes(32), logger = false, webRoot, cookieSecure = true, product = LIMS,
   batchPrefix = product.batchPrefix, demo = false }: AppOptions): Promise<FastifyInstance> {
   const app = Fastify({ logger, trustProxy: true });
   app.decorate('product', product);

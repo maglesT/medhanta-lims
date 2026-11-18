@@ -7,18 +7,18 @@ export const E2E_SCHEMA = process.env.E2E_SCHEMA ?? 'e2e';
 export const E2E_RECRUITMENT = `${E2E_SCHEMA}_rc`;
 // Invented test people and the TrueBatch permissions core gives them.
 export const USERS: Record<string, Permission[]> = {
-  op1: ['truebatch_api.batch.operate'],
-  chk1: ['truebatch_api.batch.check'],
-  qa1: ['truebatch_api.qa.release', 'truebatch_api.master.approve'],
+  op1: ['lims.batch.operate'],
+  chk1: ['lims.batch.check'],
+  qa1: ['lims.qa.release', 'lims.master.approve'],
   // Makes a version effective when the change control was typed by hand (no QMS link).
-  qa2: ['truebatch_api.master.approve'],
+  qa2: ['lims.master.approve'],
   // The release journey: production supervisor and QC.
-  sup1: ['truebatch_api.batch.supervise'],
-  qc1: ['truebatch_api.qc.approve'],
+  sup1: ['lims.batch.supervise'],
+  qc1: ['lims.qc.approve'],
   // Writes the fixture master and issues the batch of the floor journey.
-  iss1: ['truebatch_api.master.author', 'truebatch_api.batch.issue'],
+  iss1: ['lims.master.author', 'lims.batch.issue'],
   // The master designer journey: an author and a second-person checker (qa1 approves).
-  author1: ['truebatch_api.master.author'],
-  mcheck1: ['truebatch_api.master.check'],
+  author1: ['lims.master.author'],
+  mcheck1: ['lims.master.check'],
   norole: [],
 };

@@ -27,8 +27,8 @@ beforeAll(async () => {
   t.master.products_.push({ ...item('p', 'P', 'P'), strength: null, dosageForm: 'tablet' });
   t.master.materials_.push({ ...item('m', 'M', 'M'), category: null, unit: 'kg' });
   t.master.equipment_.push({ ...item('eq-prs', 'PRS-01', 'Tablet press'), kind: 'equipment', type: 'tablet press', room: 'CMP-01' });
-  const people = { author: ['truebatch_api.master.author'], issuer: ['truebatch_api.batch.issue'], asha: ['truebatch_api.batch.operate', 'truebatch_api.batch.check'],
-    ravi: ['truebatch_api.batch.check'], sam: ['truebatch_api.batch.supervise'], viewer: ['truebatch_api.view'] } as const;
+  const people = { author: ['lims.master.author'], issuer: ['lims.batch.issue'], asha: ['lims.batch.operate', 'lims.batch.check'],
+    ravi: ['lims.batch.check'], sam: ['lims.batch.supervise'], viewer: ['lims.view'] } as const;
   for (const [name, perms] of Object.entries(people)) {
     await seedUser(t.owner, name, [...perms]);
     cookies[name] = (await login(t.app, name)).cookie;

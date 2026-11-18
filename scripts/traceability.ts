@@ -1,4 +1,4 @@
-// Rule-to-test traceability: reads the TrueBatch API rules (TA-xx) from docs/rules.md and the
+// Rule-to-test traceability: reads the Medhanta LIMS rules (TA-xx) from docs/rules.md and the
 // rule IDs at the start of test names in test/ and e2e/, and prints the rule-to-test list. With --check it fails when a rule has no test, unless
 // docs/rules.md marks the rule "later" (its feature is not built yet).
 import { readdirSync, readFileSync } from 'node:fs';

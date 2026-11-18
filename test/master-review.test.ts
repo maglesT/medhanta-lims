@@ -15,9 +15,9 @@ beforeAll(async () => {
   t.master.products_.push({ ...item('prd-1', 'PRD-001', 'Examplol 100 mg film-coated tablets'), strength: '100 mg', dosageForm: 'tablet' });
   for (const l of tablet().formula) t.master.materials_.push({ ...item(l.materialItemId, l.code, l.name), category: null, unit: 'kg' });
   const people = {
-    author: ['truebatch_api.master.author'], author2: ['truebatch_api.master.author', 'truebatch_api.master.check'],
-    checker: ['truebatch_api.master.check'], quality: ['truebatch_api.master.approve'], qachecker: ['truebatch_api.master.approve', 'truebatch_api.master.check'],
-    viewer: ['truebatch_api.view'],
+    author: ['lims.master.author'], author2: ['lims.master.author', 'lims.master.check'],
+    checker: ['lims.master.check'], quality: ['lims.master.approve'], qachecker: ['lims.master.approve', 'lims.master.check'],
+    viewer: ['lims.view'],
   } as const;
   for (const [name, perms] of Object.entries(people)) {
     await seedUser(t.owner, name, [...perms]);

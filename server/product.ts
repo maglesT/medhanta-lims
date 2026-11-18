@@ -1,6 +1,6 @@
 import { PERMISSIONS } from './auth.js';
 
-// The product this server runs: TrueBatch API, on the Medhanta platform (own tile, licence, permissions,
+// The product this server runs: Medhanta LIMS, on the Medhanta platform (own tile, licence, permissions,
 // database and sign-on client).
 export interface Product {
   // The platform name of the product, its database and its sign-on client (lower case and _ only, as the platform's
@@ -13,4 +13,4 @@ export interface Product {
   batchPrefix: string;
 }
 
-export const INJECTABLES: Product = { id: 'truebatch_api', name: 'TrueBatch API', permissions: PERMISSIONS, batchPrefix: 'TA' };
+export const LIMS: Product = { id: 'lims', name: 'Medhanta LIMS', permissions: PERMISSIONS, batchPrefix: 'LA' };

@@ -158,7 +158,7 @@ test('TA-23 only trained people sign: the sign dialog shows the training from Re
 
   // Recruitment down: the checker ticks "I am trained in …"; the signature says so, for QA.
   const owner = connect(TEST_DATABASE_URL);
-  await owner.unsafe(`revoke select on all tables in schema ${E2E_RECRUITMENT} from truebatch_api_app`);
+  await owner.unsafe(`revoke select on all tables in schema ${E2E_RECRUITMENT} from lims_app`);
   try {
     await chk.getByRole('button', { name: 'Checked', exact: true }).click();
     await expect(dialog).toContainText('Recruitment cannot be reached');
@@ -166,7 +166,7 @@ test('TA-23 only trained people sign: the sign dialog shows the training from Re
     await dialog.getByLabel('I am trained in SOP-STR-004 Operating the stirrer').check();
     await sign(chk);
   } finally {
-    await owner.unsafe(`grant select on all tables in schema ${E2E_RECRUITMENT} to truebatch_api_app`);
+    await owner.unsafe(`grant select on all tables in schema ${E2E_RECRUITMENT} to lims_app`);
     await owner.end();
   }
   await expect(chk.locator('.step-title')).toContainText('Checked');

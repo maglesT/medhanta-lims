@@ -23,13 +23,13 @@ export type BatchStatus = (typeof BATCH_STATUSES)[number];
 
 export type BatchAction = 'production-approve' | 'qc-approve' | 'release' | 'reject' | 'terminate' | 'close-deviation';
 export const BATCH_ACTIONS: Record<BatchAction, { event: BatchEventKind; permission: Permission; from?: BatchStatus; meaning?: 'production_approved' | 'qc_approved' | 'released' | 'rejected' }> = {
-  'production-approve': { event: 'production_approved', permission: 'truebatch_api.batch.supervise', from: 'manufacturing complete', meaning: 'production_approved' },
-  'qc-approve': { event: 'qc_approved', permission: 'truebatch_api.qc.approve', from: 'production approved', meaning: 'qc_approved' },
-  release: { event: 'released', permission: 'truebatch_api.qa.release', from: 'QC approved', meaning: 'released' },
-  reject: { event: 'rejected', permission: 'truebatch_api.qa.release', from: 'QC approved', meaning: 'rejected' },
+  'production-approve': { event: 'production_approved', permission: 'lims.batch.supervise', from: 'manufacturing complete', meaning: 'production_approved' },
+  'qc-approve': { event: 'qc_approved', permission: 'lims.qc.approve', from: 'production approved', meaning: 'qc_approved' },
+  release: { event: 'released', permission: 'lims.qa.release', from: 'QC approved', meaning: 'released' },
+  reject: { event: 'rejected', permission: 'lims.qa.release', from: 'QC approved', meaning: 'rejected' },
   // QA stops a batch still in production that cannot be finished, with a reason (TA-21 rows in test/release.test.ts).
-  terminate: { event: 'rejected', permission: 'truebatch_api.qa.release', meaning: 'rejected' },
-  'close-deviation': { event: 'deviation_closed', permission: 'truebatch_api.qa.release' },
+  terminate: { event: 'rejected', permission: 'lims.qa.release', meaning: 'rejected' },
+  'close-deviation': { event: 'deviation_closed', permission: 'lims.qa.release' },
 };
 
 /** "Terminated by … at …: reason", with what went back to stores unused of each lot the batch used (screens and PDF). */

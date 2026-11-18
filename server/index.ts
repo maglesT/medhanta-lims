@@ -1,5 +1,5 @@
-// TrueBatch API.
+// Medhanta LIMS.
 import { start } from './start.js';
-import { INJECTABLES } from './product.js';
+import { LIMS } from './product.js';
 
-await start(INJECTABLES);
+await start(LIMS);

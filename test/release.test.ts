@@ -11,10 +11,10 @@ import { batchRecordDoc } from '../server/batch-record.js';
 let n = 1000;
 const be = (kind: BatchEventKind, payload: BatchEvent['payload'] = {}): BatchEvent => ({ id: n++, kind, payload, person: 5, at: at(900) });
 const people = {
-  supervisor: { permissions: ['truebatch_api.batch.supervise'] },
-  qc: { permissions: ['truebatch_api.qc.approve'] },
-  qa: { permissions: ['truebatch_api.qa.release'] },
-  operator: { permissions: ['truebatch_api.batch.operate'] },
+  supervisor: { permissions: ['lims.batch.supervise'] },
+  qc: { permissions: ['lims.qc.approve'] },
+  qa: { permissions: ['lims.qa.release'] },
+  operator: { permissions: ['lims.batch.operate'] },
 };
 type Who = keyof typeof people;
 
@@ -151,7 +151,7 @@ describe('the review list for QA', () => {
     const events = [ev('started', '0.1.0.1'), reading('0.1.0.1', { readingCheck: notPassed }), ev('done', '0.1.0.1'), ev('started', '0.1.0.2'), reading('0.1.0.2', { readingCheck: notPassed })];
     const { steps } = openSteps(d, events, at(1000));
     expect(steps.map((v) => [v.id, v.notYet, cutShort(true, v, steps), cutShort(false, v, steps)])).toEqual([['0.1.0.1', 'readingCheck', false, false], ['0.1.0.2', 'readingCheck', true, false]]);
-    const record = (batchEvents: BatchEvent[]) => JSON.stringify(batchRecordDoc({ batch: { id: 1, batchNo: 'TA260099', masterVersionId: 1, issuedBy: 1, issuedAt: at(0) }, doc: d,
+    const record = (batchEvents: BatchEvent[]) => JSON.stringify(batchRecordDoc({ batch: { id: 1, batchNo: 'LA260099', masterVersionId: 1, issuedBy: 1, issuedAt: at(0) }, doc: d,
       events: events.map((e) => ({ ...e, personName: 'RAMESH' })), batchEvents: batchEvents.map((b) => ({ ...b, personName: 'MEERA' })), now: at(1000), versionNo: 1, issuedByName: 'SUPER', signatures: [] }, 'QA'));
     const ended = record([be('rejected', { terminated: true, reason: 'The dryer broke down' })]);
     expect(ended.match(/pH = 9: not yet, the rounds go on/g)).toHaveLength(1);

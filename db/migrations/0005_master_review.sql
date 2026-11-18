@@ -31,8 +31,8 @@ create index master_comments_version on master_comments (version_id, id);
 create trigger master_comments_insert_only before update or delete or truncate on master_comments
   for each statement execute function refuse_change();
 
-revoke all on master_events, master_comments from truebatch_api_app;   -- the platform's default grants (0000)
-revoke all on sequence master_events_id_seq, master_comments_id_seq from truebatch_api_app;
-grant select on master_events, master_comments to truebatch_api_app;
-grant insert (version_id, kind, payload, person_id) on master_events to truebatch_api_app;
-grant insert (version_id, path, text, person_id) on master_comments to truebatch_api_app;
+revoke all on master_events, master_comments from lims_app;   -- the platform's default grants (0000)
+revoke all on sequence master_events_id_seq, master_comments_id_seq from lims_app;
+grant select on master_events, master_comments to lims_app;
+grant insert (version_id, kind, payload, person_id) on master_events to lims_app;
+grant insert (version_id, path, text, person_id) on master_comments to lims_app;

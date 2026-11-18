@@ -62,7 +62,7 @@ cross join lateral (
 -- Every deviation note, for Deviations to file later (source_ref, as the Logbook's overdue_v1). status is TrueBatch's
 -- own: open until QA closes it by hand in TrueBatch, closed after; null for a note without a deviation number.
 create view deviation_note_v1 with (security_barrier) as
-select n.id as note_id, 'truebatch_api:note:' || n.id as source_ref, b.batch_no as batch_number, v.doc->'header'->>'productCode' as product_code,
+select n.id as note_id, 'lims:note:' || n.id as source_ref, b.batch_no as batch_number, v.doc->'header'->>'productCode' as product_code,
   (v.doc->'stages'->n.stage->>'key') || '/' || (v.doc->'stages'->n.stage->'steps'->n.step->>'key') as step, n.payload->>'text' as note, n.payload->>'reference' as reference,
   case when n.payload->>'reference' is null then null when c.at is not null then 'closed' else 'open' end as status,
   n.at as noted_at, now() as read_at, greatest(n.at, c.at) as data_as_of

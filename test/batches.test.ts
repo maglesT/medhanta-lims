@@ -26,9 +26,9 @@ beforeAll(async () => {
     { ...item('eq-prs', 'PRS-01', 'Tablet press'), kind: 'equipment', type: 'tablet press', room: 'CMP-01' },
   );
   const people = {
-    author: ['truebatch_api.master.author', 'truebatch_api.view'], issuer: ['truebatch_api.batch.issue'], viewer: ['truebatch_api.view'],
-    asha: ['truebatch_api.batch.operate', 'truebatch_api.batch.check'], ravi: ['truebatch_api.batch.check'], meera: ['truebatch_api.qa.release'],
-    sam: ['truebatch_api.batch.supervise'], quinn: ['truebatch_api.qc.approve'],
+    author: ['lims.master.author', 'lims.view'], issuer: ['lims.batch.issue'], viewer: ['lims.view'],
+    asha: ['lims.batch.operate', 'lims.batch.check'], ravi: ['lims.batch.check'], meera: ['lims.qa.release'],
+    sam: ['lims.batch.supervise'], quinn: ['lims.qc.approve'],
   } as const;
   for (const [name, perms] of Object.entries(people)) {
     await seedUser(t.owner, name, [...perms]);
@@ -119,7 +119,7 @@ describe('issuing a batch', () => {
     const mv = await effectiveMaster();
     const a = await issue(mv);
     const b = await issue(mv);
-    expect(a.batchNo).toMatch(/^TA\d{2}\d{4}$/);
+    expect(a.batchNo).toMatch(/^LA\d{2}\d{4}$/);
     expect(Number(b.batchNo.slice(4))).toBe(Number(a.batchNo.slice(4)) + 1);
     expect(await code(t.sql`insert into batches (batch_no, master_version_id, issued_by) values (${a.batchNo}, ${mv}, 1)`)).toBe('23505');
     expect(await t.owner`select 1 from signatures where object_type = 'batch' and object_id = ${a.id} and meaning = 'issued'`).toHaveLength(1);
@@ -286,7 +286,7 @@ describe('walking a stage', () => {
 
   it('TA-22 the batch record PDF shows the corrected value struck through with its reason, the worked lines, limits, notes and who did what', async () => {
     const text = await recordText(id);
-    expect(text).toMatch(/^TrueBatch API · Batch record TA\d{6} · PRD-001 Examplol 100 mg film-coated tablets/);
+    expect(text).toMatch(/^Medhanta LIMS · Batch record LA\d{6} · PRD-001 Examplol 100 mg film-coated tablets/);
     expect(text).toContain('Status | In production');
     expect(text).toContain('Changed values | marked CHANGED');
     expect(text).toContain('Tare weight: 0.849 kg  CHANGED');
@@ -403,7 +403,7 @@ describe('production approval, QC approval and QA release', () => {
     const res = await as('viewer', 'GET', `/api/batches/${id}/pdf`);
     expect(res.statusCode).toBe(200);
     expect(res.headers['content-type']).toBe('application/pdf');
-    expect(res.headers['content-disposition']).toMatch(/^attachment; filename="batch-record-TA\d{6}\.pdf"$/);
+    expect(res.headers['content-disposition']).toMatch(/^attachment; filename="batch-record-LA\d{6}\.pdf"$/);
     expect(res.rawPayload.subarray(0, 5).toString()).toBe('%PDF-');
     expect((await as('viewer', 'GET', '/api/batches/999999/pdf')).statusCode).toBe(404);
     const text = await recordText(id);

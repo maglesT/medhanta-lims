@@ -5,12 +5,12 @@ import { asPermissions } from '../server/auth.js';
 import { demoSkipCommand, skipWaits } from '../server/demo.js';
 import { batchRecordDoc } from '../server/batch-record.js';
 import { loadBatch, recordInput } from '../server/routes/batches.js';
-import { INJECTABLES } from '../server/product.js';
+import { LIMS } from '../server/product.js';
 import { doneProblems, evaluate, lateItems, openSteps, timers, type StepEvent } from '../shared/engine/index.js';
 import { at, ev, pass, reading, small } from './engine-fixture.js';
 import { call, fakeSignOn, freshApp, login, proofFor, seedUser, TEST_PROOF_KEY, type TestApp } from './helpers.js';
 
-// Demo installations only (TRUEBATCH_DEMO=1): a skip event satisfies the wait the timers compute, nothing else changes;
+// Demo installations only (LIMS_DEMO=1): a skip event satisfies the wait the timers compute, nothing else changes;
 // the button, the route and the terminal command are refused anywhere else.
 
 const skip = (key: string, timer: string, min: number) => ev('demo_wait_skipped', key, { min, payload: { timer, label: timer } });
@@ -111,8 +111,8 @@ describe('demo skip through the server', () => {
     t = await freshApp(undefined, true);
     t.master.products_.push({ ...item('p', 'P', 'P'), strength: null, dosageForm: 'tablet' });
     t.master.materials_.push({ ...item('m', 'M', 'M'), category: null, unit: 'kg' });
-    const people = { author: ['truebatch_api.master.author'], issuer: ['truebatch_api.batch.issue'], asha: ['truebatch_api.batch.operate', 'truebatch_api.demo.skip'],
-      ravi: ['truebatch_api.batch.operate'], meera: ['truebatch_api.qa.release'] } as const;
+    const people = { author: ['lims.master.author'], issuer: ['lims.batch.issue'], asha: ['lims.batch.operate', 'lims.demo.skip'],
+      ravi: ['lims.batch.operate'], meera: ['lims.qa.release'] } as const;
     for (const [name, perms] of Object.entries(people)) {
       await seedUser(t.owner, name, [...perms]);
       cookies[name] = (await login(t.app, name)).cookie;
@@ -166,11 +166,11 @@ describe('demo skip through the server', () => {
 
   it('the terminal command skips every running wait of a batch or a stage as the named person, and is refused when not a demo', async () => {
     const lines: string[] = [];
-    expect(await demoSkipCommand(INJECTABLES, ['TA260001', '--as', 'asha'], {}, (l) => lines.push(l))).toBe(2);
-    expect(await demoSkipCommand(INJECTABLES, ['TA260001', '--as', 'asha'], { TRUEBATCH_DEMO: 'yes' }, (l) => lines.push(l))).toBe(2);
-    expect(lines).toEqual(['Refused: TrueBatch API here is not a demo installation (TRUEBATCH_DEMO is not 1).',
-      'Refused: TrueBatch API here is not a demo installation (TRUEBATCH_DEMO is not 1).']);
-    expect(await demoSkipCommand(INJECTABLES, ['TA260001'], { TRUEBATCH_DEMO: '1' }, () => {})).toBe(1);
+    expect(await demoSkipCommand(LIMS, ['LA260001', '--as', 'asha'], {}, (l) => lines.push(l))).toBe(2);
+    expect(await demoSkipCommand(LIMS, ['LA260001', '--as', 'asha'], { LIMS_DEMO: 'yes' }, (l) => lines.push(l))).toBe(2);
+    expect(lines).toEqual(['Refused: Medhanta LIMS here is not a demo installation (LIMS_DEMO is not 1).',
+      'Refused: Medhanta LIMS here is not a demo installation (LIMS_DEMO is not 1).']);
+    expect(await demoSkipCommand(LIMS, ['LA260001'], { LIMS_DEMO: '1' }, () => {})).toBe(1);
     const b = await issue();
     expect(await skipWaits(t.sql, b.batchNo, undefined, 'nobody')).toEqual({ error: 'There is no person nobody here: they sign in once first.' });
     expect(await skipWaits(t.sql, b.batchNo, 'packing', 'asha')).toEqual({ error: `Batch ${b.batchNo} has no stage packing: 1 s0 (Stage 0).` });

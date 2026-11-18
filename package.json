@@ -1,10 +1,10 @@
 {
-  "name": "truebatch-api",
+  "name": "medhanta-lims",
   "version": "0.1.0",
   "private": true,
   "license": "SEE LICENSE IN LICENSE",
   "type": "module",
-  "description": "Electronic batch records for active pharmaceutical ingredients made by chemical synthesis (TrueBatch API), on the Medhanta platform",
+  "description": "Electronic batch records for active pharmaceutical ingredients made by chemical synthesis (Medhanta LIMS), on the Medhanta platform",
   "engines": {
     "node": ">=22"
   },

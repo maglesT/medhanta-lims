@@ -10,7 +10,7 @@ import type { Permission } from '../server/auth.js';
 import type { Links } from '../server/links.js';
 
 export const TEST_DATABASE_URL =
-  process.env.TEST_DATABASE_URL ?? 'postgres://truebatch_api_owner:dev@localhost:5432/truebatch_api_test';
+  process.env.TEST_DATABASE_URL ?? 'postgres://lims_owner:dev@localhost:5432/lims_test';
 
 export interface TestDb {
   // Owner connection: migrations and test setup only.
@@ -27,7 +27,7 @@ export async function freshDb(): Promise<TestDb> {
   const owner = connect(TEST_DATABASE_URL, { searchPath: schema });
   await owner.unsafe(`create schema ${schema}`);
   await migrate(owner);
-  const sql = connect(TEST_DATABASE_URL, { role: 'truebatch_api_app', searchPath: schema });
+  const sql = connect(TEST_DATABASE_URL, { role: 'lims_app', searchPath: schema });
   return {
     owner,
     sql,
