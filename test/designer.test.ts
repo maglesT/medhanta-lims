@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { BLOCKS, findBlock } from '../shared/blocks/index.js';
 import { masterChecks, type Problem } from '../shared/master/checks.js';
 import { masterSchema } from '../shared/master/schema.js';
+import { specSchema } from '../shared/master/spec.js';
+import { monitoringSchema } from '../shared/master/monitoring.js';
 import { describeMaster, diffMasters, stepText } from '../web/src/designer/describe.js';
 import { workedExample } from '../web/src/designer/example.js';
 import { answerDoc, earlierRefs, neededKind, stepFrom } from '../web/src/designer/model.js';
@@ -134,8 +136,36 @@ describe('method designer', () => {
     const lines = diff.flatMap((s) => s.lines.filter((l) => l.change !== 'same').map((l) => `${s.title} ${l.key} ${l.change}`));
     expect(lines).toEqual(['Header technique changed', 'Stage 1: Standard solution about changed', 'Stage 4: Sample solutions result removed']);
     expect(describeMaster(prev).map((s) => s.title)).toEqual(['Header', 'Stage 1: Standard solution', 'Stage 2: Loss on drying', 'Stage 3: Instrument run', 'Stage 4: Sample solutions']);
-    expect(describeMaster(prev)[0]!.lines.map((l) => l.text)).toEqual(['Method QC-M-001, Examplol assay by HPLC.', 'Technique HPLC. Reference In-house method QC-M-001, version 1.']);
+    expect(describeMaster(prev)[0]!.lines.map((l) => l.text)).toEqual(['Method QC-M-001, Examplol assay by HPLC.', 'Technique HPLC. Reference In-house method QC-M-001, version 1.',
+      'Source: in-house (validated before use). Used for: routine testing.']);
     expect(diffMasters(prev, method()).every((s) => s.change === 'same')).toBe(true);
+  });
+
+  it('LIMS-02 the changes view shows a change of the method\'s source or use: the checker and QA sign what they can see (found on the demo)', () => {
+    const next = method();
+    next.header.origin = 'pharmacopoeial';
+    const changed = diffMasters(method(), next).flatMap((s) => s.lines.filter((l) => l.change !== 'same').map((l) => `${s.title} ${l.key} ${l.change}`));
+    expect(changed).toEqual(['Header source changed']);
+    expect(describeMaster(next)[0]!.lines.at(-1)!.text).toBe('Source: pharmacopoeial (verified before use). Used for: routine testing.');
+    next.header.use = 'validation';
+    expect(describeMaster(next)[0]!.lines.at(-1)!.text).toContain('Used for: a validation worksheet.');
+  });
+
+  it('LIMS-05 LIMS-36 the plain view and its changes show every header setting a reviewer signs: sampling plan, reserve sample, adverse trend', () => {
+    const spec = (header: object) => specSchema.parse({ header: { of: 'material', itemId: 'm1', code: 'RM-1', name: 'Demolactose', type: 'Raw material', number: 'SPEC-RM-1', pharmacopoeia: 'Ph. Int.', ...header },
+      tests: [{ key: 'ph', name: 'pH', method: { masterId: 1, code: 'PH', name: 'pH' }, result: 's0/t0/readingCheck', limitType: 'range', limit: { low: '5.0', high: '7.0', unit: '' } }] });
+    const a = spec({ sampling: { plan: 'square root' } });
+    const b = spec({ sampling: { plan: 'every container', storage: 'Below 25 °C' }, reserveQuantity: '60 g' });
+    const changed = diffMasters(a, b).flatMap((s) => s.lines.filter((l) => l.change !== 'same').map((l) => l.key));
+    expect(changed).toEqual(['reserve', 'sampling']);
+    const text = describeMaster(b)[0]!.lines.map((l) => l.text);
+    expect(text).toContain('Reserve sample: 60 g.');
+    expect(text).toContain('Sampling plan: every container. Storage: Below 25 °C.');
+    const point = (adverse?: object) => monitoringSchema.parse({ header: { number: 'EMP-1', name: 'Block', shifts: 1 }, points: [{ key: 'p1', code: 'B101-SP1', name: 'LAF', of: 'room',
+      room: { itemId: 'r', code: 'B101', name: 'Filling', grade: 'B' }, samplings: [{ key: 'sp', kind: 'settle plate', frequency: 'daily', state: 'in operation',
+        spec: { masterId: 10, testKey: 'sp', number: 'SPEC-EM', testName: '', method: '', limit: '' }, quantity: '1 plate', identify: 'on action', ...(adverse ? { adverse } : {}) }] }] });
+    const em = diffMasters(point(), point({ n: 2, m: 4 })).flatMap((s) => s.lines.filter((l) => l.change !== 'same').map((l) => l.text));
+    expect(em.join(' ')).toContain('Adverse trend: 2 alert or action results in the last 4 samplings.');
   });
 
   it('an author\'s answer to a warning is kept in the method document with the warning as answered', () => {

@@ -65,7 +65,7 @@ function describeMonitoring(doc: MonitoringDoc): Section[] {
     ...doc.points.map((p) => ({ key: `point:${p.key}`, title: `Point ${p.code}`, lines: [
       { key: 'where', text: `${p.code}, ${p.name || '(no description)'}: ${pointWhere(p)}${p.critical ? ', a critical location' : ''}.` },
       ...p.samplings.map((s) => ({ key: s.key, text: `${s.kind[0]!.toUpperCase()}${s.kind.slice(1)}, ${s.frequency}${s.state ? `, ${s.state}` : ''}, ${s.quantity}: ${s.spec
-        ? `specification ${s.spec.number}, ${s.spec.testName} (${s.spec.limit || 'no limit'}), method ${s.spec.method}` : '(no specification test)'}. Isolates identified: ${s.identify}.` })),
+        ? `specification ${s.spec.number}, ${s.spec.testName} (${s.spec.limit || 'no limit'}), method ${s.spec.method}` : '(no specification test)'}. Isolates identified: ${s.identify}.${s.adverse ? ` Adverse trend: ${s.adverse.n} alert or action results in the last ${s.adverse.m} samplings.` : ' Adverse trend: the default for its grade.'}` })),
     ] })),
   ];
 }
@@ -87,6 +87,8 @@ function describeSpec(doc: SpecDoc): Section[] {
     { key: 'header', title: 'Header', lines: [
       { key: 'what', text: `Specification ${h.number} for the ${h.of} ${h.code} ${h.name} (${h.type.toLowerCase()})${h.market ? `, market ${h.market}` : ''}.` },
       { key: 'pharmacopoeia', text: `Pharmacopoeia ${h.pharmacopoeia}${h.edition ? `, ${h.edition}` : ''}.` },
+      { key: 'reserve', text: h.reserveQuantity ? `Reserve sample: ${h.reserveQuantity}.` : 'No reserve sample.' },
+      { key: 'sampling', text: h.sampling ? `Sampling plan: ${h.sampling.plan === 'square root' ? '1 + √N containers' : 'every container'}.${(['method', 'equipment', 'amount', 'subdivision', 'precautions', 'storage'] as const).map((k) => h.sampling?.[k] ? ` ${k[0]!.toUpperCase()}${k.slice(1)}: ${h.sampling[k]}.` : '').join('')}` : 'No sampling plan.' },
     ] },
     { key: 'tests', title: 'Tests', lines: doc.tests.map((t, n) => ({ key: t.key, text: testText(t, n) })) },
   ];
@@ -121,6 +123,7 @@ export function describeMaster(doc: AnyDoc, units?: Units): Section[] {
     { key: 'header', title: 'Header', lines: [
       { key: 'method', text: `Method ${h.code}, ${h.name}.` },
       { key: 'technique', text: `Technique ${h.technique}. Reference ${h.reference || '(not set)'}${h.edition ? `, ${h.edition}` : ''}.` },
+      { key: 'source', text: `Source: ${h.origin === 'pharmacopoeial' ? 'pharmacopoeial (verified before use)' : h.origin === 'transferred' ? 'transferred from another laboratory (transfer report before use)' : 'in-house (validated before use)'}. Used for: ${h.use === 'validation' ? 'a validation worksheet' : 'routine testing'}.` },
     ] },
   ];
   return [
