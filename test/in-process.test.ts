@@ -70,7 +70,7 @@ beforeAll(async () => {
     S.tb = `${db.schema}_tb`; S.lq = `${db.schema}_lq`;
     await db.owner.unsafe(`create schema ${S.tb}; create schema ${S.lq}; ${requests(S.tb)} ${requests(S.lq)}
       insert into ${S.tb}.lab_request_v1 values
-        ('B26101/blend', 'B26101', 'FG-IP1', 'Blending', 'blend', 'Blend uniformity', '[{"name":"bu","label":"Blend uniformity","unit":"%","individual":10}]', now() - interval '1 hour', 'open'),
+        ('B26101/blend', 'B26101', 'FG-IP1', 'Blending', 'blend', 'Blend uniformity', '[{"name":"results","code":"bu","label":"Blend uniformity","unit":"%","individual":10}]', now() - interval '1 hour', 'open'),
         ('B26101/lub', 'B26101', 'FG-IP1', 'Blending', 'lub', 'Lubrication', '[{"name":"lod","label":"LOD of the blend","unit":"%","individual":null}]', now() - interval '30 minutes', 'open'),
         ('B26100/blend', 'B26100', 'FG-IP1', 'Blending', 'blend', 'Blend uniformity', '[{"name":"bu","label":"Blend uniformity","unit":"%","individual":10}]', now() - interval '2 days', 'done');
       insert into ${S.lq}.lab_request_v1 values
@@ -176,8 +176,9 @@ describe('on the server', () => {
     expect(no).toMatch(/^IPR\d{7}$/);
     const [coa] = await t.owner.unsafe(`select purpose, request_id from ${t.schema}_report.coa_v1 where coa_number = '${no}'`);
     expect(coa).toEqual({ purpose: 'in_process', request_id: 'B26101/blend' });
-    const rows = await t.owner.unsafe(`select test_key, reported, request_id, purpose, individual_values::text[] as individual, figure, ipc_field from ${t.schema}_report.result_v1 where coa_number = '${no}'`);
-    expect(rows).toEqual([{ test_key: 'bu', reported: '100.1', request_id: 'B26101/blend', purpose: 'in_process', individual: values, figure: 'mean', ipc_field: 'bu' }]);
+    // Matched by the request test's code ('bu'); ipc_field is the TrueBatch field it fills ('results'), ipc_code the code.
+    const rows = await t.owner.unsafe(`select test_key, reported, request_id, purpose, individual_values::text[] as individual, figure, ipc_field, ipc_code from ${t.schema}_report.result_v1 where coa_number = '${no}'`);
+    expect(rows).toEqual([{ test_key: 'bu', reported: '100.1', request_id: 'B26101/blend', purpose: 'in_process', individual: values, figure: 'mean', ipc_field: 'results', ipc_code: 'bu' }]);
     // sample_v1 (MMS D-77): the sample with its quantity split into a number and its unit, who took it, and its status.
     const [sv] = await t.owner.unsafe(`select sample_number, lot_number, item_kind, purpose, quantity::text, unit, sampled_by, status, request_id from ${t.schema}_report.sample_v1 where request_id = 'B26101/blend'`);
     expect(sv).toMatchObject({ lot_number: 'B26101', item_kind: 'PRODUCT', purpose: 'in_process', quantity: '10', unit: 'unit doses', sampled_by: 'ANALYST', status: 'decided', request_id: 'B26101/blend' });

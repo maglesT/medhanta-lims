@@ -55,7 +55,7 @@ export interface SampleRow {
   request?: SampleRequest | null;
 }
 export interface SampleRequest { edition: string; requestId: string; batchNo: string; stageTitle: string | null; stepKey: string; stepTitle: string | null;
-  tests: { name: string; label: string; unit: string | null; individual: number | null }[]; requestedAt: string }
+  tests: { name: string; label: string; unit: string | null; individual: number | null; code?: string | null }[]; requestedAt: string }
 export interface SamplingTaken { received: number; plan: 'square root' | 'every container'; line: string; numbers: number[]; details: Record<string, string> }
 export type EventRow = SampleEvent & { id: number; personName: string; at: Date; signature: { printedName: string; signedAt: Date } | null };
 
@@ -493,7 +493,9 @@ export function sampleRoutes(app: FastifyInstance, sql: Sql) {
               on conflict (year) do update set last_no = coa_counters.last_no + 1 returning last_no as n, right(year::text, 2) as yy`;
             coaNo = `COA${c!.yy}${String(c!.n).padStart(5, '0')}`;
           }
-          const results = tests.filter((t) => t.decided).map((t) => t.decided);
+          // In-process: each result names the TrueBatch field it fills (the request test its code matches).
+          const field = (code: unknown) => l.s.request?.tests.find((x) => (x.code || x.name) === code)?.name;
+          const results = tests.filter((t) => t.decided).map((t) => (t.decided!.ipcField && field(t.decided!.ipcField) ? { ...t.decided, ipcName: field(t.decided!.ipcField) } : t.decided));
           const payload = { ...(coaNo ? { coaNo } : {}), ...(b.reason ? { reason: b.reason } : {}), results };
           const [ev] = await tx<{ id: number }[]>`
             insert into sample_events (sample_id, kind, payload, person_id) values (${id}, ${decision === 'approve' ? 'approved' : 'rejected'}, ${tx.json(payload as never)}, ${user.id}) returning id::int`;

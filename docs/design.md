@@ -634,3 +634,7 @@ In-process tests in every TrueBatch edition (Injectables and Liquids bulk tests,
 ## EM: time taken and batch (owner 19 Nov 2026, LIMS owns EM)
 
 `em_v1` gains at its end `sampled_at` (when the sample was taken; `taken_on` is only the plant day) and `batch_number` (the TrueBatch batch it was taken during; null when none). Migration `0027`. The sampling dialog picks the batch from TrueBatch's running batches of every edition (`GET /api/em/batches`): needed for a per-batch sampling, optional for any other; typed by hand (then checked by a second person) only while TrueBatch does not answer.
+
+## In-process tests matched by code (TrueBatch round 45)
+
+`lab_request_v1` tests carry a `code` unique within the product ('<block id>.<field>'; content uniformity one test of up to 30 units); `name` stays the TrueBatch field name. An in-process specification test's TrueBatch field holds the code (picked from the codes the product's requests published; a request without codes matches by its name, `testCode`). At QC approval the result keeps the field name it fills (`ipcName`): `result_v1.ipc_field` publishes the name, and `ipc_code` (appended, migration `0028`) the code.

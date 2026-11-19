@@ -45,8 +45,9 @@ export const specTestSchema = z.object({
   // LIMS-08: an identity test. For a starting material (raw material, active substance) it is done on each container
   // sampled for release (every container of the lot); the decision waits for a result of each.
   identity: z.boolean().optional(),
-  // In-process (owner 19 Nov 2026): the TrueBatch in-process field this test answers (lab_request_v1 tests[].name); an
-  // in-process sample is tested for the tests whose field its request names.
+  // In-process (owner 19 Nov 2026): the TrueBatch in-process test this test answers: its code (lab_request_v1 tests[].code,
+  // unique within the product), or its field name for a request without codes; an in-process sample is tested for the
+  // tests its request names.
   ipcField: text(60).optional(),
 }).strict();
 
@@ -256,9 +257,9 @@ export function sampledProblem(numbers: readonly number[], n: number, received: 
  * The tests of the specification a sample is tested for, beyond its purpose: a monitoring sample one test (its plan's),
  * an in-process sample those whose TrueBatch field its request names; undefined: all that apply to the purpose.
  */
-export function sampleOnly(doc: SpecDoc, s: { monitoring?: { testKey: string } | null; request?: { tests: { name: string }[] } | null }): string[] | undefined {
+export function sampleOnly(doc: SpecDoc, s: { monitoring?: { testKey: string } | null; request?: { tests: { name: string; code?: string | null }[] } | null }): string[] | undefined {
   if (s.monitoring) return [s.monitoring.testKey];
-  if (s.request) { const names = new Set(s.request.tests.map((t) => t.name)); return doc.tests.filter((t) => t.ipcField && names.has(t.ipcField)).map((t) => t.key); }
+  if (s.request) { const names = new Set(s.request.tests.map((t) => t.code || t.name)); return doc.tests.filter((t) => t.ipcField && names.has(t.ipcField)).map((t) => t.key); }
   return undefined;
 }
 /** Whether a test of the specification applies to a sample (its purpose, and sampleOnly). */

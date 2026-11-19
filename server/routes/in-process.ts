@@ -3,7 +3,7 @@ import { z } from 'zod';
 import type { Sql, Tx } from '../db.js';
 import { requirePermission } from '../auth.js';
 import { usableItem } from '../master.js';
-import type { LabRequest } from '../links.js';
+import { testCode, type LabRequest } from '../links.js';
 import { EDITION_NAME, TB_EDITIONS, type Edition } from '../../shared/engine/links.js';
 import type { SpecDoc } from '../../shared/master/spec.js';
 import { effectiveSpecs, newSample, type SampleRequest } from './samples.js';
@@ -24,8 +24,8 @@ export function requestProblems(r: LabRequest, spec: SpecDoc | null): string[] {
   if (r.status !== 'open') return [`Request ${r.requestId} is ${r.status} in TrueBatch: only an open request is tested.`];
   if (!spec) return [`No effective in-process specification for ${r.productCode}: QA makes one effective first.`];
   if (!r.tests.length) return [`Request ${r.requestId} names no test.`];
-  const missing = r.tests.filter((t) => !spec.tests.some((x) => x.ipcField === t.name));
-  return missing.length ? [`Specification ${spec.header.number} has no test for ${missing.map((t) => `${t.label} (${t.name})`).join(', ')}: add it in a new version.`] : [];
+  const missing = r.tests.filter((t) => !spec.tests.some((x) => x.ipcField === testCode(t)));
+  return missing.length ? [`Specification ${spec.header.number} has no test for ${missing.map((t) => `${t.label} (${testCode(t)})`).join(', ')}: add it in a new version.`] : [];
 }
 
 async function inProcessSpec(q: Sql | Tx, productCode: string) {

@@ -224,14 +224,18 @@ export const BATCH_DONE_WITH = ['REJECTED', 'CANCELLED', 'RELEASED'];
 export const batchWaiting = (b: BatchRead) => !b.released && !BATCH_DONE_WITH.includes(b.status.toUpperCase());
 
 /** An in-process lab request of a TrueBatch step (lab_request_v1). `individual`: the number of units tested one by one. */
-export interface LabRequestTest { name: string; label: string; unit: string | null; individual: number | null }
+// code (TrueBatch round 45): unique within the product ('<block id>.<field>'); name: the TrueBatch field name. A request
+// from before codes has none: its name is its code.
+export interface LabRequestTest { name: string; label: string; unit: string | null; individual: number | null; code?: string | null }
+/** What an in-process specification test's TrueBatch field matches: the request test's code, else its name. */
+export const testCode = (t: { name: string; code?: string | null }) => t.code || t.name;
 export interface LabRequest { edition: Edition; requestId: string; batchNo: string; productCode: string; stageTitle: string | null; stepKey: string; stepTitle: string | null;
   tests: LabRequestTest[]; requestedAt: string; status: string }
 type RequestRow = { request_id: string; batch_no: string; product_code: string; stage_title: string | null; step_key: string; step_title: string | null;
   tests: LabRequestTest[] | null; requested_at: string; status: string };
 const requestOf = (r: RequestRow, edition: Edition): LabRequest => ({ edition, requestId: r.request_id, batchNo: r.batch_no, productCode: r.product_code, stageTitle: r.stage_title,
   stepKey: r.step_key, stepTitle: r.step_title, requestedAt: r.requested_at, status: r.status,
-  tests: (r.tests ?? []).map((t) => ({ name: String(t.name), label: String(t.label ?? t.name), unit: t.unit ?? null, individual: t.individual ?? null })) });
+  tests: (r.tests ?? []).map((t) => ({ name: String(t.name), label: String(t.label ?? t.name), unit: t.unit ?? null, individual: t.individual ?? null, ...(t.code ? { code: String(t.code) } : {}) })) });
 const REQUEST_COLS = `request_id, batch_no, product_code, stage_title, step_key, step_title, tests, requested_at::text, status`;
 
 /**
@@ -297,7 +301,7 @@ export const truebatchClient = (links: Link | EditionLink[]) => {
     }),
     requestFields: async (productCode: string) => {
       const r = await allEditions(all, async (q, v) => q<{ name: string; label: string; unit: string | null }[]>`
-        select distinct t ->> 'name' as name, coalesce(t ->> 'label', t ->> 'name') as label, t ->> 'unit' as unit
+        select distinct coalesce(nullif(t ->> 'code', ''), t ->> 'name') as name, coalesce(t ->> 'label', t ->> 'name') as label, t ->> 'unit' as unit
         from ${v('lab_request_v1')} r, jsonb_array_elements(r.tests) t where r.product_code = ${productCode} limit 500`);
       return r.state === 'ok' ? { ...r, value: [...new Map(r.value.map((x) => [x.name, x])).values()].sort((a, b) => a.name.localeCompare(b.name)) } : r;
     },
