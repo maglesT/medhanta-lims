@@ -614,6 +614,7 @@ Found making the TrueBatch Liquids release CoA (TL260004) on the demo screens.
 | Bulk release sample | A batch takes its release sample from production on (the bulk at its QA hold, before packing) until it is released; never when rejected or cancelled (`batchWaiting`). |
 | OOS as reported | The OOS screens and `oos_v1` (value and shown, migration `0024`) give the result rounded half up as its limit is written, the CoA's rule (`reportedFigure`); the full value stays in the OOS record and its worked line. Found on the demo: OOS260001 showed 0.8991… % for 0.9 %. |
 | Bare reported figure | The TrueBatch–LIMS contract: `result_v1.reported` is the figure as reported, rounded as the limit is written, as text without its unit ('1.25', '0.500'); a result with no number gives its text ('Conforms: …'). Every row, those decided before `reported` was kept too (rounded in the view). `reported_text` appended at the end: the printed text with its unit, as on the CoA. Migration `0025`. |
+| Packing batches | A packing edition's finished packs (`packing_batch_v1`, the same columns) take their release sample as a production batch does: truebatch_packing, truebatch_capsules_packing, truebatch_liquids_packing and truebatch_injectables_packing are read with the production editions. |
 
 ## In-process samples, individual values, sample_v1 (owner 19 Nov 2026)
 

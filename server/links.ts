@@ -257,26 +257,29 @@ async function oneOf<T>(ls: EditionLink[], f: (q: Sql, v: View, edition: Edition
 /** TrueBatch: one link (a test's) or one per edition. */
 export const truebatchClient = (links: Link | EditionLink[]) => {
   const all: EditionLink[] = Array.isArray(links) ? links : [{ edition: 'truebatch', link: links }];
-  const production = all.filter((e) => TB_PRODUCTION.includes(e.edition));
+  // Release samples: a production edition's batch_fact_v1, a packing edition's packing_batch_v1 (the finished packs,
+  // same columns; owner 19 Nov 2026: a packing batch has its own release CoA).
+  const production = all;
+  const batchView = (e: Edition) => (TB_PRODUCTION.includes(e) ? 'batch_fact_v1' : 'packing_batch_v1');
   return {
     batch: (batchNumber: string) => oneOf(production, async (q, v, ed) => {
-      const [r] = await q<BatchRow[]>`select ${q.unsafe(BATCH_COLS)} from ${v('batch_fact_v1')} b where batch_number = ${batchNumber} order by completed_at desc nulls last limit 1`;
+      const [r] = await q<BatchRow[]>`select ${q.unsafe(BATCH_COLS)} from ${v(batchView(ed))} b where batch_number = ${batchNumber} order by completed_at desc nulls last limit 1`;
       return r ? batchOf(r, ed) : null;
     }),
     waiting: () => allEditions(production, async (q, v, ed) => (await q<BatchRow[]>`
-      select ${q.unsafe(BATCH_COLS)} from ${v('batch_fact_v1')} b where released is not true and upper(status) <> all(${BATCH_DONE_WITH})
+      select ${q.unsafe(BATCH_COLS)} from ${v(batchView(ed))} b where released is not true and upper(status) <> all(${BATCH_DONE_WITH})
       order by completed_at nulls last, batch_number limit 500`).map((r) => batchOf(r, ed))),
     // Stability (LIMS-27, plan 2.6): the completed batches of a product, newest first, to put on study; and the batches
     // released since a plant date (released_at through to_jsonb: the completion on a view from before it was appended).
     ofProduct: async (productCode: string) => {
       const r = await allEditions(production, async (q, v, ed) => (await q<BatchRow[]>`
-        select ${q.unsafe(BATCH_COLS)} from ${v('batch_fact_v1')} b where product_code = ${productCode} and completed_at is not null and status <> 'REJECTED'
+        select ${q.unsafe(BATCH_COLS)} from ${v(batchView(ed))} b where product_code = ${productCode} and completed_at is not null and status <> 'REJECTED'
         order by completed_at desc, batch_number limit 100`).map((x) => batchOf(x, ed)));
       return r.state === 'ok' ? { ...r, value: r.value.sort((a, b) => (b.completedAt ?? '').localeCompare(a.completedAt ?? '') || a.batchNumber.localeCompare(b.batchNumber)) } : r;
     },
     releasedSince: async (date: string) => {
       const r = await allEditions(production, async (q, v, ed) => (await q<BatchRow[]>`
-        select ${q.unsafe(BATCH_COLS)} from ${v('batch_fact_v1')} b where released is true
+        select ${q.unsafe(BATCH_COLS)} from ${v(batchView(ed))} b where released is true
           and (coalesce((to_jsonb(b) ->> 'released_at')::timestamptz, completed_at) at time zone 'Asia/Kolkata')::date >= ${date}::date
         order by product_code, batch_number limit 2000`).map((x) => batchOf(x, ed)));
       return r.state === 'ok' ? { ...r, value: r.value.sort((a, b) => (a.productCode ?? '').localeCompare(b.productCode ?? '') || a.batchNumber.localeCompare(b.batchNumber)) } : r;
