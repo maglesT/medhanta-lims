@@ -8,9 +8,10 @@ import { SignDialog } from '../components/SignDialog.js';
 import { testText } from '../designer/describe.js';
 import type { SampleAction } from '../../../shared/engine/sample.js';
 import { ReservePanel } from './Reserve.js';
-import { PURPOSE_LABEL, STATUS_CHIP, STATUS_LABEL, answerOot, coaLink, decide, getSample, labelsLink, sampleEntry, type SampleDetail, type SampleEntry } from './api-samples.js';
+import { PURPOSE_LABEL, STATUS_CHIP, STATUS_LABEL, answerOot, coaLink, decide, getSample, labelsLink, recordReduced, sampleEntry, type ReducedBasis, type SampleDetail, type SampleEntry } from './api-samples.js';
 import { FormsPanel, OutsideDialog, OutsideLine } from './Paper.js';
 import { SAMPLING_DETAILS } from '../../../shared/master/spec.js';
+import { plantDate } from '../../../shared/plant-time.js';
 
 // What a sample's lot number is: a material's lot, a product's batch, an EM or water sample's point.
 const LOT_WORD = { material: 'Lot', product: 'Batch', room: 'Point', water: 'Point' } as const;
@@ -151,6 +152,7 @@ function EntryForm({ action, sampleNo, onSubmit, onCancel }: { action: SampleAct
 function Tests({ d, me, reload }: { d: SampleDetail; me: Me; reload: () => Promise<void> }) {
   const [starting, setStarting] = useState<SampleDetail['methods'][number] | null>(null);
   const [outside, setOutside] = useState(false);
+  const [certificate, setCertificate] = useState(false);
   // LIMS-08: a starting material's identity is tested on each container: the container is picked when its analysis starts.
   const [container, setContainer] = useState<number | undefined>(undefined);
   const n = d.identityContainers;
@@ -183,13 +185,37 @@ function Tests({ d, me, reload }: { d: SampleDetail; me: Me; reload: () => Promi
           {inQc ? d.methods.map((m) => <button key={m.masterId} onClick={() => setStarting(m)}>Start {m.code} {m.name}</button>)
             : <p className="muted small">Analyses start once QC has received the sample.</p>}
           {inQc && !d.decision && <button onClick={() => setOutside(true)}>Outside lab result</button>}
+          {inQc && !d.decision && d.reducedTesting?.recorded && <button onClick={() => setCertificate(true)}>Supplier's certificate result</button>}
           {inQc && n !== null && <label className="small">Identity of container<select aria-label="Identity of container" value={container ?? ''} onChange={(e) => setContainer(e.target.value ? Number(e.target.value) : undefined)}>
             <option value="">— (other tests)</option>{Array.from({ length: n }, (_, k) => <option key={k} value={k + 1}>{k + 1}</option>)}</select></label>}
         </div>
       )}
       {starting && <IssueDialog row={{ id: starting.versionId, versionNo: starting.versionNo, header: { code: starting.code, name: starting.name } }} sampleId={d.sample.id} sampleNo={d.sample.sampleNo} container={container} onCancel={() => setStarting(null)} />}
       {outside && <OutsideDialog d={d} onCancel={() => setOutside(false)} onDone={() => { setOutside(false); void reload(); }} />}
+      {certificate && d.reducedTesting?.recorded && <OutsideDialog d={d} certificate={d.reducedTesting.recorded.payload} onCancel={() => setCertificate(false)} onDone={() => { setCertificate(false); void reload(); }} />}
+      {d.reducedTesting && <Reduced d={d} reload={reload} />}
     </section>
+  );
+}
+
+/**
+ * LIMS-09: reduced testing on the supplier's certificate: recorded (with its basis as pulled), or what stands in the way,
+ * or QC records it. Identity is always tested here; every n-th lot and at least every m months a lot is tested in full.
+ */
+function Reduced({ d, reload }: { d: SampleDetail; reload: () => Promise<void> }) {
+  const r = d.reducedTesting!;
+  const [error, setError] = useState('');
+  const basis = (b: ReducedBasis) => `Manufacturer ${b.manufacturer}${b.manufacturerBatchNo ? `, batch ${b.manufacturerBatchNo}` : ''}; supplier ${b.supplier}${b.broker ? ' (a broker: the certificate must be the manufacturer\'s own)' : ''}; QMS approval ${b.approval ?? '—'}${b.approvedUntil ? ` until ${plantDate(b.approvedUntil)}` : ''}; last full test ${b.lastFull ?? '—'}.`;
+  return (
+    <div className="card" aria-label="Reduced testing">
+      <h3>Reduced testing (supplier's certificate)</h3>
+      <p className="muted small">Full testing every {r.interval.fullEvery} lots and at least every {r.interval.months} months; identity always tested here.</p>
+      {r.recorded ? <p><span className="chip chip-info">tested on the certificate</span> Recorded by {r.recorded.personName}, {plantTime(r.recorded.at)}. {basis(r.recorded.payload)}</p>
+        : r.problems.length ? <><p>This lot is tested in full:</p><ul>{r.problems.map((x) => <li key={x}>{x}</li>)}</ul></>
+        : <><p>{r.basis && basis(r.basis)}</p>
+          <button className="primary" onClick={async () => { try { await recordReduced(d.sample.id); await reload(); } catch (e) { setError(plainError(e)); } }}>Test this lot on the supplier's certificate</button></>}
+      {error && <p className="error" role="alert">{error}</p>}
+    </div>
   );
 }
 

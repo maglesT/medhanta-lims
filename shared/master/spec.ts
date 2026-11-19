@@ -74,6 +74,13 @@ export const specHeaderSchema = z.object({
     method: text(300).optional(), equipment: text(200).optional(), amount: text(60).optional(), subdivision: text(300).optional(),
     precautions: text(300).optional(), storage: text(200).optional(),
   }).strict().optional(),
+  // LIMS-09: a lot of this material may be tested on the supplier's certificate (its identity still tested here) when
+  // QMS approves its manufacturer and supplier for reduced testing; every `fullEvery`-th lot of a manufacturer, and at
+  // least one lot every `months` months, is tested in full (the customer's interval). Absent: every lot in full.
+  reducedTesting: z.object({
+    fullEvery: z.number().int().min(2).max(50),
+    months: z.number().int().min(1).max(36),
+  }).strict().optional(),
 }).strict();
 
 export const specSchema = z.object({
@@ -153,6 +160,11 @@ export function specChecks(doc: SpecDoc, methods: (masterId: number) => { doc: M
   if (doc.header.of === 'material' && SAMPLED_BY_PLAN.includes(doc.header.type) && !doc.header.sampling?.plan) {
     error('header.sampling', `A ${doc.header.type.toLowerCase()} is sampled by a written plan: choose the sampling plan (1 + √N containers or every container) and say how it is sampled`, 'LIMS-05');
   }
+  // LIMS-09: reduced testing only for a starting or packing material, and at least one specific identity test is still done.
+  if (doc.header.reducedTesting) {
+    if (doc.header.of !== 'material' || !SAMPLED_BY_PLAN.includes(doc.header.type)) error('header.reducedTesting', `Reduced testing on the supplier's certificate is for a raw material, an active substance or a packing material, not a ${doc.header.type.toLowerCase()}`, 'LIMS-09');
+    if (!doc.tests.some((t) => t.identity && (t.use === 'release and stability' || t.use === 'release'))) error('header.reducedTesting', 'Reduced testing needs at least one identity test, done here on every lot', 'LIMS-09');
+  }
   doc.tests.forEach((t, i) => {
     const p = `tests[${i}]`;
     if (doc.tests.findIndex((x) => x.key === t.key) !== i) error(p, `The key ${t.key} is used twice`);
@@ -202,7 +214,7 @@ export const STARTING_MATERIALS: readonly string[] = ['Raw material', 'Active su
 /**
  * LIMS-08: the number of containers each identity test of this sample is done on, or null when it is done once. A release
  * sample of a starting material is identified container by container. A validated reduced identity (fewer containers)
- * needs the supplier's qualification and whether it is a broker, which no linked system publishes: it is not offered.
+ * needs a qualification of that procedure and whether the material is for a parenteral, which no linked system publishes: it is not offered.
  */
 export function identityContainers(doc: SpecDoc, purpose: string, containers: number | null): number | null {
   return purpose === 'release' && STARTING_MATERIALS.includes(doc.header.type) && doc.tests.some((t) => t.identity) ? containers ?? 0 : null;

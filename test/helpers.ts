@@ -5,7 +5,7 @@ import { migrate } from '../db/migrate.js';
 import { buildApp } from '../server/app.js';
 import type { Identity, SignOn } from '../server/signon.js';
 import { MEANINGS, makeProof } from '../server/signatures.js';
-import { ConnectionOff, type Master, type MasterEquipment, type MasterMaterial, type MasterProduct, type MasterRoom } from '../server/master.js';
+import { ConnectionOff, type Master, type MasterEquipment, type MasterMaterial, type MasterProduct, type MasterRoom, type MasterSupplier } from '../server/master.js';
 import type { Permission } from '../server/auth.js';
 import type { Links } from '../server/links.js';
 
@@ -52,6 +52,7 @@ export interface FakeMaster extends Master {
   materials_: MasterMaterial[];
   equipment_: MasterEquipment[];
   rooms_: MasterRoom[];
+  suppliers_: MasterSupplier[];
   cut: boolean;
 }
 const ROOMS = [['DSP-01', 'Dispensing'], ['GRN-01', 'Granulation'], ['CMP-01', 'Compression'], ['COT-01', 'Coating'], ['PK-01', 'Packing'], ['PK-02', 'Packing']] as const;
@@ -59,8 +60,8 @@ export function fakeMaster(): FakeMaster {
   const read = <T>(rows: () => T[]) => async () => { if (m.cut) throw new ConnectionOff(); return rows().map((r) => ({ ...r })); };
   const m: FakeMaster = {
     // The rooms the fixtures' machines stand in, by area (shared/engine/picks.ts); tests add their own.
-    products_: [], materials_: [], equipment_: [], rooms_: ROOMS.map(([code, area]) => ({ itemId: `room-${code}`, code, name: `${area} room`, version: 1, active: true, area, grade: 'D' })), cut: false,
-    products: read(() => m.products_), materials: read(() => m.materials_), equipment: read(() => m.equipment_), rooms: read(() => m.rooms_),
+    products_: [], materials_: [], equipment_: [], rooms_: ROOMS.map(([code, area]) => ({ itemId: `room-${code}`, code, name: `${area} room`, version: 1, active: true, area, grade: 'D' })), suppliers_: [], cut: false,
+    products: read(() => m.products_), materials: read(() => m.materials_), equipment: read(() => m.equipment_), rooms: read(() => m.rooms_), suppliers: read(() => m.suppliers_),
   };
   return m;
 }

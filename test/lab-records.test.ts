@@ -19,7 +19,7 @@ import { c1WithinLimits } from '../shared/templates/index.js';
 import { itemStatus, registerProblems, ITEM_KIND_NAME } from '../shared/engine/items.js';
 
 // The register rules closed in build step 8c: sample labels (LIMS-06), the identity of each container of a starting
-// material (LIMS-08), no supplier certificate in place of a test (LIMS-09), outside (contract) lab results (LIMS-22),
+// material (LIMS-08), no supplier certificate in place of a test unless reduced testing is recorded (LIMS-09), outside (contract) lab results (LIMS-22),
 // records kept and readable (LIMS-52) and the paper fallback (LIMS-54).
 
 function pdfText(def: TDocumentDefinitions): string {
@@ -104,8 +104,8 @@ describe('the rules', () => {
     expect(plan('Intermediate')).toEqual([]);
   });
 
-  it('LIMS-09 no supplier certificate replaces a test: a specification has no reduced-testing option, and every test that applies needs its own reviewed result', () => {
-    // MMS publishes no supplier, broker or reduced-testing qualification of a lot, so reduced testing is not offered.
+  it('LIMS-09 without reduced testing recorded, no supplier certificate replaces a test: a test has no skip flag, and every test that applies needs its own reviewed result', () => {
+    // Reduced testing is a specification header setting with its full-test interval (test/reduced.test.ts), never a flag on a test.
     const doc = specOf('Raw material');
     const withSkip = { ...doc, tests: [{ ...doc.tests[0]!, reducedTesting: true }, ...doc.tests.slice(1)] };
     expect(specSchema.safeParse(withSkip).success).toBe(false);

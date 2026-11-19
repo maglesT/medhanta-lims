@@ -89,6 +89,7 @@ function describeSpec(doc: SpecDoc): Section[] {
       { key: 'pharmacopoeia', text: `Pharmacopoeia ${h.pharmacopoeia}${h.edition ? `, ${h.edition}` : ''}.` },
       { key: 'reserve', text: h.reserveQuantity ? `Reserve sample: ${h.reserveQuantity}.` : 'No reserve sample.' },
       { key: 'sampling', text: h.sampling ? `Sampling plan: ${h.sampling.plan === 'square root' ? '1 + √N containers' : 'every container'}.${(['method', 'equipment', 'amount', 'subdivision', 'precautions', 'storage'] as const).map((k) => h.sampling?.[k] ? ` ${k[0]!.toUpperCase()}${k.slice(1)}: ${h.sampling[k]}.` : '').join('')}` : 'No sampling plan.' },
+      { key: 'reduced', text: h.reducedTesting ? `Reduced testing on the supplier's certificate allowed for a QMS-approved supplier: identity tested on every lot; full testing every ${h.reducedTesting.fullEvery} lots and at least every ${h.reducedTesting.months} months.` : 'Every lot tested in full.' },
     ] },
     { key: 'tests', title: 'Tests', lines: doc.tests.map((t, n) => ({ key: t.key, text: testText(t, n) })) },
   ];

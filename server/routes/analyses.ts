@@ -360,7 +360,7 @@ export interface TestResult { analysisId: number; analysisNo: string; status: st
   // LIMS-08: the container an identity analysis tested. LIMS-22: a result of an outside lab (analysisNo: its report number).
   container?: number | null; outside?: OutsideFacts }
 /** An outside (contract) lab's result as typed from its report (LIMS-22), and its second person's check. */
-export interface OutsideFacts { id: number; lab: string; reportNo: string; fileName: string; size: number; sha256: string; enteredBy: string; enteredAt: Date; checkedBy: string | null; checkedAt: Date | null }
+export interface OutsideFacts { id: number; certificate?: boolean; lab: string; reportNo: string; fileName: string; size: number; sha256: string; enteredBy: string; enteredAt: Date; checkedBy: string | null; checkedAt: Date | null }
 /** The analyses of a sample, per spec test they cover, oldest first, each with its status and its result once worked out. */
 export async function sampleTestResults(q: Sql | Tx, sampleId: number, app?: FastifyInstance): Promise<Record<string, TestResult[]>> {
   const ids = await q<{ id: number; container: number | null }[]>`select id::int, container from analyses where sample_id = ${sampleId} order by id`;

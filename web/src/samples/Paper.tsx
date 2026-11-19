@@ -3,7 +3,8 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { can, plantTime, type Me } from '../api.js';
 import { plainError } from '../api-floor.js';
-import { checkOutside, enterOutside, formEntry, formLink, issueForm, listForms, type FormRow, type SampleDetail, type TestResult } from './api-samples.js';
+import { checkOutside, enterOutside, formEntry, formLink, issueForm, listForms, type FormRow, type ReducedBasis, type SampleDetail, type TestResult } from './api-samples.js';
+import { CERTIFICATE_FIELDS } from '../../../shared/engine/reduced.js';
 
 const base64 = (bytes: Uint8Array) => { let s = ''; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000)); return btoa(s); };
 export const FORM_WORDS: Record<FormRow['state'], string> = { issued: 'issued, not back yet', used: 'returned, transcribed', unused: 'returned unused', voided: 'voided' };
@@ -11,14 +12,17 @@ export const FORM_WORDS: Record<FormRow['state'], string> = { issued: 'issued, n
 /** An outside lab's result as the Tests table shows it, with the second person's check. */
 export function OutsideLine({ d, a, me, reload }: { d: SampleDetail; a: TestResult; me: Me; reload: () => Promise<void> }) {
   const [error, setError] = useState('');
+  const [fields, setFields] = useState(false);
   const o = a.outside!;
   return (
     <div>
-      <span className="chip chip-info">outside lab</span> {o.lab}, report {o.reportNo}
+      {o.certificate ? <><span className="chip chip-info">supplier's certificate</span> {o.lab}, certificate {o.reportNo}</> : <><span className="chip chip-info">outside lab</span> {o.lab}, report {o.reportNo}</>}
       {a.result && <> · <b>{a.result.value || a.result.shown}{a.result.value ? ` ${a.result.unit}` : ''}</b>{a.result.pass !== undefined && <span className={`chip ${a.result.pass ? 'chip-ok' : 'chip-bad'}`}>{a.result.pass ? 'within limits' : 'out of limits'}</span>}</>}
       <span className="cell-sub">File {o.fileName}, SHA-256 {o.sha256.slice(0, 16)}… · typed by {o.enteredBy}, {plantTime(o.enteredAt)} · {o.checkedBy ? `checked by ${o.checkedBy}, ${plantTime(o.checkedAt)}` : 'waits for a second person\'s check'}</span>
       {!o.checkedBy && !d.decision && can(me, 'analysis.review') && (
-        <button className="link dark" onClick={async () => { try { await checkOutside(d.sample.id, o.id); await reload(); } catch (e) { setError(plainError(e)); } }}>Check against the report</button>
+        <>{o.certificate && <label className="check small"><input type="checkbox" checked={fields} onChange={(e) => setFields(e.target.checked)} /> The certificate gives {CERTIFICATE_FIELDS}</label>}
+        <button className="link dark" disabled={o.certificate && !fields} onClick={async () => { try { await checkOutside(d.sample.id, o.id, o.certificate ? fields : undefined); await reload(); } catch (e) { setError(plainError(e)); } }}>
+          {o.certificate ? 'Check against the certificate' : 'Check against the report'}</button></>
       )}
       {error && <p className="error" role="alert">{error}</p>}
     </div>
@@ -26,8 +30,9 @@ export function OutsideLine({ d, a, me, reload }: { d: SampleDetail; a: TestResu
 }
 
 /** Enter an outside lab's result for a test of the sample: the lab, its report (file) and the result as it gives it. */
-export function OutsideDialog({ d, onDone, onCancel }: { d: SampleDetail; onDone: () => void; onCancel: () => void }) {
-  const tests = d.spec!.tests.filter((t) => t.applies && !(d.identityContainers !== null && t.identity));
+export function OutsideDialog({ d, onDone, onCancel, certificate }: { d: SampleDetail; onDone: () => void; onCancel: () => void; certificate?: ReducedBasis }) {
+  // LIMS-09: from the supplier's certificate, every test but identity (always tested here); the manufacturer is the lab.
+  const tests = d.spec!.tests.filter((t) => t.applies && !(d.identityContainers !== null && t.identity) && !(certificate && t.identity));
   const [test, setTest] = useState(tests[0]?.key ?? '');
   const [lab, setLab] = useState('');
   const [reportNo, setReportNo] = useState('');
@@ -41,24 +46,27 @@ export function OutsideDialog({ d, onDone, onCancel }: { d: SampleDetail; onDone
   const isConforms = t?.limitType === 'conforms';
   const send = async (e: FormEvent) => {
     e.preventDefault();
-    if (!t || !lab.trim() || !reportNo.trim() || !file) return setError('Give the test, the lab, the report number and the report file.');
+    if (!t || (!certificate && !lab.trim()) || !reportNo.trim() || !file) return setError(certificate ? 'Give the test, the certificate number and its scan.' : 'Give the test, the lab, the report number and the report file.');
     if (isConforms ? !conforms : !value.trim()) return setError(isConforms ? 'Say whether the report finds it conforms.' : 'Type the result as the report gives it.');
     setBusy(true);
     try {
-      await enterOutside(d.sample.id, { test, lab: lab.trim(), reportNo: reportNo.trim(), file: { name: file.name, content: base64(new Uint8Array(await file.arrayBuffer())) },
+      await enterOutside(d.sample.id, { test, ...(certificate ? { certificate: true } : { lab: lab.trim() }), reportNo: reportNo.trim(), file: { name: file.name, content: base64(new Uint8Array(await file.arrayBuffer())) },
         ...(isConforms ? { conforms: conforms === 'yes' } : { value: value.trim(), unit: unit.trim() }) });
       onDone();
     } catch (err) { setError(plainError(err)); setBusy(false); }
   };
   return (
-    <div className="overlay" role="dialog" aria-modal="true" aria-label="Outside lab result">
+    <div className="overlay" role="dialog" aria-modal="true" aria-label={certificate ? 'Supplier\'s certificate result' : 'Outside lab result'}>
       <form className="card dialog" onSubmit={send}>
-        <h2>Outside lab result</h2>
-        <p className="muted">A test done by a contract lab. Type the result from its report; a second person checks it against the report before it counts. The report's file is named with its SHA-256.</p>
+        <h2>{certificate ? 'Supplier\'s certificate result' : 'Outside lab result'}</h2>
+        {certificate
+          ? <p className="muted">The lot is tested on the certificate of {certificate.manufacturer}{certificate.manufacturerBatchNo ? `, batch ${certificate.manufacturerBatchNo}` : ''}. Type the result as the certificate gives it; a second person checks it against the scan before it counts. Identity is always tested here.</p>
+          : <p className="muted">A test done by a contract lab. Type the result from its report; a second person checks it against the report before it counts. The report's file is named with its SHA-256.</p>}
         <label>Test<select aria-label="Test" value={test} onChange={(e) => setTest(e.target.value)}>{tests.map((x) => <option key={x.key} value={x.key}>{x.name}</option>)}</select></label>
-        <label>Outside lab<input aria-label="Outside lab" value={lab} onChange={(e) => setLab(e.target.value)} placeholder="e.g. Demo Analytical Services, Pune" /></label>
-        <label>Report number<input aria-label="Report number" value={reportNo} onChange={(e) => setReportNo(e.target.value)} /></label>
-        <label>Report (PDF or scan)<input aria-label="Report file" type="file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} /></label>
+        {certificate ? <p>Manufacturer: <b>{certificate.manufacturer}</b> <span className="muted small">(from MMS and master data)</span></p>
+          : <label>Outside lab<input aria-label="Outside lab" value={lab} onChange={(e) => setLab(e.target.value)} placeholder="e.g. Demo Analytical Services, Pune" /></label>}
+        <label>{certificate ? 'Certificate number' : 'Report number'}<input aria-label={certificate ? 'Certificate number' : 'Report number'} value={reportNo} onChange={(e) => setReportNo(e.target.value)} /></label>
+        <label>{certificate ? 'Certificate (PDF or scan)' : 'Report (PDF or scan)'}<input aria-label={certificate ? 'Certificate file' : 'Report file'} type="file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} /></label>
         {isConforms ? (
           <label>Conforms ({t?.conforms})<select aria-label="Conforms" value={conforms} onChange={(e) => setConforms(e.target.value)}><option value="">Pick…</option><option value="yes">Yes</option><option value="no">No</option></select></label>
         ) : (<>

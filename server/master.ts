@@ -11,12 +11,15 @@ export interface MasterProduct extends Base { strength: string | null; dosageFor
 export interface MasterMaterial extends Base { category: string | null; unit: string | null }
 export interface MasterEquipment extends Base { kind: 'equipment' | 'instrument'; type: string | null; room: string | null }
 export interface MasterRoom extends Base { area: string | null; grade: string | null }
+export interface MasterSupplier extends Base { address: string | null }
 
 export interface Master {
   products(): Promise<MasterProduct[]>;
   materials(): Promise<MasterMaterial[]>;
   equipment(): Promise<MasterEquipment[]>;   // equipment and instruments
   rooms(): Promise<MasterRoom[]>;
+  // LIMS-09: the manufacturer named on a supplier's certificate.
+  suppliers(): Promise<MasterSupplier[]>;
 }
 
 export const CONNECTION_OFF = 'Connection to master data is off. Ask your administrator.';
@@ -51,6 +54,8 @@ export function sqlMaster(md: Sql): Master {
     ].sort((a, b) => a.code.localeCompare(b.code))),
     rooms: () => read(async () => [...await md<MasterRoom[]>`
       select id as "itemId", code, name, version, active, area, grade from report.room_v1 order by code`]),
+    suppliers: () => read(async () => [...await md<MasterSupplier[]>`
+      select id::text as "itemId", code, name, version, active, address from report.supplier_v1 order by code`]),
   };
 }
 

@@ -3,6 +3,7 @@ import type { Sql } from './db.js';
 import type { LinkState, Provider } from '../shared/engine/links.js';
 import type { TrainingRead } from '../shared/engine/training.js';
 import { qualificationProblem, type QualPick, type QualRead } from '../shared/engine/qualification.js';
+import type { SupplierApproval } from '../shared/engine/reduced.js';
 
 // Links to the other Medhanta products, the Logbook way (platform PL-08, D-02). Each provider is read live through
 // its report views with this product's own login, from the URL the platform writes only while the link is on
@@ -94,6 +95,15 @@ export const qmsClient = (l: Link) => ({
   approved: () => l.read(async (q, v) => (await q<CcRow[]>`
     select number, status, title, products, qa_approved_at::text from ${v('change_v1')}
     where qa_approved_at is not null and status = any(${CHANGE_STEPS}) order by number desc limit 200`).map(cc)),
+  // LIMS-09: QMS's approval of a material from a manufacturer through a supplier (report.supplier_approval_v1).
+  supplierApproval: (materialId: string, manufacturerId: string, supplierId: string) => l.read(async (q, v) => {
+    const [r] = await q<{ record_number: string | null; status: string; approved_until: string | null; is_broker: boolean | null; reduced_testing_approved: boolean | null; reduced_testing_approved_at: string | null }[]>`
+      select to_jsonb(a) ->> 'record_number' as record_number, status, approved_until::text, is_broker, reduced_testing_approved, reduced_testing_approved_at::text
+      from ${v('supplier_approval_v1')} a where material_id::text = ${materialId} and manufacturer_id::text = ${manufacturerId} and supplier_id::text = ${supplierId}
+      order by data_as_of desc nulls last limit 1`;
+    return r ? { recordNumber: r.record_number, status: r.status, approvedUntil: r.approved_until, isBroker: r.is_broker === true,
+      reducedTestingApproved: r.reduced_testing_approved === true, reducedTestingApprovedAt: r.reduced_testing_approved_at } satisfies SupplierApproval : null;
+  }),
 });
 
 // ---- Logbook: report.equipment_status_v1 (planned), the status the Logbook computes. fit_for_use leaves out a use in
@@ -149,6 +159,18 @@ export const mmsClient = (l: Link) => ({
       select test, value::text, unit, basis, report_ref from ${v('lot_test_v1')} where lot_number = ${lotNumber} and value is not null`;
     return { ...lotOf(r, tests.map((t) => ({ test: t.test, value: t.value, unit: t.unit, basis: t.basis, reportRef: t.report_ref }))), stock: r.stock, unit: r.unit };
   }),
+  // LIMS-09: the lot's supplier, manufacturer and the manufacturer's batch number (lot_v1's last columns, through to_jsonb:
+  // null on a view from before they were appended).
+  supplier: (lotNumber: string) => l.read(async (q, v) => {
+    const [r] = await q<{ supplier_id: string | null; manufacturer_id: string | null; manufacturer_batch_no: string | null }[]>`
+      select to_jsonb(l) ->> 'supplier_id' as supplier_id, to_jsonb(l) ->> 'manufacturer_id' as manufacturer_id, to_jsonb(l) ->> 'manufacturer_batch_no' as manufacturer_batch_no
+      from ${v('lot_v1')} l where lot_number = ${lotNumber} and kind = 'material' limit 1`;
+    return r ? { supplierId: r.supplier_id, manufacturerId: r.manufacturer_id, manufacturerBatchNo: r.manufacturer_batch_no } : null;
+  }),
+  // LIMS-09: the lot numbers of a material from one manufacturer (for its periodic full test and its OOS).
+  lotsOfManufacturer: (materialId: string, manufacturerId: string) => l.read(async (q, v) => (await q<{ lot_number: string }[]>`
+    select lot_number from ${v('lot_v1')} l where kind = 'material' and material_master_id::text = ${materialId}
+      and to_jsonb(l) ->> 'manufacturer_id' = ${manufacturerId} limit 5000`).map((r) => r.lot_number)),
   // The material lots waiting to be sampled: received and in quarantine (or under test) in MMS.
   waiting: () => l.read(async (q, v) => (await q<(LotRow & { stock: string | null; unit: string | null })[]>`
     select ${q.unsafe(LOT_COLS)}, to_jsonb(l) ->> 'stock' as stock, to_jsonb(l) ->> 'unit' as unit from ${v('lot_v1')} l

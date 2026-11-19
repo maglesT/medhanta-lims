@@ -48,12 +48,14 @@ export interface SampleDetail {
   reserveRequired: string | null; reserveNote: string | null;
   // LIMS-08: the containers each identity test is done on (null: once); LIMS-54: the blank worksheets issued for the sample.
   identityContainers: number | null; forms: FormRow[];
+  // LIMS-09: reduced testing (null: the specification does not allow it, or not a release sample).
+  reducedTesting: { recorded: { personName: string; at: string; payload: ReducedBasis } | null; problems: string[]; basis: ReducedBasis | null; interval: { fullEvery: number; months: number } } | null;
 }
 // LIMS-54: a blank worksheet issued for paper and its state.
 export interface FormRow { id: number; formNo: string; sampleId: number; sampleNo: string; methodCode: string; methodName: string; versionNo: number; reason: string;
   issuedByName: string; issuedAt: string; state: 'issued' | 'used' | 'unused' | 'voided'; entry: { kind: string; payload: { outcome?: string; analysisNo?: string; reason?: string }; personName: string; at: string } | null }
 // LIMS-22: an outside lab's result, as typed from its report.
-export interface OutsideFacts { id: number; lab: string; reportNo: string; fileName: string; size: number; sha256: string; enteredBy: string; enteredAt: string; checkedBy: string | null; checkedAt: string | null }
+export interface OutsideFacts { id: number; certificate?: boolean; lab: string; reportNo: string; fileName: string; size: number; sha256: string; enteredBy: string; enteredAt: string; checkedBy: string | null; checkedAt: string | null }
 // A spec test's analysis: its status and, once worked out, its result (pass or fail against the test's limit).
 export interface TestResult { analysisId: number; analysisNo: string; status: string; result: { shown: string; value: string; unit: string; pass?: boolean } | null;
   container?: number | null; outside?: OutsideFacts }
@@ -84,7 +86,11 @@ export const PURPOSE_LABEL: Record<SamplePurpose, string> = { release: 'Release'
 
 export const labelsLink = (id: number) => `/api/samples/${id}/labels`;
 export const enterOutside = (id: number, body: object) => api<{ ok: true; sha256: string }>('POST', `/api/samples/${id}/outside`, body);
-export const checkOutside = (id: number, rid: number) => api<{ ok: true }>('POST', `/api/samples/${id}/outside/${rid}/check`, {});
+export const checkOutside = (id: number, rid: number, certificateFields?: boolean) => api<{ ok: true }>('POST', `/api/samples/${id}/outside/${rid}/check`, certificateFields ? { certificateFields } : {});
+export const recordReduced = (id: number) => api<{ ok: true }>('POST', `/api/samples/${id}/reduced-testing`, {});
+/** LIMS-09: the basis of reduced testing as pulled (server/reduced.ts). */
+export interface ReducedBasis { manufacturer: string; manufacturerAddress: string | null; supplier: string; manufacturerBatchNo: string | null; broker: boolean; approval: string | null;
+  approvedUntil: string | null; reducedTestingApprovedAt: string | null; lastFull: string | null; fullEvery: number; months: number }
 export const issueForm = (id: number, body: { masterVersionId: number; reason: string }) => api<{ ok: true; id: number; formNo: string }>('POST', `/api/samples/${id}/forms`, body);
 export const listForms = (open = false) => api<FormRow[]>('GET', `/api/forms${open ? '?open=1' : ''}`);
 export const formLink = (id: number) => `/api/forms/${id}/pdf`;

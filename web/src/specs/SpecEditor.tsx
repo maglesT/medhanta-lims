@@ -102,6 +102,16 @@ export function SpecEditor({ me, versionId, onBack, onOpen }: { me: Me; versionI
                       const { [k]: _, ...rest } = h.sampling!;
                       change({ ...doc, header: { ...h, sampling: e.target.value ? { ...rest, [k]: e.target.value } : rest } as typeof h });
                     }} /></label>))}
+                  {/* LIMS-09: reduced testing on the supplier's certificate, with the periodic full test (the customer's interval). */}
+                  <label>Reduced testing<select aria-label="Reduced testing" value={h.reducedTesting ? 'yes' : ''} onChange={(e) => change({ ...doc, header: e.target.value
+                    ? { ...h, reducedTesting: { fullEvery: 5, months: 12 } } : (({ reducedTesting: _, ...x }) => x)(h) })}>
+                    <option value="">no: every lot tested in full</option><option value="yes">on the supplier's certificate, for a QMS-approved supplier</option></select></label>
+                  {h.reducedTesting && <>
+                    <label>Full test every (lots)<input aria-label="Full test every (lots)" inputMode="numeric" value={h.reducedTesting.fullEvery}
+                      onChange={(e) => change({ ...doc, header: { ...h, reducedTesting: { ...h.reducedTesting!, fullEvery: Number(e.target.value) || 0 } } })} /></label>
+                    <label>And at least every (months)<input aria-label="Full test at least every (months)" inputMode="numeric" value={h.reducedTesting.months}
+                      onChange={(e) => change({ ...doc, header: { ...h, reducedTesting: { ...h.reducedTesting!, months: Number(e.target.value) || 0 } } })} /></label>
+                  </>}
                 </div>
               </div>
               {doc.tests.map((t, i) => (

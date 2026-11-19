@@ -5,8 +5,8 @@ import { migrate } from '../db/migrate.js';
 import { buildApp } from '../server/app.js';
 import globalSetup from '../test/global-setup.js';
 import { TEST_DATABASE_URL, TEST_PROOF_KEY, fakeMaster, fakeSignOn, seedUser } from '../test/helpers.js';
-import { E2E_LB, E2E_MATERIAL_ID, E2E_RETEST_ID, E2E_MMS, E2E_PORT, E2E_QUAL, E2E_RECRUITMENT, E2E_SCHEMA, E2E_TB, USERS } from './config.js';
-import { link, links, logbookClient, truebatchClient, type Link } from '../server/links.js';
+import { E2E_LB, E2E_MAKER_ID, E2E_PACK_ID, E2E_QMS, E2E_TRADER_ID, E2E_MATERIAL_ID, E2E_RETEST_ID, E2E_MMS, E2E_PORT, E2E_QUAL, E2E_RECRUITMENT, E2E_SCHEMA, E2E_TB, USERS } from './config.js';
+import { link, links, logbookClient, qmsClient, truebatchClient, type Link } from '../server/links.js';
 import { seedMasterData } from './master-data.js';
 
 await globalSetup();
@@ -44,7 +44,19 @@ await rc.unsafe(`drop schema if exists ${E2E_MMS} cascade; create schema ${E2E_M
   -- The retest journey (LIMS-31): a released lot of RM-031 past its retest date.
   insert into ${E2E_MMS}.lot_v1 (lot_number, kind, material_master_id, material_code, status, expiry_date, retest_date, stock, unit) values
     ('RM-R1', 'material', '${E2E_RETEST_ID}', 'RM-031', 'released', '2030-06-30', '2026-01-31', 80, 'kg');
+  -- The reduced testing journey (LIMS-09): two lots of a packing material from Demo Pack Co through Demo Traders.
+  alter table ${E2E_MMS}.lot_v1 add column supplier_id uuid, add column manufacturer_id uuid, add column manufacturer_batch_no text;
+  insert into ${E2E_MMS}.lot_v1 (lot_number, kind, material_master_id, material_code, status, expiry_date, stock, unit, supplier_id, manufacturer_id, manufacturer_batch_no) values
+    ('PK-1', 'material', '${E2E_PACK_ID}', 'PM-041', 'quarantine', '2030-06-30', 400, 'kg', '${E2E_TRADER_ID}', '${E2E_MAKER_ID}', 'DPC-2601'),
+    ('PK-2', 'material', '${E2E_PACK_ID}', 'PM-041', 'quarantine', '2030-06-30', 400, 'kg', '${E2E_TRADER_ID}', '${E2E_MAKER_ID}', 'DPC-2602');
   grant usage on schema ${E2E_MMS} to lims_app; grant select on all tables in schema ${E2E_MMS} to lims_app;`);
+// QMS's supplier_approval_v1 (LIMS-09): Demo Pack Co through Demo Traders, approved for reduced testing.
+await rc.unsafe(`drop schema if exists ${E2E_QMS} cascade; create schema ${E2E_QMS};
+  create table ${E2E_QMS}.supplier_approval_v1 (material_id uuid, manufacturer_id uuid, supplier_id uuid, is_broker boolean, status text, approved_until date,
+    reduced_testing_approved boolean, reduced_testing_approved_at date, data_as_of timestamptz default now(), record_number text);
+  insert into ${E2E_QMS}.supplier_approval_v1 (material_id, manufacturer_id, supplier_id, is_broker, status, approved_until, reduced_testing_approved, reduced_testing_approved_at, record_number) values
+    ('${E2E_PACK_ID}', '${E2E_MAKER_ID}', '${E2E_TRADER_ID}', false, 'approved', '2099-12-31', true, '2026-01-10', 'SA-26-0041');
+  grant usage on schema ${E2E_QMS} to lims_app; grant select on all tables in schema ${E2E_QMS} to lims_app;`);
 // Qualification's qualification_v1 (LIMS-12): the lab instruments qualified, BAL-02 due for requalification.
 await rc.unsafe(`drop schema if exists ${E2E_QUAL} cascade; create schema ${E2E_QUAL};
   create table ${E2E_QUAL}.qualification_v1 (item_id bigint, master_id text, code text, name text, kind text, status text, next_review_due date,
@@ -65,6 +77,8 @@ const whileThere = (l: Link): Link => ({ provider: l.provider, read: async (f) =
 const linksNow = links({ recruitment: linked, mms: linked, qual: linked }, { recruitment: E2E_RECRUITMENT, mms: E2E_MMS, qual: E2E_QUAL });
 linksNow.truebatch = truebatchClient(whileThere(link('truebatch', linked, E2E_TB)));
 linksNow.logbook = logbookClient(whileThere(link('logbook', linked, E2E_LB)));
+// QMS: only supplier_approval_v1 is there; change_v1 is not, so change control stays "not linked" (typed by hand).
+linksNow.qms = qmsClient(whileThere(link('qms', linked, E2E_QMS)));
 const app = await buildApp({ sql, signOn: fakeSignOn(), proofKey: TEST_PROOF_KEY, master,
   links: linksNow,
   webRoot: new URL('../dist/web', import.meta.url).pathname, cookieSecure: false });

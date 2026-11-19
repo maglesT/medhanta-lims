@@ -10,7 +10,9 @@ import { pageFrame, plant, runs } from './pdf.js';
 
 interface Decided { key: string; name: string; value: string; unit: string; shown: string; reported?: string; pass?: boolean; limit: string; method: string; analysisNo: string; reviewedAt?: string | null;
   // LIMS-08: an identity tested on each of this many containers; LIMS-22: done by an outside lab, with its report.
-  containers?: number; outsideLab?: string; report?: { file: string; sha256: string } }
+  containers?: number; outsideLab?: string; report?: { file: string; sha256: string };
+  // LIMS-09: taken from the supplier's certificate of a lot tested on it.
+  certificate?: { manufacturer: string } }
 export interface CoaInput { sample: SampleRow; spec: SpecDoc; specVersion: number; decision: EventRow }
 
 const small = (text: string, extra: Record<string, unknown> = {}): Content => ({ text: runs(text), fontSize: 8, ...extra }) as Content;
@@ -59,12 +61,13 @@ export function coaDoc(c: CoaInput, by: string, printedAt = new Date(), demo = f
     { text: 'Results', bold: true, fontSize: 11, margin: [0, 12, 0, 4] },
     { table: { headerRows: 1, widths: [110, 70, '*', 90, 50], body: [
       [th('Test'), th('Method'), th('Limit'), th('Result'), th('')],
-      ...results.map((r) => [small(r.name, { bold: true }), small(r.outsideLab ? `OUTSIDE LAB: ${r.outsideLab}\nreport ${r.analysisNo}` : `${r.method}\n${r.analysisNo}`),
+      ...results.map((r) => [small(r.name, { bold: true }), small(r.certificate ? `SUPPLIER'S CERTIFICATE: ${r.certificate.manufacturer}\ncertificate ${r.analysisNo}` : r.outsideLab ? `OUTSIDE LAB: ${r.outsideLab}\nreport ${r.analysisNo}` : `${r.method}\n${r.analysisNo}`),
         small(r.limit || '—'), small(`${figure(r)}${r.containers ? ` (each of ${r.containers} containers)` : ''}`, { bold: true }),
         small(r.pass === false ? 'FAILS' : r.pass ? 'Complies' : 'Reported', { bold: true, color: r.pass === false ? RED : undefined })]),
     ] }, layout: 'lightHorizontalLines' },
     small('Every result above was reviewed by a second person with its audit trail before this decision (LIMS-18, LIMS-19).', { margin: [0, 6, 0, 0], color: '#555555' }),
-    ...results.filter((r) => r.outsideLab).map((r) => small(`${r.name}: tested by the outside (contract) lab ${r.outsideLab}, report ${r.analysisNo} (file ${r.report?.file ?? ''}, SHA-256 ${r.report?.sha256 ?? ''}); the result was typed from the report and checked by a second person.`, { margin: [0, 2, 0, 0] })),
+    ...results.filter((r) => r.certificate).map((r) => small(`${r.name}: taken from the certificate ${r.analysisNo} of the manufacturer ${r.certificate!.manufacturer} (scan ${r.report?.file ?? ''}, SHA-256 ${r.report?.sha256 ?? ''}): the lot was tested on the supplier's certificate (reduced testing, LIMS-09) with its identity tested here; the result was typed from the certificate and checked by a second person.`, { margin: [0, 2, 0, 0] })),
+    ...results.filter((r) => r.outsideLab && !r.certificate).map((r) => small(`${r.name}: tested by the outside (contract) lab ${r.outsideLab}, report ${r.analysisNo} (file ${r.report?.file ?? ''}, SHA-256 ${r.report?.sha256 ?? ''}); the result was typed from the report and checked by a second person.`, { margin: [0, 2, 0, 0] })),
     { text: 'Decision', bold: true, fontSize: 11, margin: [0, 12, 0, 4] },
     small(`APPROVED by ${c.decision.signature?.printedName ?? c.decision.personName}, ${plant(c.decision.signature?.signedAt ?? c.decision.at)} (e-signature, meaning "QC approved")`, { fontSize: 10, bold: true }),
   ];

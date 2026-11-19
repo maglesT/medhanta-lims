@@ -9,6 +9,7 @@ import { SignError, authenticateSigner, contentHash, sign, signBody } from '../s
 import { SAMPLING_DETAILS, identityContainers, limitFor, sampledProblem, samplingPlan, limitText, limitWords, outOfTrend, purposeLimits, type SpecDoc } from '../../shared/master/spec.js';
 import { OOT_ANSWERS, approvalProblems, ootRefusal, rejectionRefusal, sampleDecision, type TestState } from '../../shared/engine/sample.js';
 import { oosOfSample } from './oos.js';
+import { reducedState } from '../reduced.js';
 import { loadReserves, openRetestSample, reserveNeed } from './reserve.js';
 import { coaDoc } from '../coa.js';
 import { render, sendPdf } from '../pdf.js';
@@ -165,7 +166,8 @@ export function testStates(spec: SpecDoc, purpose: string, results: Record<strin
       // The result as it goes on the certificate and into result_v1.
       decided: r?.result ? { key: t.key, name: t.name, value: r.result.value, unit: r.result.unit, shown: r.result.shown, reported: reportedFigure(r.result.value, r.result.unit, limitFor(t, on)), ...(r.result.pass !== undefined ? { pass: r.result.pass } : {}),
         limit: limitText(t, on), method: r.method, analysisNo: r.analysisNo, reviewedAt: r.reviewedAt,
-        ...(each ? { containers: perContainer } : {}), ...(r.outside ? { outsideLab: r.outside.lab, report: { file: r.outside.fileName, sha256: r.outside.sha256 } } : {}) } : null,
+        ...(each ? { containers: perContainer } : {}), ...(r.outside ? { outsideLab: r.outside.certificate ? `supplier's certificate (${r.outside.lab})` : r.outside.lab, report: { file: r.outside.fileName, sha256: r.outside.sha256 },
+          ...(r.outside.certificate ? { certificate: { manufacturer: r.outside.lab } } : {}) } : {}) } : null,
     };
   });
 }
@@ -371,7 +373,39 @@ export function sampleRoutes(app: FastifyInstance, sql: Sql) {
       forms: await loadForms(sql, { sampleId: l.s.id }),
       reserveNote: release && v && !need?.required ? 'The specification names no reserve quantity: the reserve sample is not checked at approval.' : null,
       rejectionRefusal: user.permissions.includes('lims.qc.approve') ? rejectionRefusal(l.events) : 'Rejection needs the QC approval permission.',
+      // LIMS-09: tested on the supplier's certificate (recorded), or why not now; offered only when the specification allows it.
+      reducedTesting: v?.doc.header.reducedTesting && release ? await (async () => {
+        const recorded = l.events.find((e) => e.kind === 'reduced_testing') ?? null;
+        const st = await reducedState(sql, app, l.s, v.doc, sampleDecision(l.events), !!recorded, plantToday(new Date()));
+        return { recorded, problems: user.permissions.includes('lims.qc.approve') ? st.problems : ['Reduced testing is recorded by QC with the QC approval permission.', ...st.problems], basis: st.basis,
+          interval: v.doc.header.reducedTesting };
+      })() : null,
     };
+  });
+
+  // LIMS-09: QC records that this release sample's lot is tested on the supplier's certificate, when the pulled facts
+  // allow it (shared/engine/reduced.ts); the basis as read now is kept with the entry.
+  app.post<{ Params: { id: string } }>('/api/samples/:id/reduced-testing', { preHandler: requirePermission('lims.qc.approve') }, async (req, reply) => {
+    const id = parseId(req.params.id);
+    if (id === null) return reply.code(404).send({ error: 'not_found' });
+    const user = req.user!;
+    try {
+      return await sql.begin(async (tx) => {
+        await tx`select pg_advisory_xact_lock(hashtext(${`sample-entry:${id}`}))`;
+        const l = await loadSample(tx, id);
+        if (!l) throw new SampleError(404, 'not_found');
+        const [v] = await tx<{ doc: SpecDoc }[]>`select doc from master_versions where id = ${l.s.specVersionId}`;
+        const st = await reducedState(tx, app, l.s, v!.doc, sampleDecision(l.events), l.events.some((e) => e.kind === 'reduced_testing'), plantToday(new Date()));
+        if (st.problems.length || !st.basis) throw new SampleError(409, 'not_allowed_now', st.problems.length ? st.problems : ['The supplier of the lot is not known.']);
+        const [ev] = await tx<{ id: number }[]>`
+          insert into sample_events (sample_id, kind, payload, person_id) values (${id}, 'reduced_testing', ${tx.json(st.basis as never)}, ${user.id}) returning id::int`;
+        await audit(tx, { actorId: user.id, action: 'sample.reduced_testing', objectType: 'sample', objectId: id, new: { event: ev!.id, ...st.basis } });
+        return { ok: true, eventId: ev!.id, basis: st.basis };
+      });
+    } catch (e) {
+      if (e instanceof SampleError) return reply.code(e.status).send({ error: e.code, problems: e.problems, message: e.problems[0] });
+      throw e;
+    }
   });
 
   // One route per entry, each in the same steps: read the sample and its entries, check the order and the person, insert

@@ -123,6 +123,14 @@ export async function oosOfSample(q: Sql | Tx, sampleId: number): Promise<(Sampl
     return { id: r.id, oosNo: r.oosNo, testName: r.result.name, testKey: r.testKey, analysisNo: r.analysisNo, status: brief(s), detail: s };
   });
 }
+/** LIMS-09: the OOS of these samples, with the plant day each was opened (a stop to reduced testing). */
+export async function oosOfSamples(q: Sql | Tx, sampleIds: number[]): Promise<{ oosNo: string; status: SampleOos['status']; openedOn: string }[]> {
+  if (!sampleIds.length) return [];
+  const rows = await q<{ id: number; oosNo: string; openedOn: string }[]>`
+    select o.id::int, o.oos_no as "oosNo", (o.opened_at at time zone ${PLANT_TZ})::date::text as "openedOn" from oos o where o.sample_id = any(${sampleIds}) order by o.id`;
+  const ev = await events(q, rows.map((r) => r.id));
+  return rows.map((r) => ({ oosNo: r.oosNo, openedOn: r.openedOn, status: brief(oosStatus(ev.filter((e) => e.oosId === r.id))) }));
+}
 /** The OOS an analysis opened, and the one it is a retest of (the analysis screen links to them). */
 export async function oosOfAnalysis(q: Sql | Tx, analysisId: number) {
   const rows = await q<{ id: number; oosNo: string; testName: string; retest: boolean }[]>`

@@ -25,6 +25,12 @@ export const E2E_STAB_PRODUCT_ID = '00000000-0000-4000-8000-000000000102';
 export const E2E_EM_ID = '00000000-0000-4000-8000-000000000201';
 // The product of the trends journey (its own, so the other journeys' results are not on its chart).
 export const E2E_TREND_PRODUCT_ID = '00000000-0000-4000-8000-000000000103';
+// The reduced testing journey (LIMS-09): QMS's stand-in supplier_approval_v1 (only that view: the QMS link stays "not
+// linked" for change control), its packing material, and the manufacturer and supplier as master data names them.
+export const E2E_QMS = `${E2E_SCHEMA}_qms`;
+export const E2E_PACK_ID = '00000000-0000-4000-8000-000000000041';
+export const E2E_MAKER_ID = '00000000-0000-4000-8000-0000000000f1';
+export const E2E_TRADER_ID = '00000000-0000-4000-8000-0000000000f2';
 // Invented test people and the Medhanta LIMS permissions core gives them.
 export const USERS: Record<string, Permission[]> = {
   op1: ['lims.analysis.perform'],
