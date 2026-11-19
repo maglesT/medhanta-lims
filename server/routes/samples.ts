@@ -81,6 +81,17 @@ async function releaseSample(q: Sql | Tx, of: Of, lotNo: string) {
   return r?.sampleNo ?? null;
 }
 
+/**
+ * A material lot still waiting in MMS whose release sample QC has decided: MMS sent it back to QC (a new QC cycle), so it
+ * is offered for a retest sample (LIMS-31); with the retest sample already registered and waiting for QC, if any.
+ */
+async function sentBack(q: Sql | Tx, lotNo: string): Promise<{ releaseDecided: boolean; retestNo: string | null }> {
+  const [r] = await q<{ decided: boolean }[]>`
+    select exists (select 1 from samples s join sample_events e on e.sample_id = s.id and e.kind in ('approved', 'rejected')
+      where s.lot_no = ${lotNo} and s.item->>'of' = 'material' and s.purpose = 'release') as decided`;
+  return { releaseDecided: !!r?.decided, retestNo: await openRetestSample(q, lotNo) };
+}
+
 export const lotShown = (l: LotRead) => `MMS lot ${l.lotNumber}: ${l.materialCode ?? '—'}, ${l.status.replaceAll('_', ' ')}, expiry ${l.expiryDate ? plantDate(l.expiryDate) : '—'}, retest ${l.retestDate ? plantDate(l.retestDate) : '—'}${l.stock ? `, ${l.stock} ${l.unit ?? ''} in stock`.trimEnd() : ''}`;
 export const batchShown = (b: BatchRead) => `${b.edition ? EDITION_NAME[b.edition] : 'TrueBatch'} batch ${b.batchNumber}: ${b.productCode ?? '—'}${b.productName ? ` ${b.productName}` : ''}, ${b.status.replaceAll('_', ' ').toLowerCase()}, completed ${b.completedAt ?? '—'}${b.quantity ? `, ${b.quantity} made` : ''}`;
 
@@ -218,7 +229,9 @@ export function sampleRoutes(app: FastifyInstance, sql: Sql) {
       const specs = l.materialMasterId ? await effectiveSpecs(sql, 'material', l.materialMasterId) : [];
       requests.push({ source: 'mms' as const, lotNo: l.lotNumber, ...item, name: specs[0]?.header.name ?? null, status: l.status, shown: lotShown(l), asOf: l.dataAsOf,
         stock: l.stock ? `${l.stock} ${l.unit ?? ''}`.trim() : null, specs: specs.map(({ header, ...x }) => ({ ...x, number: header.number, type: header.type, market: header.market ?? null, sampling: header.sampling ?? null })),
-        noSpec: specs.length ? null : `No effective specification for ${l.materialCode ?? 'this material'}.`, sampleNo: await releaseSample(sql, 'material', l.lotNumber) });
+        noSpec: specs.length ? null : `No effective specification for ${l.materialCode ?? 'this material'}.`, sampleNo: await releaseSample(sql, 'material', l.lotNumber),
+        // LIMS-31: a lot MMS sent back to QC (quarantine again after QC decided its release sample) is sampled again for retest.
+        ...(await sentBack(sql, l.lotNumber)) });
     }
     if (batches.state === 'ok') for (const b of batches.value) {
       const specs = b.productCode ? await effectiveSpecs(sql, 'product', b.productCode) : [];

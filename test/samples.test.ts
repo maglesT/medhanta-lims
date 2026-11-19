@@ -188,6 +188,18 @@ describe('registering a sample', () => {
     expect((await registerLot('RM-L1', { purpose: 'investigation' })).statusCode).toBe(200);
   });
 
+  it('LIMS-31 a lot MMS sent back to QC (its release sample decided, the lot in quarantine again) is offered for a retest sample, once', async () => {
+    type Req = { lotNo: string; sampleNo: string | null; releaseDecided?: boolean; retestNo?: string | null };
+    const lot = async () => ((await as('sampler', 'GET', '/api/sample-requests')).json() as { requests: Req[] }).requests.find((x) => x.lotNo === 'RM-L1')!;
+    expect(await lot()).toMatchObject({ sampleNo: first.sampleNo, releaseDecided: false, retestNo: null });
+    await t.owner`insert into sample_events (sample_id, kind, payload, person_id) values (${first.id}, 'approved', ${t.owner.json({ coaNo: 'COA-T-SB', results: [] } as never)}, ${ids.sampler!})`;
+    expect(await lot()).toMatchObject({ sampleNo: first.sampleNo, releaseDecided: true, retestNo: null });
+    const r = await registerLot('RM-L1', { purpose: 'retest' });
+    expect(r.statusCode, r.body).toBe(200);
+    expect(await lot()).toMatchObject({ releaseDecided: true, retestNo: r.json().sampleNo });
+    expect((await registerLot('RM-L1', { purpose: 'retest' })).json().problems).toEqual([`Lot RM-L1 already has its retest sample ${r.json().sampleNo}, waiting for QC's decision.`]);
+  });
+
   it('LIMS-05 a lot that is not waiting (approved in MMS, or not in MMS) is refused', async () => {
     const r = await registerLot('RM-OK');
     expect(r.statusCode).toBe(409);

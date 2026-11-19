@@ -42,8 +42,9 @@ export function Samples({ me }: { me: Me }) {
   if (open !== null) return <SampleScreen me={me} id={open} onBack={() => { setOpen(null); load(); }} onOpenReserve={(r) => { setOpen(null); setReserve(r); }} />;
   const words = q.toLowerCase().split(/\s+/).filter(Boolean);
   const shown = (rows ?? []).filter((r) => words.every((w) => `${r.sampleNo} ${r.item.code} ${r.item.name} ${r.lotNo} ${r.purpose} ${r.status} ${r.registeredByName}`.toLowerCase().includes(w)));
-  const waiting = (req?.requests ?? []).filter((r) => !r.sampleNo);
-  const sampled = (req?.requests ?? []).filter((r) => r.sampleNo);
+  // A lot sent back to QC by MMS (its release sample decided, the lot waiting again) is offered for a retest sample.
+  const waiting = (req?.requests ?? []).filter((r) => !r.sampleNo || r.releaseDecided);
+  const sampled = (req?.requests ?? []).filter((r) => r.sampleNo && !r.releaseDecided);
   return (
     <>
       <div className="home-head">
@@ -76,7 +77,11 @@ export function Samples({ me }: { me: Me }) {
                         <td><b>{r.code}</b><span className="cell-sub">{r.name ?? ''}</span></td>
                         <td>{PROVIDER_NAME[r.source]}<span className="cell-sub">{plantText(r.shown)}</span></td>
                         <td>{r.specs.length ? r.specs.map((s) => <span key={s.id} className="cell-line">{s.number}, version {s.versionNo}</span>) : <span className="chip chip-warn">{r.noSpec}</span>}</td>
-                        <td><button className="primary" disabled={!r.specs.length} onClick={() => { setPurpose('release'); setRegistering(r); }} aria-label={`Register ${r.lotNo}`}>Register</button></td>
+                        <td>{!r.sampleNo
+                          ? <button className="primary" disabled={!r.specs.length} onClick={() => { setPurpose('release'); setRegistering(r); }} aria-label={`Register ${r.lotNo}`}>Register</button>
+                          : r.retestNo ? <span className="cell-sub">retest sample {r.retestNo} waiting for QC</span>
+                          : <><button className="primary" disabled={!r.specs.length} onClick={() => { setPurpose('retest'); setRegistering(r); }} aria-label={`Register the retest sample of ${r.lotNo}`}>Register the retest sample</button>
+                            <span className="cell-sub">sent back to QC: release sample {r.sampleNo} decided</span></>}</td>
                       </tr>
                     ))}
                   </tbody>

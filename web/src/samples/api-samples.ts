@@ -11,6 +11,8 @@ export interface SpecChoice { id: number; masterId: number; versionNo: number; n
 export interface SampleRequest {
   source: From; lotNo: string; of: 'material' | 'product'; itemId: string | null; code: string; name: string | null; status: string;
   shown: string; asOf: string | null; stock: string | null; specs: SpecChoice[]; noSpec: string | null; sampleNo: string | null;
+  /** MMS lots: QC decided the release sample and the lot waits again (sent back to QC): offered for a retest sample. */
+  releaseDecided?: boolean; retestNo?: string | null;
 }
 export interface Requests { links: Record<From, LinkState>; requests: SampleRequest[] }
 // A monitoring sample is of a room (master data) or a water system (server/routes/em.ts).

@@ -424,6 +424,7 @@ records; a second sampler checks.
   lot (or one still waiting to be sampled), and one at a time per lot until QC decides on it. Its decision is published as any sample's (`coa_v1`,
   `result_v1`); MMS owns the lot's status and moves its retest date. MMS absent or down: the list says so and the retest
   sample is registered by hand (second-person check), as any sample.
+- **Sent back to QC (LIMS-31).** A material lot MMS sends back to QC (quarantine again after QC decided its release sample, MMS D-72 QA "Send back to QC") stays on "Waiting to be sampled" with "Register the retest sample" (purpose retest, the effective specification version): `/api/sample-requests` gives `releaseDecided` and the open `retestNo`; one retest sample at a time, as before.
 
 ## Step 6: stability protocols and studies (build step 6, 18 Nov 2026)
 Plan 2.6 and 2b items 1, 2, 5, 6 (LIMS-26, LIMS-27, LIMS-28), the Logbook way: a record row, insert-only entries, and
