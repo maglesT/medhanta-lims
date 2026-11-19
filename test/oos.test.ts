@@ -290,6 +290,26 @@ describe('OOS on the server', () => {
     await ok(as('qcuser', 'POST', `/api/samples/${sid}/reject`, { proof: proofFor('qcuser'), contentHash: (await detail(sid)).decisionHash, reason: `Confirmed OOS ${oosNo}` }));
   });
 
+  it('LIMS-23 the deviation Deviations filed from the OOS (its source_ref names it) is the phase II deviation, nobody picks it; QA concludes once it is closed', async () => {
+    const sid = await sampleOf();
+    await analysed(sid, '4.4', true);
+    const id = (await oosOf(sid))[0]!.id;
+    const oosNo = (await get(id)).oos.oosNo;
+    await ok(act('analyst', id, 'checklist', { answers: yes }));
+    await ok(act('analyst', id, 'conclude-phase1', { labError: false }));
+    await ok(act('supervisor', id, 'review', {}, 'reviewed'));
+    const [row] = await t.owner.unsafe(`select oos_id::text from ${t.schema}_report.oos_v1 where oos_number = '${oosNo}'`) as { oos_id: string }[];
+    const oosId = row!.oos_id;
+    await t.owner.unsafe(`insert into ${DV}.deviation_v1 (number, status, title, source_ref) values ('DEV-26-0310', 'investigation', 'Phase II of ${oosNo}', 'lims:oos:${oosId}')`);
+    const d = await get(id);
+    expect(d.phase2).toMatchObject({ reference: 'DEV-26-0310', typed: false, filed: true, event: null });
+    expect((await act('supervisor', id, 'phase2', { reference: 'DEV-26-0310' })).json().problems).toEqual(['The phase II deviation is DEV-26-0310.']);
+    expect((await act('qalead', id, 'conclude', { outcome: 'confirmed', reason: 'early' }, 'oos_approved')).json().problems[0]).toMatch(/DEV-26-0310 is investigation in Deviations/);
+    await t.owner.unsafe(`update ${DV}.deviation_v1 set status = 'closed', closed_at = now() where number = 'DEV-26-0310'`);
+    await ok(act('qalead', id, 'conclude', { outcome: 'confirmed', reason: 'Phase II DEV-26-0310 closed: wrong granulation end point' }, 'oos_approved'));
+    expect(await view(oosNo)).toMatchObject({ status: 'CONFIRMED', closed: true });
+  });
+
   it('LIMS-23 Deviations not reachable: the phase II number is typed by hand, checked by a second person, and QA confirms the closure by hand', async () => {
     const sid = await sampleOf();
     await analysed(sid, '7.6', false);

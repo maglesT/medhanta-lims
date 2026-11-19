@@ -14,9 +14,10 @@ import { analysisRecordDoc, type RecordInput, type Signature } from '../analysis
 import { linkRetest, oosOfAnalysis, openOos } from './oos.js';
 import { render, sendPdf } from '../pdf.js';
 import { findBlock, type Block, type BlockField } from '../../shared/blocks/index.js';
+import { Dec } from '../../shared/templates/index.js';
 import { blocking, masterChecks } from '../../shared/master/checks.js';
 import type { MasterDoc, Step } from '../../shared/master/schema.js';
-import { applySpec, identityContainers, limitFor, purposeLimits, testsFor, testsForAnalysis, type SpecDoc, type SpecTest } from '../../shared/master/spec.js';
+import { applySpec, identityContainers, limitFor, purposeLimits, sampleOnly, testsFor, testsForAnalysis, type SpecDoc, type SpecTest } from '../../shared/master/spec.js';
 import { sampleStatus, type SampleEvent } from '../../shared/engine/sample.js';
 import { isHand as sourceByHand } from '../../shared/engine/links.js';
 import { createHash } from 'node:crypto';
@@ -354,13 +355,33 @@ async function recordClosedStages(tx: Tx, id: number, before: readonly StageView
 }
 
 // A spec test's result in an analysis: the method's result step (stage/step/name), from its last signed round.
-export interface TestResult { analysisId: number; analysisNo: string; status: string; result: { shown: string; value: string; unit: string; pass?: boolean } | null;
+export interface TestResult { analysisId: number; analysisNo: string; status: string;
+  // individual: the units' results (unitValues); figure: what the value is (figureOf).
+  result: { shown: string; value: string; unit: string; pass?: boolean; individual?: string[]; figure?: 'AV' | 'mean' | 'result' } | null;
   // Who recorded, signed or checked its steps, and its open deviations (read from Deviations while linked).
   people: number[]; openDeviations: number; reviewedAt: Date | null; method: string;
   // LIMS-08: the container an identity analysis tested. LIMS-22: a result of an outside lab (analysisNo: its report number).
   container?: number | null; outside?: OutsideFacts }
 /** An outside (contract) lab's result as typed from its report (LIMS-22), and its second person's check. */
 export interface OutsideFacts { id: number; certificate?: boolean; lab: string; reportNo: string; fileName: string; size: number; sha256: string; enteredBy: string; enteredAt: Date; checkedBy: string | null; checkedAt: Date | null }
+/**
+ * The results of the individual units (BU locations, CU tablets) behind a result, in order, as recorded: the block's
+ * `units` fields one after the other (10, or 30 after a second stage), else the contents a uniformity template worked
+ * out (T14 by weight variation, to 1 decimal); null when the result has none.
+ */
+export function unitValues(block: Block, values: Record<string, Value>, r: Stored): string[] | null {
+  if (block.units?.length) {
+    const xs = block.units.flatMap((u) => { const x = values[u]; return Array.isArray(x) ? x.map((y) => y.value).filter((y) => y !== '') : []; });
+    return xs.length ? xs : null;
+  }
+  const contents = (r as Record<string, unknown>).contents;
+  return Array.isArray(contents) && contents.length ? contents.map((c) => new Dec(String(c)).toFixed(1)) : null;
+}
+/** What a result's figure is: the acceptance value of a uniformity test, the mean of readings, or the result itself. */
+export function figureOf(block: Block | undefined, calc: string): 'AV' | 'mean' | 'result' {
+  const tpl = block?.calcs.find((c) => c.name === calc)?.template;
+  return tpl === 'T14' || (tpl === 'C6' && block?.id === 'content-uniformity') ? 'AV' : tpl === 'T7' ? 'mean' : 'result';
+}
 /** The analyses of a sample, per spec test they cover, oldest first, each with its status and its result once worked out. */
 export async function sampleTestResults(q: Sql | Tx, sampleId: number, app?: FastifyInstance): Promise<Record<string, TestResult[]>> {
   const ids = await q<{ id: number; container: number | null }[]>`select id::int, container from analyses where sample_id = ${sampleId} order by id`;
@@ -375,9 +396,12 @@ export async function sampleTestResults(q: Sql | Tx, sampleId: number, app?: Fas
       const [sk, tk, name] = t.result.split('/') as [string, string, string];
       const at = steps.filter((x) => x.stageKey === sk && x.stepKey === tk && ['done', 'checked'].includes(x.state)).at(-1);
       const r = at?.results[name];
+      const block = at ? findBlock(l.doc.stages.find((x) => x.key === sk)?.steps.find((x) => x.key === tk)?.block ?? { id: '', version: 0 }) : undefined;
+      const units = at && block && r?.ok ? unitValues(block, at.values, r) : null;
       (out[t.key] ??= []).push({ analysisId: id, analysisNo: l.analysis.analysisNo, status, people: v.people, openDeviations: v.deviations.filter((d) => d.open).length,
         reviewedAt, method: l.doc.header.code, ...(container ? { container } : {}),
-        result: r?.ok ? { shown: r.shown, value: r.value, unit: r.unit, ...(r.check ? { pass: r.check.pass } : {}) } : null });
+        result: r?.ok ? { shown: r.shown, value: r.value, unit: r.unit, ...(r.check ? { pass: r.check.pass } : {}),
+          ...(units ? { individual: units } : {}), figure: figureOf(block, name) } : null });
     }
   }
   // LIMS-22: the results of outside labs, after the lab's own (the latest counts); a result counts once a second person checked it.
@@ -412,8 +436,9 @@ export function analysisRoutes(app: FastifyInstance, sql: Sql) {
         if (b.data.sampleId !== undefined && v.doc.header.use === 'validation') throw new StepError(409, 'validation_worksheet', [`${v.doc.header.code} is a validation worksheet: it is run without a sample.`]);
         if (b.data.sampleId !== undefined) {
           await tx`select pg_advisory_xact_lock(${-b.data.sampleId}::bigint)`;
-          const [x] = await tx<{ id: number; sampleNo: string; purpose: string; registeredBy: number; source: Source; spec: SpecDoc; containers: number | null }[]>`
-            select s.id::int, s.sample_no as "sampleNo", s.purpose, s.registered_by::int as "registeredBy", s.source, v.doc as spec, s.containers
+          const [x] = await tx<{ id: number; sampleNo: string; purpose: string; registeredBy: number; source: Source; spec: SpecDoc; containers: number | null;
+            monitoring: { testKey: string } | null; request: { tests: { name: string }[] } | null }[]>`
+            select s.id::int, s.sample_no as "sampleNo", s.purpose, s.registered_by::int as "registeredBy", s.source, v.doc as spec, s.containers, s.monitoring, s.request
             from samples s join master_versions v on v.id = s.spec_version_id where s.id = ${b.data.sampleId}`;
           if (!x) throw new StepError(404, 'no_such_sample', ['There is no such sample.']);
           const events = await tx<SampleEvent[]>`select kind, payload, person_id::int as person from sample_events where sample_id = ${x.id} order by id`;
@@ -422,7 +447,10 @@ export function analysisRoutes(app: FastifyInstance, sql: Sql) {
           if (!['received', 'stored', 'handed over'].includes(status)) throw new StepError(409, 'sample_not_in_qc', [`Sample ${x.sampleNo} is ${status}: it is tested once QC has received it.`]);
           const covers = testsForAnalysis(x.spec, v.masterId, x.purpose, identityContainers(x.spec, x.purpose, x.containers), b.data.container);
           if ('problem' in covers) throw new StepError(409, 'container', [covers.problem]);
-          const tests = covers.tests;
+          // A monitoring sample is of its plan's test; an in-process one of the tests its request names (sampleOnly).
+          const only = sampleOnly(x.spec, x);
+          const tests = covers.tests.filter((t) => !only || only.includes(t.key));
+          if (covers.tests.length && !tests.length) throw new StepError(409, 'no_tests', [`${v.doc.header.code} does none of the tests sample ${x.sampleNo} is tested for.`]);
           if (!tests.length) throw new StepError(409, 'method_not_in_spec', [`The specification of sample ${x.sampleNo} has no ${x.purpose === 'stability' ? 'stability' : 'release'} test done by method ${v.doc.header.code}.`]);
           sample = { id: x.id, sampleNo: x.sampleNo, tests: tests.map((t) => t.key) };
         }

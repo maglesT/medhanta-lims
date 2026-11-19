@@ -9,6 +9,7 @@ export const contentUniformity: Block = {
     { name: 'results', label: 'Content of 10 tablets (% of label claim)', kind: 'number', unit: '%', count: 10 },
     { name: 'moreResults', label: 'Content of 20 more tablets (% of label claim)', kind: 'number', unit: '%', count: 20, optional: true },
   ],
+  units: ['results', 'moreResults'],
   settings: [{ name: 'coating', label: 'Coating', kind: 'text', options: ['uncoated', 'film-coated', 'sugar-coated', 'other coated'] }],
   calcs: [
     { name: 'acceptance', label: 'Content uniformity', template: 'C6', args: { test: 'content uniformity', coating: '$coating', stages: ['$results', '$moreResults?'] } },

@@ -82,6 +82,9 @@ export const blockSchema = z.object({
   periodic: z.object({ maxMinutes: z.number().int().positive(), alongside: z.boolean().optional() }).strict().optional(),
   // The name of a step that names a material, "{material}" its name and code: "Issue {material}".
   title: z.string().regex(/\{material\}/).optional(),
+  // The fields holding the results of individual units (tablets, capsules, blend locations), in order: published as
+  // the result's individual values (result_v1.individual_values; BU, CU, fill weights).
+  units: z.array(name).optional(),
 }).strict();
 
 export type BlockField = z.infer<typeof fieldSchema>;
@@ -126,5 +129,6 @@ export function blockProblems(b: Block): string[] {
     known.add(c.name);
   }
   if (b.stop && !b.calcs.some((c) => c.name === b.stop)) p.push(`stop: no calculation ${b.stop}`);
+  for (const u of b.units ?? []) if (!b.fields.some((f) => f.name === u && f.kind === 'number' && f.count !== undefined)) p.push(`units: ${u} is not a field of several numbers`);
   return p;
 }

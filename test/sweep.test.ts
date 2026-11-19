@@ -28,6 +28,7 @@ const SETTINGS: Record<string, Step['settings']> = {
   disintegration: { maxTime: '15', temperatureLimit: { low: '35', high: '39', unit: '°C' } },
   'uniformity-by-weight': { coating: 'uncoated', labelClaim: '50 mg' },
   'content-uniformity': { coating: 'uncoated' },
+  'blend-uniformity': { limit: { low: '90.0', high: '110.0', unit: '%' }, rsdLimit: { high: '5.0', unit: '%' }, individualLimit: { low: '85.0', high: '115.0', unit: '%' } },
   assay: { cdsPeak: 'Paracetamol', mode: 'bracketing', response: 'peak area', responseUnit: '', stdMass: '50.00 mg', stdVolume: '100 mL', stdFactor: '10', preparations: '3',
     sample1Mass: '250.0 mg', sample2Mass: '250.0 mg', sample3Mass: '250.0 mg', sampleVolume: '100 mL', sample1Factor: '10', sample2Factor: '10', sample3Factor: '10',
     per: 'unit', averageWeight: '250 mg', labelClaim: '50 mg', basis: 'dried', sampleLod: '0.5 %', sampleWater: '0.4 %', sampleSolvents: '0.1 %',

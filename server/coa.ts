@@ -12,7 +12,9 @@ interface Decided { key: string; name: string; value: string; unit: string; show
   // LIMS-08: an identity tested on each of this many containers; LIMS-22: done by an outside lab, with its report.
   containers?: number; outsideLab?: string; report?: { file: string; sha256: string };
   // LIMS-09: taken from the supplier's certificate of a lot tested on it.
-  certificate?: { manufacturer: string } }
+  certificate?: { manufacturer: string };
+  // The units' results behind it (BU, CU) and what the figure is.
+  individual?: string[]; figure?: 'AV' | 'mean' }
 export interface CoaInput { sample: SampleRow; spec: SpecDoc; specVersion: number; decision: EventRow }
 
 const small = (text: string, extra: Record<string, unknown> = {}): Content => ({ text: runs(text), fontSize: 8, ...extra }) as Content;
@@ -50,8 +52,12 @@ export function coaDoc(c: CoaInput, by: string, printedAt = new Date(), demo = f
     try { return t && r.value ? reportedFigure(r.value, r.unit, limitFor(t, on)) : undefined; } catch { return undefined; }
   };
   const figure = (r: Decided) => resultFigure(r.shown, r.value, r.unit, reported(r));
+  // In-process: a test report of the step's request, not a certificate (owner 19 Nov 2026).
+  const title = s.purpose === 'in_process' ? 'In-process test report' : 'Certificate of analysis';
+  const req = (s as { request?: { requestId: string; stageTitle: string | null; stepTitle: string | null } | null }).request;
   const content: Content[] = [
-    { text: runs(`Certificate of analysis ${p.coaNo ?? ''}`), fontSize: 16, bold: true },
+    { text: runs(`${title} ${p.coaNo ?? ''}`), fontSize: 16, bold: true },
+    ...(req ? [small(`Request ${req.requestId}: ${[req.stageTitle, req.stepTitle].filter(Boolean).join(' › ')}`, { margin: [0, 2, 0, 0] })] : []),
     { text: runs(`${s.item.code} · ${s.item.name}`), fontSize: 11, margin: [0, 2, 0, 8] },
     { table: { widths: [95, '*', 95, '*'], body: [
       [th(s.item.of === 'material' ? 'Material' : 'Product'), small(`${s.item.code} · ${s.item.name}`), th(s.item.of === 'material' ? 'Lot' : 'Batch'), small(s.lotNo, { bold: true })],
@@ -66,10 +72,11 @@ export function coaDoc(c: CoaInput, by: string, printedAt = new Date(), demo = f
         small(r.pass === false ? 'FAILS' : r.pass ? 'Complies' : 'Reported', { bold: true, color: r.pass === false ? RED : undefined })]),
     ] }, layout: 'lightHorizontalLines' },
     small('Every result above was reviewed by a second person with its audit trail before this decision (LIMS-18, LIMS-19).', { margin: [0, 6, 0, 0], color: '#555555' }),
+    ...results.filter((r) => r.individual?.length).map((r) => small(`${r.name}: ${r.individual!.length} individual results ${r.individual!.join(', ')}${r.unit ? ` ${r.unit}` : ''}; the figure reported is ${r.figure === 'AV' ? 'the acceptance value' : 'their mean'}.`, { margin: [0, 2, 0, 0] })),
     ...results.filter((r) => r.certificate).map((r) => small(`${r.name}: taken from the certificate ${r.analysisNo} of the manufacturer ${r.certificate!.manufacturer} (scan ${r.report?.file ?? ''}, SHA-256 ${r.report?.sha256 ?? ''}): the lot was tested on the supplier's certificate (reduced testing, LIMS-09) with its identity tested here; the result was typed from the certificate and checked by a second person.`, { margin: [0, 2, 0, 0] })),
     ...results.filter((r) => r.outsideLab && !r.certificate).map((r) => small(`${r.name}: tested by the outside (contract) lab ${r.outsideLab}, report ${r.analysisNo} (file ${r.report?.file ?? ''}, SHA-256 ${r.report?.sha256 ?? ''}); the result was typed from the report and checked by a second person.`, { margin: [0, 2, 0, 0] })),
     { text: 'Decision', bold: true, fontSize: 11, margin: [0, 12, 0, 4] },
     small(`APPROVED by ${c.decision.signature?.printedName ?? c.decision.personName}, ${plant(c.decision.signature?.signedAt ?? c.decision.at)} (e-signature, meaning "QC approved")`, { fontSize: 10, bold: true }),
   ];
-  return pageFrame(`Medhanta LIMS · Certificate of analysis ${p.coaNo ?? ''} · ${s.item.code} ${s.lotNo}`, by, content, printedAt, demo);
+  return pageFrame(`Medhanta LIMS · ${title} ${p.coaNo ?? ''} · ${s.item.code} ${s.lotNo}`, by, content, printedAt, demo);
 }

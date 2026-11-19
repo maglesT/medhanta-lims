@@ -12,6 +12,7 @@ import { masterDataRoutes } from './routes/masterdata.js';
 import { masterRoutes } from './routes/masters.js';
 import { analysisRoutes } from './routes/analyses.js';
 import { sampleRoutes } from './routes/samples.js';
+import { inProcessRoutes } from './routes/in-process.js';
 import { inventoryRoutes } from './routes/inventory.js';
 import { reserveRoutes } from './routes/reserve.js';
 import { oosRoutes } from './routes/oos.js';
@@ -97,6 +98,7 @@ export async function buildApp({ sql, signOn, master, links = noLinks(), proofKe
   masterRoutes(app, sql);
   analysisRoutes(app, sql);
   sampleRoutes(app, sql);
+  inProcessRoutes(app, sql);
   inventoryRoutes(app, sql);
   reserveRoutes(app, sql);
   oosRoutes(app, sql);

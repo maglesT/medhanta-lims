@@ -7,7 +7,7 @@ import { usableItem } from '../master.js';
 import { LOT_USABLE, LOT_WAITING, batchWaiting, type BatchRead, type LotRead } from '../links.js';
 import { EDITION_NAME } from '../../shared/engine/links.js';
 import { SignError, authenticateSigner, contentHash, sign, signBody } from '../signatures.js';
-import { SAMPLING_DETAILS, identityContainers, limitFor, sampledProblem, samplingPlan, limitText, limitWords, outOfTrend, purposeLimits, type SpecDoc } from '../../shared/master/spec.js';
+import { SAMPLING_DETAILS, identityContainers, limitFor, sampledProblem, samplingPlan, limitText, limitWords, outOfTrend, purposeLimits, sampleOnly, testApplies, type SpecDoc } from '../../shared/master/spec.js';
 import { OOT_ANSWERS, approvalProblems, ootRefusal, rejectionRefusal, sampleDecision, type TestState } from '../../shared/engine/sample.js';
 import { oosOfSample } from './oos.js';
 import { reducedState } from '../reduced.js';
@@ -51,7 +51,11 @@ export interface SampleRow {
   monitoring?: MonitoringTaken | null;
   // LIMS-05: the sampling plan as applied (null: the specification names none).
   sampling?: SamplingTaken | null;
+  // In-process: the TrueBatch lab request it was made from (server/routes/in-process.ts).
+  request?: SampleRequest | null;
 }
+export interface SampleRequest { edition: string; requestId: string; batchNo: string; stageTitle: string | null; stepKey: string; stepTitle: string | null;
+  tests: { name: string; label: string; unit: string | null; individual: number | null }[]; requestedAt: string }
 export interface SamplingTaken { received: number; plan: 'square root' | 'every container'; line: string; numbers: number[]; details: Record<string, string> }
 export type EventRow = SampleEvent & { id: number; personName: string; at: Date; signature: { printedName: string; signedAt: Date } | null };
 
@@ -83,7 +87,7 @@ export const batchShown = (b: BatchRead) => `${b.edition ? EDITION_NAME[b.editio
 async function loadSample(q: Sql | Tx, id: number): Promise<{ s: SampleRow; events: EventRow[] } | null> {
   const [s] = await q<SampleRow[]>`
     select s.id::int, s.sample_no as "sampleNo", s.spec_version_id::int as "specVersionId", s.purpose, s.lot_no as "lotNo", s.item, s.source,
-      s.quantity, s.containers, s.registered_by::int as "registeredBy", u.full_name as "registeredByName", s.registered_at as "registeredAt", s.stability, s.monitoring, s.sampling
+      s.quantity, s.containers, s.registered_by::int as "registeredBy", u.full_name as "registeredByName", s.registered_at as "registeredAt", s.stability, s.monitoring, s.sampling, s.request
     from samples s join users u on u.id = s.registered_by where s.id = ${id}`;
   if (!s) return null;
   const events = await q<EventRow[]>`
@@ -119,7 +123,8 @@ const registerBody = z.object({
   received: z.number().int().min(1).max(100000).optional(),
   sampled: z.array(z.number().int()).max(100000).optional(),
   // A monitoring sample is taken from its plan (server/routes/em.ts), not registered.
-  purpose: z.enum(SAMPLE_PURPOSES).default('release').refine((p) => p !== 'monitoring', 'an EM or water sample is taken from its monitoring plan'),
+  purpose: z.enum(SAMPLE_PURPOSES).default('release').refine((p) => p !== 'monitoring', 'an EM or water sample is taken from its monitoring plan')
+    .refine((p) => p !== 'in_process', 'an in-process sample is made by picking its TrueBatch lab request'),
 }).strict();
 const ACTION_BODIES: Record<SampleAction, z.ZodTypeAny> = {
   check: z.object({}),
@@ -137,7 +142,7 @@ const ACTION_BODIES: Record<SampleAction, z.ZodTypeAny> = {
 import { reportedFigure } from '../coa.js';
 export { reportedFigure };
 
-export function testStates(spec: SpecDoc, purpose: string, results: Record<string, TestResult[]>, trend: Record<string, string> = {}, only?: string,
+export function testStates(spec: SpecDoc, purpose: string, results: Record<string, TestResult[]>, trend: Record<string, string> = {}, only?: readonly string[],
   containers: number | null = null): (TestState & { decided: Record<string, unknown> | null })[] {
   const on = purposeLimits(purpose);
   // LIMS-08: a starting material's identity, container by container (identityContainers).
@@ -159,7 +164,7 @@ export function testStates(spec: SpecDoc, purpose: string, results: Record<strin
       ? [t.trendLimit && outOfTrend(t, r.result.value, r.result.unit) ? `trend limit ${limitWords(t.trendLimit)}` : '', trend[t.key] ?? ''].filter(Boolean).join('; ') : '';
     return {
       // A monitoring sample is of one test of its specification: the one its plan's sampling names (LIMS-36).
-      key: t.key, name: t.name, applies: (t.use === 'release and stability' || t.use === on) && (only === undefined || t.key === only),
+      key: t.key, name: t.name, applies: testApplies(t, purpose, only),
       ...(each ? { containers: { of: perContainer!, missing: each.flatMap((a, i) => (a ? [] : [i + 1])) } } : {}),
       reviewed: r ? { analysisNo: r.analysisNo, hasResult: !!r.result, ...(r.result?.pass !== undefined ? { pass: r.result.pass } : {}), ...(shown ? { shown } : {}),
         people: r.people, openDeviations: r.openDeviations,
@@ -167,6 +172,9 @@ export function testStates(spec: SpecDoc, purpose: string, results: Record<strin
       // The result as it goes on the certificate and into result_v1.
       decided: r?.result ? { key: t.key, name: t.name, value: r.result.value, unit: r.result.unit, shown: r.result.shown, reported: reportedFigure(r.result.value, r.result.unit, limitFor(t, on)), ...(r.result.pass !== undefined ? { pass: r.result.pass } : {}),
         limit: limitText(t, on), method: r.method, analysisNo: r.analysisNo, reviewedAt: r.reviewedAt,
+        // result_v1's end: the units' results (BU, CU), what the figure is, the TrueBatch in-process field answered.
+        ...(r.result.individual ? { individual: r.result.individual } : {}), ...(r.result.figure && r.result.figure !== 'result' ? { figure: r.result.figure } : {}),
+        ...(t.ipcField ? { ipcField: t.ipcField } : {}),
         ...(each ? { containers: perContainer } : {}), ...(r.outside ? { outsideLab: r.outside.certificate ? `supplier's certificate (${r.outside.lab})` : r.outside.lab, report: { file: r.outside.fileName, sha256: r.outside.sha256 },
           ...(r.outside.certificate ? { certificate: { manufacturer: r.outside.lab } } : {}) } : {}) } : null,
     };
@@ -179,16 +187,18 @@ export function testStates(spec: SpecDoc, purpose: string, results: Record<strin
  * sampling of a monitoring plan (server/routes/em.ts, which names the plan, point and sampling).
  */
 export async function newSample(tx: Tx, person: number, row: { specVersionId: number; purpose: SamplePurpose; lotNo: string; item: SampleItem; source: Source;
-  quantity: string; containers: number | null; stability?: { studyId: number; studyNo: string; condition: string; label: string; month: number }; monitoring?: MonitoringTaken; sampling?: SamplingTaken }): Promise<{ id: number; sampleNo: string }> {
+  quantity: string; containers: number | null; stability?: { studyId: number; studyNo: string; condition: string; label: string; month: number }; monitoring?: MonitoringTaken; sampling?: SamplingTaken;
+  request?: SampleRequest }): Promise<{ id: number; sampleNo: string }> {
   const [c] = await tx<{ n: number; yy: string }[]>`
     insert into sample_counters (year, last_no) values (extract(year from now() at time zone ${PLANT_TZ})::int, 1)
     on conflict (year) do update set last_no = sample_counters.last_no + 1
     returning last_no as n, right(year::text, 2) as yy`;
   const sampleNo = `${SAMPLE_PREFIX}${c!.yy}${String(c!.n).padStart(5, '0')}`;
   const [s] = await tx<{ id: number }[]>`
-    insert into samples (sample_no, spec_version_id, purpose, lot_no, item, source, quantity, containers, registered_by, stability, monitoring, sampling)
+    insert into samples (sample_no, spec_version_id, purpose, lot_no, item, source, quantity, containers, registered_by, stability, monitoring, sampling, request)
     values (${sampleNo}, ${row.specVersionId}, ${row.purpose}, ${row.lotNo}, ${tx.json(row.item as never)}, ${tx.json(row.source as never)}, ${row.quantity}, ${row.containers},
-      ${person}, ${row.stability ? tx.json(row.stability as never) : null}, ${row.monitoring ? tx.json(row.monitoring as never) : null}, ${row.sampling ? tx.json(row.sampling as never) : null})
+      ${person}, ${row.stability ? tx.json(row.stability as never) : null}, ${row.monitoring ? tx.json(row.monitoring as never) : null}, ${row.sampling ? tx.json(row.sampling as never) : null},
+      ${row.request ? tx.json(row.request as never) : null})
     returning id::int`;
   await audit(tx, { actorId: person, action: 'sample.registered', objectType: 'sample', objectId: s!.id, new: { sampleNo, ...row } });
   return { id: s!.id, sampleNo };
@@ -353,19 +363,19 @@ export function sampleRoutes(app: FastifyInstance, sql: Sql) {
       sample: l.s, status: sampleStatus(facts(l.s), l.events), events: l.events,
       spec: v ? { id: v.id, masterId: v.masterId, versionNo: v.versionNo, state: v.state, header: v.doc.header,
         // Each test with whether it applies to this sample's purpose, and its analyses with their results (LIMS-11).
-        tests: v.doc.tests.map((t) => ({ ...t, applies: (t.use === 'release and stability' || t.use === purposeLimits(l.s.purpose)) && (!l.s.monitoring || t.key === l.s.monitoring.testKey),
+        tests: v.doc.tests.map((t) => ({ ...t, applies: testApplies(t, l.s.purpose, sampleOnly(v.doc, l.s)),
           analyses: results[t.key] ?? [] })) } : null,
       // The methods this sample's tests are done by: their effective versions, to start an analysis from.
       methods,
       actions: SAMPLE_ACTION_NAMES.filter((a) => refusals[a] === null), refusals, contentHash: sampleHash(l.s, l.events),
       // QC's decision (LIMS-20): made, or what stands in the way of approval for this person.
       // LIMS-23, LIMS-25: the OOS of the sample, and the tests whose reviewed result is out of trend (answered or not).
-      oos, oot: v ? testStates(v.doc, l.s.purpose, results, trend, l.s.monitoring?.testKey, l.s.containers).flatMap((t) => (t.reviewed?.outOfTrend ? [{ key: t.key, name: t.name, analysisNo: t.reviewed.analysisNo, shown: t.reviewed.shown ?? '',
+      oos, oot: v ? testStates(v.doc, l.s.purpose, results, trend, sampleOnly(v.doc, l.s), l.s.containers).flatMap((t) => (t.reviewed?.outOfTrend ? [{ key: t.key, name: t.name, analysisNo: t.reviewed.analysisNo, shown: t.reviewed.shown ?? '',
         trend: t.reviewed.outOfTrend, answer: l.events.find((e) => e.kind === 'oot_answered' && e.payload.test === t.key && e.payload.analysisNo === t.reviewed!.analysisNo) ?? null }] : [])) : [],
       ootRefusal: user.permissions.includes('lims.qc.approve') ? null : 'Answering an out-of-trend flag needs the QC approval permission.',
-      decision: sampleDecision(l.events), decisionHash: v ? decisionHash(l.s, l.events, testStates(v.doc, l.s.purpose, results, trend, l.s.monitoring?.testKey, l.s.containers)) : null,
+      decision: sampleDecision(l.events), decisionHash: v ? decisionHash(l.s, l.events, testStates(v.doc, l.s.purpose, results, trend, sampleOnly(v.doc, l.s), l.s.containers)) : null,
       approvalProblems: !v ? ['The sample has no specification.'] : !user.permissions.includes('lims.qc.approve') ? ['QC approval needs the QC approval permission.']
-        : approvalProblems(facts(l.s), l.events, testStates(v.doc, l.s.purpose, results, trend, l.s.monitoring?.testKey, l.s.containers), user.id, oos, need),
+        : approvalProblems(facts(l.s), l.events, testStates(v.doc, l.s.purpose, results, trend, sampleOnly(v.doc, l.s), l.s.containers), user.id, oos, need),
       // LIMS-30: the reserve sample (null: none logged), and what the decision says when the specification names no quantity.
       reserve: reserve ? { id: reserve.row.id, amount: reserve.row.amount, unit: reserve.row.unit, location: reserve.row.location, keptUntil: reserve.row.keptUntil, state: reserve.state } : null,
       reserveRequired: v?.doc.header.reserveQuantity ?? null,
@@ -465,13 +475,19 @@ export function sampleRoutes(app: FastifyInstance, sql: Sql) {
           if (!l) throw new SampleError(404, 'not_found');
           const [v] = await tx<{ doc: SpecDoc }[]>`select doc from master_versions where id = ${l.s.specVersionId}`;
           const sampleResults = await sampleTestResults(tx, id, app);
-          const tests = testStates(v!.doc, l.s.purpose, sampleResults, await sampleTrend(tx, l.s, v!.doc, sampleResults), l.s.monitoring?.testKey, l.s.containers);
+          const tests = testStates(v!.doc, l.s.purpose, sampleResults, await sampleTrend(tx, l.s, v!.doc, sampleResults), sampleOnly(v!.doc, l.s), l.s.containers);
           const need = l.s.purpose === 'release' ? await reserveNeed(tx, id, v!.doc) : undefined;
           const problems = decision === 'approve' ? approvalProblems(facts(l.s), l.events, tests, user.id, await oosOfSample(tx, id), need) : [rejectionRefusal(l.events)].filter((x): x is string => !!x);
           if (problems.length) throw new SampleError(problems.some((p) => p.includes('another person approves')) ? 403 : 409, 'not_ready', problems);
           if (b.contentHash !== decisionHash(l.s, l.events, tests)) throw new SampleError(409, 'content_changed', ['The sample or its results changed since you opened it.']);
           let coaNo: string | undefined;
-          if (decision === 'approve') {
+          if (decision === 'approve' && l.s.purpose === 'in_process') {
+            // In-process: an in-process test report number, not a certificate (owner 19 Nov 2026).
+            const [c] = await tx<{ n: number; yy: string }[]>`
+              insert into ipr_counters (year, last_no) values (extract(year from now() at time zone ${PLANT_TZ})::int, 1)
+              on conflict (year) do update set last_no = ipr_counters.last_no + 1 returning last_no as n, right(year::text, 2) as yy`;
+            coaNo = `IPR${c!.yy}${String(c!.n).padStart(5, '0')}`;
+          } else if (decision === 'approve') {
             const [c] = await tx<{ n: number; yy: string }[]>`
               insert into coa_counters (year, last_no) values (extract(year from now() at time zone ${PLANT_TZ})::int, 1)
               on conflict (year) do update set last_no = coa_counters.last_no + 1 returning last_no as n, right(year::text, 2) as yy`;
@@ -507,7 +523,7 @@ export function sampleRoutes(app: FastifyInstance, sql: Sql) {
         if (!l) throw new SampleError(404, 'not_found');
         const [v] = await tx<{ doc: SpecDoc }[]>`select doc from master_versions where id = ${l.s.specVersionId}`;
         const results = await sampleTestResults(tx, id, app);
-        const tests = testStates(v!.doc, l.s.purpose, results, await sampleTrend(tx, l.s, v!.doc, results), l.s.monitoring?.testKey, l.s.containers);
+        const tests = testStates(v!.doc, l.s.purpose, results, await sampleTrend(tx, l.s, v!.doc, results), sampleOnly(v!.doc, l.s), l.s.containers);
         const no = ootRefusal(l.events, tests, body.data.test);
         if (no) throw new SampleError(409, 'not_allowed_now', [no]);
         const payload = { test: body.data.test, analysisNo: tests.find((t) => t.key === body.data.test)!.reviewed!.analysisNo, answer: body.data.answer, reason: body.data.reason };

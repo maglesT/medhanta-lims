@@ -31,6 +31,10 @@ export const E2E_QMS = `${E2E_SCHEMA}_qms`;
 export const E2E_PACK_ID = '00000000-0000-4000-8000-000000000041';
 export const E2E_MAKER_ID = '00000000-0000-4000-8000-0000000000f1';
 export const E2E_TRADER_ID = '00000000-0000-4000-8000-0000000000f2';
+// The in-process journey: TrueBatch Liquids' stand-in lab_request_v1 (only that view: its batches stay "not linked"),
+// and its product.
+export const E2E_LQ = `${E2E_SCHEMA}_lq`;
+export const E2E_IPC_PRODUCT_ID = '00000000-0000-4000-8000-000000000104';
 // Invented test people and the Medhanta LIMS permissions core gives them.
 export const USERS: Record<string, Permission[]> = {
   op1: ['lims.analysis.perform'],

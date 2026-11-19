@@ -5,7 +5,7 @@
 import { useEffect, useState } from 'react';
 import { can, plantTime, type Me } from '../api.js';
 import { plainError } from '../api-floor.js';
-import { plantDate } from '../../../shared/plant-time.js';
+import { plantClock, plantDate } from '../../../shared/plant-time.js';
 import { SampleScreen } from '../samples/SampleScreen.js';
 import { ControlChart } from './ControlChart.js';
 import {
@@ -175,7 +175,7 @@ function KpisTab({ me }: { me: Me }) {
             <thead><tr><th>Sample purpose</th><th>Target (days)</th><th>Set</th>{qc && <th />}</tr></thead>
             <tbody>{k.targets.map((t) => (
               <tr key={t.purpose}><td>{t.purpose}</td>
-                <td>{qc && t.purpose in edit ? <input type="number" min={1} max={365} aria-label={`Target ${t.purpose}`} value={edit[t.purpose]} onChange={(e) => setEdit({ ...edit, [t.purpose]: e.target.value })} /> : t.days}</td>
+                <td>{qc && t.purpose in edit ? <input type="number" min={0.01} max={365} step={0.001} aria-label={`Target ${t.purpose}`} value={edit[t.purpose]} onChange={(e) => setEdit({ ...edit, [t.purpose]: e.target.value })} /> : t.days < 1 ? `${t.days} (${Math.round(t.days * 24 * 10) / 10} h)` : t.days}</td>
                 <td>{t.setBy ? `${t.setBy}, ${plantTime(t.at)}` : 'product default'}</td>
                 {qc && <td>{t.purpose in edit ? <button onClick={() => void save(t.purpose)}>Save</button> : <button className="link dark" onClick={() => setEdit({ ...edit, [t.purpose]: String(t.days) })}>Change</button>}</td>}</tr>))}</tbody>
           </table></div>
@@ -217,7 +217,7 @@ function WorkloadTab({ me, onSample }: { me: Me; onSample: (id: number) => void 
               <thead><tr><th>Due</th><th>Sample</th><th>Item</th><th>Method and tests</th><th>Analysis</th><th>Assigned to</th>{planner && <th>Assign</th>}</tr></thead>
               <tbody>{w.rows.map((r) => { const k = `${r.sampleId}:${r.methodMasterId}`; return (
                 <tr key={k}>
-                  <td>{plantDate(r.due)} {r.overdue && <span className="chip chip-bad">overdue</span>}</td>
+                  <td>{r.dueAt ? plantClock(r.dueAt) : plantDate(r.due)} {r.overdue && <span className="chip chip-bad">overdue</span>}</td>
                   <td><button className="link dark" onClick={() => onSample(r.sampleId)}>{r.sampleNo}</button><small className="muted"> {r.purpose}</small></td>
                   <td>{r.item.code} {r.item.name}<small className="muted"> · {r.lotNo}</small></td>
                   <td>{r.method ? `${r.method.code} ${r.method.name}` : 'no effective method version'}<small className="muted"> · {r.tests.join(', ')}</small></td>

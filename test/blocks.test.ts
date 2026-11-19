@@ -28,6 +28,7 @@ const ALL: [string, Record<string, unknown>, object?][] = [
   ['friability', { lossLimit: { high: '1.0', unit: '%' } }],
   ['uniformity-by-weight', { coating: 'film-coated', labelClaim: '50 mg' }],
   ['content-uniformity', { coating: 'sugar-coated' }],
+  ['blend-uniformity', { limit: { low: '90.0', high: '110.0', unit: '%' }, rsdLimit: { high: '5.0', unit: '%' }, individualLimit: { low: '85.0', high: '115.0', unit: '%' } }],
   ['density-flow', { carrLimit: { high: '20', unit: '%' }, hausnerLimit: { high: '1.25', unit: '' }, reposeLimit: { high: '40', unit: '°' } }],
   ['sieve-analysis', { sieve1: '850 µm', sieve2: '425 µm', sieve3: '250 µm', sieve4: '180 µm', sieve5: '150 µm', finesBelow: '150 µm', finesLimit: { high: '20.0', unit: '%' } }],
   // The result blocks: in a method the masses are references to the weigh steps; here they are typed.

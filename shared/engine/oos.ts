@@ -56,6 +56,9 @@ export interface OosFacts {
   analysisPeople: readonly number[];
   // An OOS of an outside (contract) lab's result: its phase I is the contract lab's investigation report.
   outside?: boolean;
+  // The deviation Deviations filed from this OOS (its source_ref names it), read live: it is the phase II deviation
+  // without anyone picking it (owner 19 Nov 2026: pull, don't type).
+  filedDeviation?: string | null;
 }
 
 export const OOS_STATUSES = ['phase I', 'phase I review', 'QA approval', 'phase II', 'confirmed', 'invalidated'] as const;
@@ -92,9 +95,10 @@ export function plans(events: readonly OosEvent[]): { plan: OosEvent; result: Oo
   return events.filter((e) => e.kind === 'plan').map((plan) => ({ plan, result: events.find((e) => e.kind === 'remeasured' && e.payload.plan === plan.id) ?? null }));
 }
 /** The phase II deviation number in force (the latest), whether typed by hand, and whether a second person checked it. */
-export function phase2(events: readonly OosEvent[]): { event: OosEvent; reference: string; typed: boolean; checked: boolean } | null {
+export function phase2(events: readonly OosEvent[], filed?: string | null): { event: OosEvent | null; reference: string; typed: boolean; checked: boolean; filed?: boolean } | null {
   const e = last(events, 'phase2');
-  if (!e) return null;
+  // Not picked: the deviation Deviations filed from this OOS, if any.
+  if (!e) return filed ? { event: null, reference: filed, typed: false, checked: true, filed: true } : null;
   const typed = e.payload.source?.from === 'hand';
   return { event: e, reference: e.payload.reference ?? '', typed, checked: events.some((x) => x.kind === 'phase2_checked' && x.payload.entry === e.id) };
 }
@@ -173,15 +177,15 @@ export function oosRefusal(action: OosAction, f: OosFacts, events: readonly OosE
     }
     case 'phase2': {
       if (status !== 'phase II') return 'Phase II starts when the reviewed phase I found no laboratory error.';
-      const p = phase2(events);
+      const p = phase2(events, f.filedDeviation);
       if (p && (!p.typed || p.checked)) return `The phase II deviation is ${p.reference}.`;
       return null;
     }
     case 'check-phase2': {
-      const p = phase2(events);
+      const p = phase2(events, f.filedDeviation);
       if (!p?.typed) return 'There is no deviation number typed by hand to check.';
       if (p.checked) return 'A second person has already checked the deviation number.';
-      if (p.event.person === user.id) return 'You typed the deviation number: a second person checks it.';
+      if (p.event?.person === user.id) return 'You typed the deviation number: a second person checks it.';
       return null;
     }
     case 'conclude': {
@@ -191,7 +195,7 @@ export function oosRefusal(action: OosAction, f: OosFacts, events: readonly OosE
         return null;
       }
       if (status !== 'phase II') return 'QA concludes after the reviewed phase I.';
-      const p = phase2(events);
+      const p = phase2(events, f.filedDeviation);
       if (!p) return 'Phase II needs its deviation number in Deviations first.';
       if (p.typed && !p.checked) return 'A second person checks the deviation number typed by hand first.';
       if (deviation?.state === 'ok') {

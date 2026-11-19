@@ -45,6 +45,9 @@ export const specTestSchema = z.object({
   // LIMS-08: an identity test. For a starting material (raw material, active substance) it is done on each container
   // sampled for release (every container of the lot); the decision waits for a result of each.
   identity: z.boolean().optional(),
+  // In-process (owner 19 Nov 2026): the TrueBatch in-process field this test answers (lab_request_v1 tests[].name); an
+  // in-process sample is tested for the tests whose field its request names.
+  ipcField: text(60).optional(),
 }).strict();
 
 export const specHeaderSchema = z.object({
@@ -165,6 +168,11 @@ export function specChecks(doc: SpecDoc, methods: (masterId: number) => { doc: M
     if (doc.header.of !== 'material' || !SAMPLED_BY_PLAN.includes(doc.header.type)) error('header.reducedTesting', `Reduced testing on the supplier's certificate is for a raw material, an active substance or a packing material, not a ${doc.header.type.toLowerCase()}`, 'LIMS-09');
     if (!doc.tests.some((t) => t.identity && (t.use === 'release and stability' || t.use === 'release'))) error('header.reducedTesting', 'Reduced testing needs at least one identity test, done here on every lot', 'LIMS-09');
   }
+  // In-process: each test names the TrueBatch field it answers, once.
+  if (doc.header.type === 'In-process') doc.tests.forEach((t, i) => {
+    if (!t.ipcField) error(`tests[${i}].ipcField`, `${t.name}: name the TrueBatch in-process field this test answers`);
+    else if (doc.tests.findIndex((x) => x.ipcField === t.ipcField) !== i) error(`tests[${i}].ipcField`, `${t.name}: the TrueBatch field ${t.ipcField} is answered by two tests`);
+  });
   doc.tests.forEach((t, i) => {
     const p = `tests[${i}]`;
     if (doc.tests.findIndex((x) => x.key === t.key) !== i) error(p, `The key ${t.key} is used twice`);
@@ -243,6 +251,19 @@ export function sampledProblem(numbers: readonly number[], n: number, received: 
   if (numbers.length !== n) return `The plan samples ${n} of ${received} containers: give ${n} container numbers (${numbers.length} given).`;
   return null;
 }
+
+/**
+ * The tests of the specification a sample is tested for, beyond its purpose: a monitoring sample one test (its plan's),
+ * an in-process sample those whose TrueBatch field its request names; undefined: all that apply to the purpose.
+ */
+export function sampleOnly(doc: SpecDoc, s: { monitoring?: { testKey: string } | null; request?: { tests: { name: string }[] } | null }): string[] | undefined {
+  if (s.monitoring) return [s.monitoring.testKey];
+  if (s.request) { const names = new Set(s.request.tests.map((t) => t.name)); return doc.tests.filter((t) => t.ipcField && names.has(t.ipcField)).map((t) => t.key); }
+  return undefined;
+}
+/** Whether a test of the specification applies to a sample (its purpose, and sampleOnly). */
+export const testApplies = (t: SpecTest, purpose: string, only: readonly string[] | undefined) =>
+  (t.use === 'release and stability' || t.use === purposeLimits(purpose)) && (!only || only.includes(t.key));
 
 /** Which limits a sample's purpose is tested against: stability samples the shelf-life ones, the others release. */
 export const purposeLimits = (purpose: string): 'release' | 'stability' => (purpose === 'stability' ? 'stability' : 'release');

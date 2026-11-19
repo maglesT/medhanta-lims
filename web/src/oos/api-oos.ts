@@ -16,7 +16,7 @@ export interface AnalysisResult { analysisId: number; analysisNo: string; status
 export interface OosDetail {
   oos: OosRow; status: OosStatus; events: OosEntry[]; checklist: [string, string][];
   plans: { plan: OosEntry; result: OosEntry | null }[]; conclusion: OosEntry | null;
-  phase2: { event: OosEntry; reference: string; typed: boolean; checked: boolean; deviation: { number: string; status: string; title: string | null; closedAt: string | null } | null; link: string } | null;
+  phase2: { event: OosEntry | null; reference: string; typed: boolean; checked: boolean; filed?: boolean; deviation: { number: string; status: string; title: string | null; closedAt: string | null } | null; link: string } | null;
   deviations: { link: string; list: { number: string; status: string; title: string | null }[] };
   retests: { authorised: number; by: OosEntry | null; analyses: AnalysisResult[] };
   original: AnalysisResult | null;

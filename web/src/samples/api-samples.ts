@@ -29,6 +29,8 @@ export interface SampleDetail {
     registeredByName: string; registeredAt: string;
     // LIMS-05: the sampling plan as applied.
     sampling?: { received: number; plan: string; line: string; numbers: number[]; details: Record<string, string> } | null;
+    // In-process: the TrueBatch lab request it was made from.
+    request?: { edition: string; requestId: string; batchNo: string; stageTitle: string | null; stepTitle: string | null; tests: { name: string; label: string }[] } | null;
     // A stability sample: its study and time point.
     stability?: { studyId: number; studyNo: string; condition: string; label: string; month: number } | null;
     // An EM or water sample: the plan, point and sampling it was taken for (LIMS-36, LIMS-37).
@@ -82,7 +84,7 @@ export const STATUS_LABEL: Record<SampleStatus, string> = {
   'waiting for check': 'Waiting for check', registered: 'Registered', received: 'Received', stored: 'Stored', 'handed over': 'Handed over',
   disposed: 'Disposed of', approved: 'Approved', rejected: 'Rejected',
 };
-export const PURPOSE_LABEL: Record<SamplePurpose, string> = { release: 'Release', retest: 'Retest', stability: 'Stability', investigation: 'Investigation', monitoring: 'EM and water' };
+export const PURPOSE_LABEL: Record<SamplePurpose, string> = { release: 'Release', retest: 'Retest', stability: 'Stability', investigation: 'Investigation', monitoring: 'EM and water', in_process: 'In-process' };
 
 export const labelsLink = (id: number) => `/api/samples/${id}/labels`;
 export const enterOutside = (id: number, body: object) => api<{ ok: true; sha256: string }>('POST', `/api/samples/${id}/outside`, body);

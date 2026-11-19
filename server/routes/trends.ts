@@ -8,7 +8,7 @@ import { pageFrame, plant, render, runs, sendPdf } from '../pdf.js';
 import type { TestResult } from './analyses.js';
 import type { SampleRow } from './samples.js';
 import { stabilityTrend } from './stability-evaluation.js';
-import { limitFor, purposeLimits, testsFor, type SpecDoc } from '../../shared/master/spec.js';
+import { limitFor, purposeLimits, sampleOnly, testApplies, testsFor, type SpecDoc } from '../../shared/master/spec.js';
 import type { MasterDoc } from '../../shared/master/schema.js';
 import { oosStatus, type OosEvent } from '../../shared/engine/oos.js';
 import { SAMPLE_PURPOSES, type SamplePurpose } from '../../shared/engine/sample.js';
@@ -103,15 +103,15 @@ const monthBack = (n: number) => addDays(`${today().slice(0, 7)}-15`, -30 * n).s
 /** The turnaround target of each sample purpose: QC's latest, else the product default. */
 async function targets(q: Sql | Tx) {
   const rows = await q<{ purpose: SamplePurpose; days: number; setBy: string; at: Date }[]>`
-    select distinct on (t.purpose) t.purpose, t.days, u.full_name as "setBy", t.at from tat_targets t join users u on u.id = t.set_by order by t.purpose, t.id desc`;
+    select distinct on (t.purpose) t.purpose, t.days::float8 as days, u.full_name as "setBy", t.at from tat_targets t join users u on u.id = t.set_by order by t.purpose, t.id desc`;
   return SAMPLE_PURPOSES.map((p) => { const r = rows.find((x) => x.purpose === p); return { purpose: p, days: r?.days ?? TAT_DEFAULT_DAYS[p], setBy: r?.setBy ?? null, at: r?.at ?? null }; });
 }
 const targetMap = (t: Awaited<ReturnType<typeof targets>>) => Object.fromEntries(t.map((x) => [x.purpose, x.days])) as Record<SamplePurpose, number>;
 
 /** Each sample with its received and decision instants (the KPIs, the backlog, the workload). */
 async function sampleFacts(q: Sql | Tx, open = false) {
-  return q<(KpiSample & { id: number; specVersionId: number; item: SampleRow['item']; lotNo: string; monitoring: SampleRow['monitoring'] })[]>`
-    select s.id::int, s.sample_no as "sampleNo", s.purpose, s.spec_version_id::int as "specVersionId", s.item, s.lot_no as "lotNo", s.monitoring,
+  return q<(KpiSample & { id: number; specVersionId: number; item: SampleRow['item']; lotNo: string; monitoring: SampleRow['monitoring']; request: SampleRow['request'] })[]>`
+    select s.id::int, s.sample_no as "sampleNo", s.purpose, s.spec_version_id::int as "specVersionId", s.item, s.lot_no as "lotNo", s.monitoring, s.request,
       (select min(e.at) from sample_events e where e.sample_id = s.id and e.kind = 'received') as "receivedAt",
       (select min(e.at) from sample_events e where e.sample_id = s.id and e.kind in ('approved', 'rejected')) as "decidedAt",
       exists (select 1 from sample_events e where e.sample_id = s.id and e.kind = 'disposed') as disposed
@@ -247,7 +247,7 @@ export function trendRoutes(app: FastifyInstance, sql: Sql) {
   app.get('/api/kpis/targets', reader, async () => targets(sql));
   // QC sets the turnaround target of a sample purpose (insert-only; the latest applies).
   app.post('/api/kpis/targets', { preHandler: requirePermission('lims.qc.approve') }, async (req, reply) => {
-    const b = z.object({ purpose: z.enum(SAMPLE_PURPOSES), days: z.number().int().min(1).max(365) }).strict().safeParse(req.body);
+    const b = z.object({ purpose: z.enum(SAMPLE_PURPOSES), days: z.number().min(0.01).max(365).refine((d) => Math.round(d * 1000) === d * 1000, "at most 3 decimals (0.125 days = 3 hours)") }).strict().safeParse(req.body);
     if (!b.success) return reply.code(400).send({ error: 'invalid', problems: b.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`) });
     return sql.begin(async (tx) => {
       const before = targetMap(await targets(tx))[b.data.purpose];
@@ -284,17 +284,20 @@ export function trendRoutes(app: FastifyInstance, sql: Sql) {
     for (const s of samples) {
       const spec = specs.get(s.specVersionId);
       if (!spec) continue;
-      const tests = spec.tests.filter((x) => (x.use === 'release and stability' || x.use === purposeLimits(s.purpose)) && (!s.monitoring || x.key === s.monitoring.testKey));
+      const only = sampleOnly(spec, s);
+      const tests = spec.tests.filter((x) => testApplies(x, s.purpose, only));
       const target = t[s.purpose];
       for (const masterId of [...new Set(tests.map((x) => x.method.masterId))]) {
         const m = methods.find((x) => x.masterId === masterId);
         const a = analyses.filter((x) => x.sampleId === s.id && x.masterId === masterId && x.status !== 'invalidated').at(-1) ?? null;
         if (a?.status === 'reviewed') continue;   // done: the sample waits for QC's decision, not for an analyst
-        const due = dueOn(s.receivedAt!, target);
+        const due = dueOn(s.receivedAt!, Math.ceil(target));
+        // A target under a day (in-process: hours) is due at a time: received + the target.
+        const dueAt = target < 1 ? new Date(s.receivedAt!.getTime() + target * 86_400_000) : null;
         rows.push({ sampleId: s.id, sampleNo: s.sampleNo, purpose: s.purpose, lotNo: s.lotNo, item: { code: s.item.code, name: s.item.name },
-          received: plantDay(s.receivedAt!), due, overdue: due < today(), targetDays: target,
+          received: plantDay(s.receivedAt!), due, ...(dueAt ? { dueAt } : {}), overdue: dueAt ? dueAt.getTime() < Date.now() : due < today(), targetDays: target,
           methodMasterId: masterId, method: m ? { code: m.doc.header.code, name: m.doc.header.name, skills: skillsOf(m.doc) } : null,
-          tests: testsFor(spec, masterId, s.purpose).filter((x) => !s.monitoring || x.key === s.monitoring.testKey).map((x) => x.name),
+          tests: testsFor(spec, masterId, s.purpose).filter((x) => !only || only.includes(x.key)).map((x) => x.name),
           analysis: a ? { id: a.id, analysisNo: a.analysisNo, status: a.status ?? 'in progress', by: a.issuedBy } : null,
           assigned: assigned.find((x) => x.sampleId === s.id && x.masterId === masterId) ?? null });
       }

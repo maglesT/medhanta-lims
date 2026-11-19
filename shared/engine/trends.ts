@@ -45,7 +45,8 @@ export function summaryOf(values: readonly { value: string; unit: string }[], li
 
 // ---------------------------------------------------------------- turnaround targets
 /** Product defaults (calendar days from receipt in QC to QC's decision), until QC sets its own on the KPI screen. */
-export const TAT_DEFAULT_DAYS: Readonly<Record<SamplePurpose, number>> = { release: 10, retest: 10, stability: 15, investigation: 15, monitoring: 7 };
+// In-process: hours, as a part of a day (0.125 = 3 hours): production waits for the result.
+export const TAT_DEFAULT_DAYS: Readonly<Record<SamplePurpose, number>> = { release: 10, retest: 10, stability: 15, investigation: 15, monitoring: 7, in_process: 0.125 };
 
 const DAY = 86_400_000;
 /** The plant date (YYYY-MM-DD) of an instant. */

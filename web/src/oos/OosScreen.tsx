@@ -106,7 +106,7 @@ export function OosScreen({ me, id }: { me: Me; id: number }) {
         <Phase title="Phase II: manufacturing investigation" sub="in Deviations; QA concludes when its deviation is closed">
           {d.phase2 && (
             <p className={d.phase2.deviation?.status === 'closed' ? 'all-good' : 'notice info'}>
-              Deviation <b>{d.phase2.reference}</b>{d.phase2.typed ? ' (typed by hand)' : ''} · {d.phase2.link === 'ok' ? (d.phase2.deviation ? `${d.phase2.deviation.status.replaceAll('_', ' ')} in Deviations${d.phase2.deviation.title ? `: ${d.phase2.deviation.title}` : ''}` : 'not in Deviations') : 'Deviations does not answer now'}
+              Deviation <b>{d.phase2.reference}</b>{d.phase2.typed ? ' (typed by hand)' : ''}{d.phase2.filed ? ' (filed in Deviations from this OOS)' : ''} · {d.phase2.link === 'ok' ? (d.phase2.deviation ? `${d.phase2.deviation.status.replaceAll('_', ' ')} in Deviations${d.phase2.deviation.title ? `: ${d.phase2.deviation.title}` : ''}` : 'not in Deviations') : 'Deviations does not answer now'}
               {d.phase2.typed && (d.phase2.checked ? ' · checked by a second person' : ' · waiting for a second person\'s check')}
             </p>)}
           {can('phase2') && <Phase2Pick d={d} onSave={(reference) => run('phase2', { reference })} />}

@@ -4,6 +4,7 @@ import { assay } from './assay.js';
 import { assayAbsorbance } from './assay-absorbance.js';
 import { check } from './check.js';
 import { contentUniformity } from './content-uniformity.js';
+import { blendUniformity } from './blend-uniformity.js';
 import { densityFlow } from './density-flow.js';
 import { dilute } from './dilute.js';
 import { disintegration } from './disintegration.js';
@@ -38,7 +39,7 @@ export type { Block, BlockField, BlockSetting } from './format.js';
 // then the tests and their results; last the result blocks of the chemistry lab, each ending in its reportable `result`.
 export const BLOCKS: readonly Block[] = [
   lineClearance, weigh, mix, dilute, instrumentRun, systemSuitability, check, periodicCheck, dryConstant, disintegration, friability,
-  uniformityByWeight, contentUniformity, densityFlow, sieveAnalysis,
+  uniformityByWeight, contentUniformity, blendUniformity, densityFlow, sieveAnalysis,
   assay, assayAbsorbance, impurities, dissolution, titration, waterKf, lossOnDrying, opticalRotation, ph, relativeDensity,
   // The microbiology lab (build step 7): incubation and the counts, and the result blocks of the micro lab.
   incubate, count, sterilityTest, bioburden, endotoxin, microbialAssay,

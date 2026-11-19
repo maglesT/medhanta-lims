@@ -4,7 +4,7 @@ import { z } from 'zod';
 import type { Sql, Tx } from '../db.js';
 import { audit } from '../audit.js';
 import { parseId, requirePermission } from '../auth.js';
-import { identityContainers, limitText, purposeLimits, type SpecDoc } from '../../shared/master/spec.js';
+import { identityContainers, limitText, purposeLimits, sampleOnly, testApplies, type SpecDoc } from '../../shared/master/spec.js';
 import { openOutsideOos } from './oos.js';
 import { outsideCheckRefusal, outsideEntryRefusal, outsideFigure } from '../../shared/engine/outside.js';
 import { sampleDecision, type SampleEvent } from '../../shared/engine/sample.js';
@@ -68,8 +68,8 @@ class OutsideError extends Error {
 export function outsideRoutes(app: FastifyInstance, sql: Sql) {
   const load = async (tx: Tx, id: number) => {
     await tx`select pg_advisory_xact_lock(hashtext(${`sample-entry:${id}`}))`;
-    const [s] = await tx<{ id: number; purpose: string; containers: number | null; spec: SpecDoc; testKey: string | null }[]>`
-      select s.id::int, s.purpose, s.containers, v.doc as spec, s.monitoring->>'testKey' as "testKey" from samples s join master_versions v on v.id = s.spec_version_id where s.id = ${id}`;
+    const [s] = await tx<{ id: number; purpose: string; containers: number | null; spec: SpecDoc; monitoring: { testKey: string } | null; request: { tests: { name: string }[] } | null }[]>`
+      select s.id::int, s.purpose, s.containers, v.doc as spec, s.monitoring, s.request from samples s join master_versions v on v.id = s.spec_version_id where s.id = ${id}`;
     if (!s) throw new OutsideError(404, ['There is no such sample.']);
     const events = await tx<SampleEvent[]>`select kind, payload, person_id::int as person from sample_events where sample_id = ${id} order by id`;
     return { s, decided: sampleDecision(events), reduced: events.find((e) => e.kind === 'reduced_testing') ?? null };
@@ -93,7 +93,7 @@ export function outsideRoutes(app: FastifyInstance, sql: Sql) {
         const { s, decided, reduced } = await load(tx, id);
         const t = s.spec.tests.find((x) => x.key === b.data.test);
         const on = purposeLimits(s.purpose);
-        const applies = !!t && (t.use === 'release and stability' || t.use === on) && (s.testKey === null || t.key === s.testKey);
+        const applies = !!t && testApplies(t, s.purpose, sampleOnly(s.spec, s));
         const no = outsideEntryRefusal(t, applies, identityContainers(s.spec, s.purpose, s.containers) !== null, decided, b.data.certificate ? { reduced: !!reduced } : undefined);
         if (no) throw new OutsideError(409, [no]);
         const lab = b.data.certificate ? reduced!.payload.manufacturer! : b.data.lab;

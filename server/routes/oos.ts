@@ -12,7 +12,7 @@ import { reportedFigure } from '../coa.js';
 import { analysisView, openSteps } from '../../shared/engine/index.js';
 import {
   OOS_ACTIONS, OOS_ACTION_NAMES, OOS_CHECKLIST, checklistProblems, oosClosed, oosRefusal, oosStatus, phase1Conclusion, phase2, plans, retestRefusal, retests,
-  type DeviationNow, type OosAction, type OosEvent, type OosPayload, type OosStatus,
+  type DeviationNow, type OosAction, type OosFacts, type OosEvent, type OosPayload, type OosStatus,
 } from '../../shared/engine/oos.js';
 import type { SampleOos } from '../../shared/engine/sample.js';
 
@@ -112,11 +112,11 @@ async function loadOos(q: Sql | Tx, id: number) {
     // An outside result: the people who typed and checked it stand where the analysis's people do.
     const [x] = await q<{ people: number[] }[]>`
       select array_remove(array[o.entered_by::int, c.person_id::int], null) as people from outside_results o left join outside_result_checks c on c.result_id = o.id where o.id = ${o.outsideResultId}`;
-    return { o, events: ev as EventRow[], facts: { analysisPeople: x!.people, outside: true } };
+    return { o, events: ev as EventRow[], facts: { analysisPeople: x!.people, outside: true } as OosFacts };
   }
   const a = (await loadAnalysis(q, o.analysisId!))!;
   const people = analysisView(a.doc, a.events, a.analysisEvents, a.now).people;
-  return { o, events: ev as EventRow[], facts: { analysisPeople: people } };
+  return { o, events: ev as EventRow[], facts: { analysisPeople: people } as OosFacts };
 }
 type Loaded = NonNullable<Awaited<ReturnType<typeof loadOos>>>;
 
@@ -189,9 +189,28 @@ const BODIES: Record<OosAction, z.ZodTypeAny> = {
 export function oosRoutes(app: FastifyInstance, sql: Sql) {
   const reader = { preHandler: requirePermission('lims.view', 'lims.analysis.perform', 'lims.analysis.review', 'lims.qc.approve', 'lims.oos.approve') };
 
+  /**
+   * The deviation Deviations filed from this OOS: its deviation_v1.source_ref names the OOS ("lims:oos:" and the OOS's
+   * oos_v1 id, its row id or its number). Read live; null when none, or Deviations cannot be read.
+   */
+  async function filedOf(l: Loaded): Promise<string | null> {
+    const h = createHash('md5').update(`lims:oos:${l.o.id}`).digest('hex');
+    const uuid = `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+    const refs = [`lims:oos:${uuid}`, `lims:oos:${l.o.id}`, `lims:oos:${l.o.oosNo}`];
+    const r = await app.links.deviations.bySourceRefs(refs);
+    if (r.state !== 'ok') return null;
+    return refs.map((x) => r.value.get(x)?.number).find((x): x is string => !!x) ?? null;
+  }
+  /** Loads the OOS with the deviation filed from it (facts.filedDeviation). */
+  const loadWithFiled = async (q: Sql | Tx, id: number) => {
+    const l = await loadOos(q, id);
+    if (l) l.facts.filedDeviation = await filedOf(l);
+    return l;
+  };
+
   /** The phase II deviation as Deviations has it now. */
   async function deviationNow(l: Loaded): Promise<DeviationNow | undefined> {
-    const p = phase2(l.events);
+    const p = phase2(l.events, l.facts.filedDeviation);
     if (!p) return undefined;
     const r = await app.links.deviations.byNumbers([p.reference]);
     return r.state === 'ok' ? { state: 'ok', status: r.value.get(p.reference)?.status ?? null } : { state: r.state };
@@ -212,12 +231,12 @@ export function oosRoutes(app: FastifyInstance, sql: Sql) {
   // phase II deviation read live, other samples of the item (impact), and what this person may do next.
   app.get<{ Params: { id: string } }>('/api/oos/:id', reader, async (req, reply) => {
     const id = parseId(req.params.id);
-    const l = id === null ? null : await loadOos(sql, id);
+    const l = id === null ? null : await loadWithFiled(sql, id);
     if (!l) return reply.code(404).send({ error: 'not_found' });
     const user = req.user!;
     const status = oosStatus(l.events);
     const dev = await deviationNow(l);
-    const p2 = phase2(l.events);
+    const p2 = phase2(l.events, l.facts.filedDeviation);
     const r2 = p2 ? await app.links.deviations.byNumbers([p2.reference]) : null;
     const picks = await app.links.deviations.byBatch(l.o.analysisNo, l.o.lotNo);
     const results = await sampleTestResults(sql, l.o.sampleId);
@@ -268,13 +287,14 @@ export function oosRoutes(app: FastifyInstance, sql: Sql) {
       try {
         const signer = rule.meaning ? await authenticateSigner(sql, app.proofKey, user, { proof: proof! }, { objectType: 'oos', objectId: id, meaning: rule.meaning }) : null;
         // Read before the transaction: the phase II deviation in Deviations, and a deviation number picked or typed.
-        const pre = await loadOos(sql, id);
+        const pre = await loadWithFiled(sql, id);
         if (!pre) throw new OosError(404, 'not_found');
         const dev = action === 'conclude' ? await deviationNow(pre) : undefined;
         const typed = action === 'phase2' ? await app.links.deviations.byNumbers([input.reference!]) : null;
         return await sql.begin(async (tx) => {
           await tx`select pg_advisory_xact_lock(hashtext(${`oos:${id}`}))`;
           const l = (await loadOos(tx, id))!;
+          l.facts.filedDeviation = pre.facts.filedDeviation;
           const no = oosRefusal(action, l.facts, l.events, user, input, dev);
           if (no) throw new OosError(no.startsWith('You ') ? 403 : 409, 'not_allowed_now', [no]);
           if (signer && shown !== oosHash(l)) throw new OosError(409, 'content_changed', ['The OOS changed since you opened it.']);
@@ -309,7 +329,7 @@ export function oosRoutes(app: FastifyInstance, sql: Sql) {
               payload = { reference: input.reference, source: typed!.state === 'ok' ? { from: 'deviations' } : { from: 'hand', state: typed!.state } };
               break;
             }
-            case 'check-phase2': payload = { entry: phase2(l.events)!.event.id }; break;
+            case 'check-phase2': payload = { entry: phase2(l.events)!.event!.id }; break;
             case 'conclude': {
               // After a phase I that found a laboratory error the outcome is the invalidation, with that cause.
               const cause = status === 'QA approval' ? phase1Conclusion(l.events)!.payload.cause : input.cause;

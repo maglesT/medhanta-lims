@@ -3,7 +3,7 @@
 // designer); other states are read only. Each test picks an approved or effective method and its result from lists,
 // a limit type from a fixed list, and gives the values the method asks the specification for.
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ApiError, can, type Me } from '../api.js';
+import { ApiError, api, can, type Me } from '../api.js';
 import { getProblems, getSpec, getVersion, listMasters, saveSpec, STATE_CHIP, STATE_LABEL, type MasterRow, type SpecVersion } from '../api-designer.js';
 import { blocking, type Problem } from '../../../shared/master/checks.js';
 import type { Limit, MasterDoc } from '../../../shared/master/schema.js';
@@ -39,6 +39,14 @@ export function SpecEditor({ me, versionId, onBack, onOpen }: { me: Me; versionI
       .filter((r, _, all) => !all.some((o) => o.masterId === r.masterId && o.versionNo > r.versionNo && (o.state === 'approved' || o.state === 'effective')))));
   }, [versionId]);
 
+  // In-process: the TrueBatch fields the product's lab requests have named, for each test's pick list.
+  const [ipcFields, setIpcFields] = useState<{ name: string; label: string; unit: string | null }[] | null>(null);
+  const ipcProduct = doc?.header.type === 'In-process' ? doc.header.code : null;
+  useEffect(() => {
+    if (!ipcProduct) return;
+    void api<{ link: string; fields: { name: string; label: string; unit: string | null }[] }>('GET', `/api/lab-requests/fields?product=${encodeURIComponent(ipcProduct)}`)
+      .then((r) => setIpcFields(r.link === 'ok' ? r.fields : null), () => setIpcFields(null));
+  }, [ipcProduct]);
   const editable = v?.state === 'draft' && can(me, 'master.author');
   const persist = async (d: SpecDoc) => {
     const p = specSchema.safeParse(d);
@@ -115,7 +123,7 @@ export function SpecEditor({ me, versionId, onBack, onOpen }: { me: Me; versionI
                 </div>
               </div>
               {doc.tests.map((t, i) => (
-                <TestCard key={t.key} t={t} n={i} methods={methods} problems={(problems ?? []).filter((p) => p.path.startsWith(`tests[${i}]`))}
+                <TestCard key={t.key} t={t} n={i} methods={methods} ipcFields={ipcProduct ? ipcFields ?? [] : null} problems={(problems ?? []).filter((p) => p.path.startsWith(`tests[${i}]`))}
                   onChange={(x) => change({ ...doc, tests: doc.tests.map((y, j) => (j === i ? x : y)) })}
                   onRemove={() => change({ ...doc, tests: doc.tests.filter((_, j) => j !== i) })} />
               ))}
@@ -147,8 +155,8 @@ function useMethodDoc(row: MasterRow | undefined): MasterDoc | null {
   return doc;
 }
 
-function TestCard({ t, n, methods, problems, onChange, onRemove }: {
-  t: SpecTest; n: number; methods: MasterRow[]; problems: Problem[]; onChange: (t: SpecTest) => void; onRemove: () => void;
+function TestCard({ t, n, methods, ipcFields, problems, onChange, onRemove }: {
+  t: SpecTest; n: number; methods: MasterRow[]; ipcFields: { name: string; label: string; unit: string | null }[] | null; problems: Problem[]; onChange: (t: SpecTest) => void; onRemove: () => void;
 }) {
   const row = methods.find((m) => m.masterId === t.method.masterId);
   const mdoc = useMethodDoc(row);
@@ -181,6 +189,16 @@ function TestCard({ t, n, methods, problems, onChange, onRemove }: {
             {TEST_USES.map((u) => <option key={u} value={u}>{u === 'release and stability' ? 'at release and on stability' : u === 'release' ? 'at release only' : 'on stability only'}</option>)}
           </select>
         </label>
+        {/* In-process: the TrueBatch field this test answers, picked from the product's lab requests (typed only when none is known). */}
+        {ipcFields && (ipcFields.length ? (
+          <label>TrueBatch field<select aria-label={`Test ${n + 1} TrueBatch field`} value={t.ipcField ?? ''} onChange={(e) => set({ ipcField: e.target.value || undefined })}>
+            <option value="">(choose)</option>
+            {[...ipcFields, ...(t.ipcField && !ipcFields.some((f) => f.name === t.ipcField) ? [{ name: t.ipcField, label: t.ipcField, unit: null }] : [])]
+              .map((f) => <option key={f.name} value={f.name}>{f.label}{f.unit ? ` (${f.unit})` : ''} · {f.name}</option>)}</select></label>
+        ) : (
+          <label>TrueBatch field<input aria-label={`Test ${n + 1} TrueBatch field`} value={t.ipcField ?? ''} placeholder="no request of this product read yet: its field name"
+            onChange={(e) => set({ ipcField: e.target.value.trim() || undefined })} /></label>
+        ))}
         {/* LIMS-08: an identity test of a starting material is done on each container sampled. */}
         <label className="check"><input type="checkbox" aria-label={`Test ${n + 1} is an identity test`} checked={!!t.identity}
           onChange={(e) => set({ identity: e.target.checked || undefined })} /> Identity test (each container of a starting material)</label>

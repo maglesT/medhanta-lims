@@ -1,6 +1,6 @@
 // Invented master data for the browser tests: what core's master_data views would list.
 import type { FakeMaster } from '../test/helpers.js';
-import { E2E_MAKER_ID, E2E_PACK_ID, E2E_TRADER_ID, E2E_EM_ID, E2E_MATERIAL_ID, E2E_PRODUCT_ID, E2E_RETEST_ID, E2E_STAB_PRODUCT_ID, E2E_TREND_PRODUCT_ID } from './config.js';
+import { E2E_IPC_PRODUCT_ID, E2E_MAKER_ID, E2E_PACK_ID, E2E_TRADER_ID, E2E_EM_ID, E2E_MATERIAL_ID, E2E_PRODUCT_ID, E2E_RETEST_ID, E2E_STAB_PRODUCT_ID, E2E_TREND_PRODUCT_ID } from './config.js';
 
 const item = (itemId: string, code: string, name: string) => ({ itemId, code, name, version: 1, active: true });
 export function seedMasterData(m: FakeMaster) {
@@ -25,6 +25,7 @@ export function seedMasterData(m: FakeMaster) {
   // The product of the OOS journey.
   m.materials_.push({ ...item(E2E_PACK_ID, 'PM-041', 'Demo PVC film 250 µm'), category: 'Packing', unit: 'kg' });
   m.suppliers_.push({ ...item(E2E_MAKER_ID, 'SUP-DPC', 'Demo Pack Co'), address: 'Unit 4, Demo Packaging Park' }, { ...item(E2E_TRADER_ID, 'SUP-DTR', 'Demo Traders'), address: null });
+  m.products_.push({ ...item(E2E_IPC_PRODUCT_ID, 'LQ-IPC125', 'Demolol syrup 125 mg/5 mL'), strength: '125 mg/5 mL', dosageForm: 'Oral solution' });
   m.products_.push({ ...item(E2E_PRODUCT_ID, 'FG-DEM100', 'Demolol 100 mg tablets'), strength: '100 mg', dosageForm: 'Tablet' });
   // The product of the stability evaluation journey.
   m.products_.push({ ...item(E2E_STAB_PRODUCT_ID, 'FG-DEM200', 'Demolol 200 mg tablets'), strength: '200 mg', dosageForm: 'Tablet' });

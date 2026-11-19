@@ -16,7 +16,7 @@ export interface Chart {
 export interface Target { purpose: string; days: number; setBy: string | null; at: string | null }
 export type KpiData = Omit<Kpis, 'backlog'> & { from: string; to: string; today: string; targets: Target[]; backlog: Kpis['backlog'] };
 export interface WorkRow {
-  sampleId: number; sampleNo: string; purpose: string; lotNo: string; item: { code: string; name: string }; received: string; due: string; overdue: boolean; targetDays: number;
+  sampleId: number; sampleNo: string; purpose: string; lotNo: string; item: { code: string; name: string }; received: string; due: string; dueAt?: string; overdue: boolean; targetDays: number;
   methodMasterId: number; method: { code: string; name: string; skills: { code: string; title?: string }[] } | null; tests: string[];
   analysis: { id: number; analysisNo: string; status: string; by: string } | null;
   assigned: { analystId: number; analyst: string; by: string; at: string; training: { checked?: string } } | null;

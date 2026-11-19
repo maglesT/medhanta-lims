@@ -6,7 +6,8 @@ import { reserveShortfall, type ReserveNeed } from './reserve.js';
  * (its link absent or down) waits for a second person's check before anything else (LIMS-41, LIMS-50).
  */
 
-export const SAMPLE_PURPOSES = ['release', 'retest', 'stability', 'investigation', 'monitoring'] as const;
+// in_process (owner 19 Nov 2026): made by picking a TrueBatch step's lab request (server/routes/in-process.ts).
+export const SAMPLE_PURPOSES = ['release', 'retest', 'stability', 'investigation', 'monitoring', 'in_process'] as const;
 export type SamplePurpose = (typeof SAMPLE_PURPOSES)[number];
 export const SAMPLE_EVENT_KINDS = ['checked', 'received', 'stored', 'handed_over', 'disposed', 'note', 'approved', 'rejected', 'oot_answered', 'reduced_testing'] as const;
 export type SampleEventKind = (typeof SAMPLE_EVENT_KINDS)[number];

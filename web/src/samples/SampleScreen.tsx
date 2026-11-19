@@ -19,7 +19,7 @@ const ENTRY_WORDS: Record<SampleEntry['kind'], string> = {
   checked: 'Checked by a second person', received: 'Received in QC', stored: 'Stored', handed_over: 'Handed over', disposed: 'Disposed of', note: 'Note', approved: 'QC approved', rejected: 'QC rejected', oot_answered: 'Out-of-trend flag answered by QC',
 };
 const entryText = (e: SampleEntry) => [e.payload.condition && `Condition: ${e.payload.condition}`, e.payload.where && `Where: ${e.payload.where}`,
-  e.payload.to && `To: ${e.payload.to}`, e.payload.reason && `Reason: ${e.payload.reason}`, e.payload.method && `Method: ${e.payload.method}`, e.payload.coaNo && `Certificate ${e.payload.coaNo}`, e.payload.test && `${e.payload.test}, analysis ${e.payload.analysisNo}: ${e.payload.answer}`, e.payload.text].filter(Boolean).join(' · ');
+  e.payload.to && `To: ${e.payload.to}`, e.payload.reason && `Reason: ${e.payload.reason}`, e.payload.method && `Method: ${e.payload.method}`, e.payload.coaNo && `${e.payload.coaNo.startsWith('IPR') ? 'In-process test report' : 'Certificate'} ${e.payload.coaNo}`, e.payload.test && `${e.payload.test}, analysis ${e.payload.analysisNo}: ${e.payload.answer}`, e.payload.text].filter(Boolean).join(' · ');
 
 // The entries asked for in a small form: their fields and button words.
 const FORMS: Partial<Record<SampleAction, { title: string; button: string; fields: { name: string; label: string; hint?: string }[] }>> = {
@@ -57,6 +57,7 @@ export function SampleScreen({ me, id, onBack, onOpenReserve }: { me: Me; id: nu
         <dl className="details">
           <dt>{LOT_WORD[s.item.of]}</dt><dd>{s.lotNo}</dd>
           <dt>Source</dt><dd>{sourceWords(s.source)}</dd>
+          {s.request && <><dt>In-process request</dt><dd>{s.request.requestId}: {[s.request.stageTitle, s.request.stepTitle].filter(Boolean).join(' › ')} · {s.request.tests.map((t) => t.label).join(', ')}</dd></>}
           <dt>Quantity</dt><dd>{s.quantity}{s.containers ? ` from ${s.containers} container${s.containers === 1 ? '' : 's'}` : ''}</dd>
           <dt>Purpose</dt><dd>{PURPOSE_LABEL[s.purpose]}</dd>
           {s.sampling && <><dt>Sampling plan</dt><dd>{s.sampling.line} · containers sampled: {s.sampling.numbers.join(', ')}
@@ -232,10 +233,10 @@ function Decision({ d, me, reload }: { d: SampleDetail; me: Me; reload: () => Pr
   const may = can(me, 'qc.approve');
   return (
     <section className="dash-panel samples-waiting" aria-label="QC decision">
-      <div className="panel-head"><h2>QC decision</h2>{d.decision === 'approved' && <a className="button" href={coaLink(d.sample.id)} download>Certificate of analysis (PDF)</a>}</div>
+      <div className="panel-head"><h2>QC decision</h2>{d.decision === 'approved' && <a className="button" href={coaLink(d.sample.id)} download>{d.sample.purpose === 'in_process' ? 'In-process test report (PDF)' : 'Certificate of analysis (PDF)'}</a>}</div>
       {decided && (
         <p className={decided.kind === 'approved' ? 'all-good' : 'notice bad'}><span aria-hidden="true">{decided.kind === 'approved' ? '✓' : '✕'}</span>
-          {decided.kind === 'approved' ? `Approved, certificate ${decided.payload.coaNo}` : `Rejected: ${decided.payload.reason}`} · {decided.signature?.printedName ?? decided.personName}, {plantTime(decided.signature?.signedAt ?? decided.at)}</p>
+          {decided.kind === 'approved' ? `Approved, ${d.sample.purpose === 'in_process' ? 'in-process test report' : 'certificate'} ${decided.payload.coaNo}` : `Rejected: ${decided.payload.reason}`} · {decided.signature?.printedName ?? decided.personName}, {plantTime(decided.signature?.signedAt ?? decided.at)}</p>
       )}
       <OosBlocks d={d} reload={reload} />
       {decided ? null : !may ? <p className="muted">QC decides when every test has a reviewed result.</p> : (<>

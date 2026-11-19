@@ -11,6 +11,7 @@ import { RegisterDialog } from './RegisterDialog.js';
 import { SampleScreen } from './SampleScreen.js';
 import { ReserveList, ReserveScreen, RetestDueList } from './Reserve.js';
 import { FormsNotBack } from './Paper.js';
+import { InProcessRequests } from './InProcess.js';
 import type { SamplePurpose } from '../../../shared/engine/sample.js';
 import '../designer/designer.css';
 import '../floor/floor.css';
@@ -86,6 +87,7 @@ export function Samples({ me }: { me: Me }) {
           </>)}
         </section>
       )}
+      {(sampler || can(me, 'analysis.perform')) && <InProcessRequests onOpenSample={setOpen} />}
       {sampler && <RetestDueList onOpenSample={setOpen} onRegister={(r) => { setPurpose('retest'); setRegistering(r); }} />}
       <h2>Samples</h2>
       <input className="search" placeholder="Search by sample, item, lot, purpose, status or person" aria-label="Search samples" value={q} onChange={(e) => setQ(e.target.value)} />
