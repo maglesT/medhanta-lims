@@ -17,7 +17,8 @@ export type Kind =
   | 'relative humidity' | 'absolute humidity' | 'absolute humidity per volume' | 'log' | 'frequency' | 'rpm per Hz' | 'charge'
   | 'IU' | 'CFU' | 'activity units' | 'IU per mass' | 'CFU per mass' | 'activity units per mass' | 'mass per IU'
   | 'absorbance' | 'calendar time' | 'molar energy'
-  | 'CFU per volume' | 'IU per volume' | 'endotoxin' | 'endotoxin per volume' | 'endotoxin per mass' | 'endotoxin per IU';
+  | 'CFU per volume' | 'IU per volume' | 'endotoxin' | 'endotoxin per volume' | 'endotoxin per mass' | 'endotoxin per IU'
+  | 'osmolality';
 
 export interface Unit {
   readonly symbol: string;
@@ -99,6 +100,10 @@ const TABLE: [string, Kind, Dec | string, string?][] = [
   ['CFU/mL', 'CFU per volume', '1'], ['CFU/L', 'CFU per volume', '0.001'], ['CFU/m³', 'CFU per volume', '0.000001'],
   ['EU', 'endotoxin', '1'], ['EU/mL', 'endotoxin per volume', '1'], ['EU/mg', 'endotoxin per mass', '1000'], ['EU/g', 'endotoxin per mass', '1'],
   ['EU/IU', 'endotoxin per IU', '1'], ['IU/mL', 'IU per volume', '1'],
+  // Parenterals (injection bulk and release tests): osmolality by freezing-point depression (Ph. Int. / Ph. Eur.
+  // 2.2.35) in mOsm/kg of water, its own kind (osmolarity per litre needs the density); dissolved oxygen in mg/L.
+  ['mOsm/kg', 'osmolality', '1'], ['Osm/kg', 'osmolality', '1000'],
+  ['mg/L', 'mass concentration', '0.001'], ['µg/L', 'mass concentration', '0.000001'],
 ];
 
 /** Other spellings people type. */
@@ -111,6 +116,7 @@ const ALIASES: Record<string, string> = {
   month: 'months', mo: 'months', 'kJ mol-1': 'kJ/mol',
   'cfu/mL': 'CFU/mL', 'cfu/ml': 'CFU/mL', 'CFU/ml': 'CFU/mL', 'cfu/m³': 'CFU/m³', 'CFU/m3': 'CFU/m³', 'cfu/m3': 'CFU/m³', 'EU/ml': 'EU/mL',
   'ug/mL': 'µg/mL', 'mcg/mL': 'µg/mL', 'μg/mL': 'µg/mL', 'µg/g': 'ppm', 'ug/g': 'ppm', 'mcg/g': 'ppm', 'μg/g': 'ppm', // 1 µg/g = 1 ppm
+  'mg/l': 'mg/L', 'mOsm/kg H2O': 'mOsm/kg', 'mosm/kg': 'mOsm/kg', 'mOsmol/kg': 'mOsm/kg', 'ug/L': 'µg/L',
 };
 
 /** Every unit symbol with its kind, in table order (the designer's unit pick lists). */
