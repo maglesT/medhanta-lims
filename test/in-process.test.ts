@@ -187,10 +187,18 @@ describe('on the server', () => {
   it('a request of another edition (TrueBatch Liquids) makes its sample the same way', async () => {
     const r = await as('analyst', 'POST', '/api/samples/in-process', { edition: 'truebatch_liquids', requestId: 'TL260004/bulk', quantity: '100 mL' });
     expect(r.statusCode, r.body).toBe(200);
-    const d = await detail((r.json() as { id: number }).id);
+    const sid = (r.json() as { id: number }).id;
+    const d = await detail(sid);
     expect(d.spec.tests.map((x) => [x.key, x.applies])).toEqual([['bu', false], ['ph', true]]);
     // A release sample's result row has no request and the plain figure.
     const [n] = await t.owner.unsafe(`select count(*)::int as n from ${t.schema}_report.result_v1 where purpose = 'in_process'`);
     expect(n!.n).toBe(1);
+    // A request opened before TrueBatch round 45 has no codes: matched by its field name; ipc_code is null, ipc_field the name.
+    expect((await as('sampler', 'POST', `/api/samples/${sid}/receive`, { condition: 'Bulk, 100 mL' })).statusCode).toBe(200);
+    await analysed(sid, ph, { reading: '6.1' });
+    const ok = await as('qcuser', 'POST', `/api/samples/${sid}/approve`, { proof: proofFor('qcuser'), contentHash: (await detail(sid)).decisionHash });
+    expect(ok.statusCode, ok.body).toBe(200);
+    const rows = await t.owner.unsafe(`select test_key, request_id, ipc_field, ipc_code from ${t.schema}_report.result_v1 where coa_number = '${(ok.json() as { coaNo: string }).coaNo}'`);
+    expect(rows).toEqual([{ test_key: 'ph', request_id: 'TL260004/bulk', ipc_field: 'ph', ipc_code: null }]);
   });
 });
