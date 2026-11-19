@@ -139,6 +139,23 @@ describe('QC decision on the server', () => {
     const rows = await t.owner.unsafe(`select test_key, value::text, passed, limit_text, analysis_number from ${t.schema}_report.result_v1 where coa_number = '${coaNo}'`);
     const [rep] = await t.owner.unsafe(`select reported from ${t.schema}_report.result_v1 where coa_number = '${coaNo}'`);
     expect(rep).toEqual({ reported: '6.2' });
+    // The TrueBatch contract (19 Nov 2026): reported is the bare figure, never with its unit, for every row; the printed
+    // text is reported_text. Found on the demo: COA2600002 published '1.25 g/mL' and COA2600001 (decided before
+    // `reported` was kept) published none. Decisions stood in by the owner connection (the record's own shape).
+    const decided = async (results: object[]) => {
+      const id = await sampleOf();
+      const [u] = await t.owner<{ id: number }[]>`select id::int from users order by id limit 1`;
+      await t.owner`insert into sample_events (sample_id, kind, payload, person_id) values (${id}, 'approved', ${t.owner.json({ coaNo: `COA-T${id}`, results } as never)}, ${u!.id})`;
+      return t.owner.unsafe(`select test_key, reported, reported_text from ${t.schema}_report.result_v1 where coa_number = 'COA-T${id}' order by test_key`);
+    };
+    expect(await decided([{ key: 'ph', name: 'pH', value: '6.249604474630443', unit: '', shown: 'Reading 6.249604474630443 after no further change' }]))
+      .toEqual([{ test_key: 'ph', reported: '6.2', reported_text: '6.2' }]);
+    expect(await decided([{ key: 'a', name: 'Density', value: '1.250', unit: 'g/mL', shown: '1.250 g/mL', reported: '1.25 g/mL' },
+      { key: 'b', name: 'Viscosity', value: '85', unit: 'mPa·s', shown: '85 mPa·s', reported: '85 mPa·s' },
+      { key: 'c', name: 'Appearance', value: '', unit: '', shown: 'Conforms: a clear syrup' },
+      { key: 'd', name: 'Water', value: '0.500', unit: '%', shown: '0.500 %', reported: '0.500 %' }]))
+      .toEqual([{ test_key: 'a', reported: '1.25', reported_text: '1.25 g/mL' }, { test_key: 'b', reported: '85', reported_text: '85 mPa·s' },
+        { test_key: 'c', reported: 'Conforms: a clear syrup', reported_text: 'Conforms: a clear syrup' }, { test_key: 'd', reported: '0.500', reported_text: '0.500 %' }]);
     const [a] = await t.owner<{ analysis_no: string }[]>`select analysis_no from analyses where id = ${aid}`;
     expect(rows).toEqual([{ test_key: 'ph', value: '6.2', passed: true, limit_text: '5.0 to 7.0', analysis_number: a!.analysis_no }]);
     // Once decided: no second decision.
