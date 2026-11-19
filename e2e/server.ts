@@ -75,7 +75,7 @@ const linked = connect(TEST_DATABASE_URL, { role: 'lims_app', link: true });
 // TrueBatch and the Logbook: linked only while their stand-ins exist (the stability journey); otherwise "not linked".
 const whileThere = (l: Link): Link => ({ provider: l.provider, read: async (f) => { const r = await l.read(f); return r.state === 'down' ? { state: 'absent' } : r; } });
 const linksNow = links({ recruitment: linked, mms: linked, qual: linked }, { recruitment: E2E_RECRUITMENT, mms: E2E_MMS, qual: E2E_QUAL });
-linksNow.truebatch = truebatchClient(whileThere(link('truebatch', linked, E2E_TB)));
+linksNow.truebatch = truebatchClient([{ edition: 'truebatch', link: whileThere(link('truebatch', linked, E2E_TB)) }]);
 linksNow.logbook = logbookClient(whileThere(link('logbook', linked, E2E_LB)));
 // QMS: only supplier_approval_v1 is there; change_v1 is not, so change control stays "not linked" (typed by hand).
 linksNow.qms = qmsClient(whileThere(link('qms', linked, E2E_QMS)));

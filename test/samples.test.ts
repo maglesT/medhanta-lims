@@ -82,7 +82,8 @@ beforeAll(async () => {
       insert into ${S.tb}.batch_fact_v1 (batch_number, product_code, product_name, record_kind, status, completed_at, released, good_quantity, good_unit) values
         ('B26001', 'FG-001', 'Examplol 500 mg tablets', 'PROCESSING', 'COMPLETED', now(), false, 98000, 'tablets'),
         ('B26002', 'FG-001', 'Examplol 500 mg tablets', 'PROCESSING', 'RELEASED', now(), true, 99000, 'tablets'),
-        ('B26003', 'FG-001', 'Examplol 500 mg tablets', 'PROCESSING', 'IN_PRODUCTION', null, false, null, null);`);
+        ('B26003', 'FG-001', 'Examplol 500 mg tablets', 'PROCESSING', 'IN_PRODUCTION', null, false, null, null),
+        ('B26004', 'FG-001', 'Examplol 500 mg tablets', 'PROCESSING', 'REJECTED', now(), false, null, null);`);
     provider = connect(TEST_DATABASE_URL, { role: 'lims_app', link: true });
     return links({ mms: provider, truebatch: provider }, { mms: S.mms, truebatch: S.tb });
   });
@@ -131,12 +132,12 @@ const restore = (schema: string) => t.owner.unsafe(`grant select on all tables i
 const plantYY = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }).slice(2, 4);
 
 describe('samples waiting to be sampled (PL-08: pulled from MMS and TrueBatch)', () => {
-  it('PL-08 the MMS material lots in quarantine or under test and the completed, unreleased TrueBatch batches wait, each with its effective specification or why none', async () => {
+  it('PL-08 the MMS material lots in quarantine or under test and the unreleased TrueBatch batches (in production or completed, not rejected) wait, each with its effective specification or why none', async () => {
     const r = await as('sampler', 'GET', '/api/sample-requests');
     expect(r.statusCode, r.body).toBe(200);
     const body = r.json() as { links: Record<string, string>; requests: { source: string; lotNo: string; code: string; specs: { id: number; number: string }[]; noSpec: string | null; shown: string }[] };
     expect(body.links).toEqual({ mms: 'ok', truebatch: 'ok' });
-    expect(body.requests.map((x) => [x.source, x.lotNo])).toEqual([['mms', 'RM-L1'], ['mms', 'RM-L2'], ['mms', 'RM-L3'], ['truebatch', 'B26001']]);
+    expect(body.requests.map((x) => [x.source, x.lotNo])).toEqual([['mms', 'RM-L1'], ['mms', 'RM-L2'], ['mms', 'RM-L3'], ['truebatch', 'B26001'], ['truebatch', 'B26003']]);
     const [l1, , l3, b1] = body.requests;
     expect(l1!.specs.map((s) => [s.id, s.number])).toEqual([[specs.rm, 'SPEC-RM-012']]);
     expect(l1!.shown).toMatch(/^MMS lot RM-L1: RM-012, quarantine, expiry 31 Jan 2099/);
@@ -210,13 +211,13 @@ describe('registering a sample', () => {
     expect((await registerLot('RM-L2', { purpose: 'whenever' })).statusCode).toBe(400);
   });
 
-  it('LIMS-05 a finished-product sample of a completed TrueBatch batch, against the product\'s effective specification; a released or unfinished batch is refused', async () => {
+  it('LIMS-05 a finished-product sample of a TrueBatch batch (completed, or its bulk in production), against the product\'s effective specification; a released or rejected batch is refused', async () => {
     const r = await as('sampler', 'POST', '/api/samples', { source: 'truebatch', batchNumber: 'B26001', specVersionId: specs.fg, quantity: '60 tablets', purpose: 'release' });
     expect(r.statusCode, r.body).toBe(200);
     const d = await detail(r.json().id);
     expect(d.sample).toMatchObject({ item: { code: 'FG-001' }, source: { from: 'truebatch' } });
-    expect(d.sample.source.shown).toMatch(/^TrueBatch batch B26001: FG-001 Examplol 500 mg tablets, completed, completed .*, 98000 tablets made$/);
-    for (const [no, why] of [['B26002', 'already released'], ['B26003', 'not completed']]) {
+    expect(d.sample.source.shown).toMatch(/^TrueBatch Tablets batch B26001: FG-001 Examplol 500 mg tablets, completed, completed .*, 98000 tablets made$/);
+    for (const [no, why] of [['B26002', 'already released'], ['B26004', 'rejected']]) {
       const x = await as('sampler', 'POST', '/api/samples', { source: 'truebatch', batchNumber: no, specVersionId: specs.fg, quantity: '60 tablets', purpose: 'release' });
       expect(x.statusCode).toBe(409);
       expect(x.json().problems[0]).toContain(why);

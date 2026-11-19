@@ -19,6 +19,10 @@ const schema = z.object({
   RECRUITMENT_DATABASE_URL: optionalUrl,
   // TrueBatch's batch_fact_v1: a completed batch waits for its finished-product sample.
   TRUEBATCH_DATABASE_URL: optionalUrl,
+  // The other TrueBatch editions (one link each, owner 19 Nov 2026).
+  TRUEBATCH_PACKING_DATABASE_URL: optionalUrl, TRUEBATCH_CAPSULES_DATABASE_URL: optionalUrl, TRUEBATCH_CAPSULES_PACKING_DATABASE_URL: optionalUrl,
+  TRUEBATCH_LIQUIDS_DATABASE_URL: optionalUrl, TRUEBATCH_LIQUIDS_PACKING_DATABASE_URL: optionalUrl, TRUEBATCH_INJECTABLES_DATABASE_URL: optionalUrl,
+  TRUEBATCH_INJECTABLES_PACKING_DATABASE_URL: optionalUrl, TRUEBATCH_API_DATABASE_URL: optionalUrl,
   // Qualification's qualification_v1: only a qualified machine, its periodic review not past, is used (LIMS-12).
   QUAL_DATABASE_URL: optionalUrl,
   // Sign-on through Medhanta core, written by the platform's apply.

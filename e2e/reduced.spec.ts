@@ -116,6 +116,7 @@ test('LIMS-09 reduced testing journey: the first lot of a manufacturer tested in
   await tests.locator('label.check', { hasText: /The certificate gives the manufacturer's name and address/ }).click();
   await expect(tests.getByRole('checkbox')).toBeChecked();
   await tests.getByRole('button', { name: 'Check against the certificate' }).click();
+  await expect(tests.getByRole('button', { name: 'Check against the certificate' })).toHaveCount(0);
   await tests.getByRole('button', { name: 'Check against the report' }).click();
   await expect(tests.getByRole('button', { name: /^Check against/ })).toHaveCount(0);
   if (process.env.SHOTS) await lab2.page.screenshot({ path: `${process.env.SHOTS}/reduced-sample.png`, fullPage: true });

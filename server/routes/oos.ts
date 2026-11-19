@@ -8,6 +8,7 @@ import { SignError, authenticateSigner, contentHash, sign, signBody } from '../s
 import { loadAnalysis, sampleTestResults } from './analyses.js';
 import { c1WithinLimits } from '../../shared/templates/index.js';
 import { limitFor, limitText, purposeLimits, type SpecDoc } from '../../shared/master/spec.js';
+import { reportedFigure } from '../coa.js';
 import { analysisView, openSteps } from '../../shared/engine/index.js';
 import {
   OOS_ACTIONS, OOS_ACTION_NAMES, OOS_CHECKLIST, checklistProblems, oosClosed, oosRefusal, oosStatus, phase1Conclusion, phase2, plans, retestRefusal, retests,
@@ -48,7 +49,8 @@ export async function openOos(tx: Tx, analysisId: number, person: number): Promi
       insert into oos_counters (year, last_no) values (extract(year from now() at time zone ${PLANT_TZ})::int, 1)
       on conflict (year) do update set last_no = oos_counters.last_no + 1 returning last_no as n, right(year::text, 2) as yy`;
     const oosNo = `${OOS_PREFIX}${c!.yy}${String(c!.n).padStart(4, '0')}`;
-    const result: OosResult = { name: t.name, value: r.value, unit: r.unit, shown: `${r.value} ${r.unit}`.trim(), line: r.shown, limit: limitText(t, purposeLimits(l.sample.purpose)), step: at.id };
+    // The value as reported (rounded as the limit is written, LIMS-15); the full value stays in `value` and the line.
+    const result: OosResult = { name: t.name, value: r.value, unit: r.unit, shown: shownOf(r.value, r.unit, limitFor(t, purposeLimits(l.sample.purpose))), line: r.shown, limit: limitText(t, purposeLimits(l.sample.purpose)), step: at.id };
     const [o] = await tx<{ id: number }[]>`
       insert into oos (oos_no, sample_id, analysis_id, test_key, result, opened_by)
       values (${oosNo}, ${l.sample.id}, ${analysisId}, ${t.key}, ${tx.json(result as never)}, ${person}) returning id::int`;
@@ -77,6 +79,14 @@ type Row = { id: number; oosNo: string; sampleId: number; analysisId: number | n
   sampleNo: string; lotNo: string; purpose: string; item: { of: string; code: string; name: string }; analysisNo: string; spec: SpecDoc; specNumber: string; specVersionNo: number };
 type EventRow = OosEvent & { personName: string; at: Date; signature: { printedName: string; meaning: string; signedAt: Date } | null };
 
+/** The result as reported: rounded half up as the limit is written (an OOS opened before this kept the full value). */
+const shownOf = (value: string, unit: string, limit: Parameters<typeof reportedFigure>[2]) => {
+  try { return value ? reportedFigure(value, unit, limit) : `${value} ${unit}`.trim(); } catch { return `${value} ${unit}`.trim(); }
+};
+const rounded = (r: Row): Row => {
+  const t = r.spec.tests.find((x) => x.key === r.testKey);
+  return t && r.result.value ? { ...r, result: { ...r.result, shown: shownOf(r.result.value, r.result.unit, limitFor(t, purposeLimits(r.purpose))) } } : r;
+};
 const ROW = (q: Sql | Tx) => q`
   select o.id::int, o.oos_no as "oosNo", o.sample_id::int as "sampleId", o.analysis_id::int as "analysisId", o.outside_result_id::int as "outsideResultId", o.test_key as "testKey", o.result,
     o.opened_by::int as "openedBy", u.full_name as "openedByName", o.opened_at as "openedAt", s.sample_no as "sampleNo", s.lot_no as "lotNo", s.purpose, s.item,
@@ -94,7 +104,8 @@ async function events(q: Sql | Tx, ids: number[]): Promise<(EventRow & { oosId: 
 }
 
 async function loadOos(q: Sql | Tx, id: number) {
-  const [o] = await q<Row[]>`${ROW(q)} where o.id = ${id}`;
+  const [o0] = await q<Row[]>`${ROW(q)} where o.id = ${id}`;
+  const o = o0 && rounded(o0);
   if (!o) return null;
   const ev = await events(q, [id]);
   if (o.outsideResultId !== null) {
@@ -116,7 +127,7 @@ const brief = (status: OosStatus): SampleOos['status'] => (status === 'confirmed
 
 /** The OOS of a sample, for QC's decision and the sample screen. */
 export async function oosOfSample(q: Sql | Tx, sampleId: number): Promise<(SampleOos & { id: number; analysisNo: string; testKey: string; detail: OosStatus })[]> {
-  const rows = await q<Row[]>`${ROW(q)} where o.sample_id = ${sampleId} order by o.id`;
+  const rows = (await q<Row[]>`${ROW(q)} where o.sample_id = ${sampleId} order by o.id`).map(rounded);
   const ev = await events(q, rows.map((r) => r.id));
   return rows.map((r) => {
     const s = oosStatus(ev.filter((e) => e.oosId === r.id));
@@ -188,7 +199,7 @@ export function oosRoutes(app: FastifyInstance, sql: Sql) {
 
   // The OOS, newest first, with their computed status.
   app.get('/api/oos', reader, async () => {
-    const rows = await sql<Row[]>`${ROW(sql)} order by o.id desc limit 500`;
+    const rows = (await sql<Row[]>`${ROW(sql)} order by o.id desc limit 500`).map(rounded);
     const ev = await events(sql, rows.map((r) => r.id));
     return rows.map(({ spec: _, ...r }) => {
       const e = ev.filter((x) => x.oosId === r.id);

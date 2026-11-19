@@ -602,3 +602,14 @@ Not in this round: a published view for QMS (method status
 in the APQR, step 8 APQR views may read `method_reports`); non-linear and multivariate calibration (owner, 18 Nov 2026);
 the CDS import on the validation blocks (their responses are typed and checked by a second person, as every validation
 step has a checker).
+
+## Hotfix 19 Nov 2026: viscosity, every TrueBatch edition, bulk release samples
+
+Found making the TrueBatch Liquids release CoA (TL260004) on the demo screens.
+
+| What | How |
+|---|---|
+| Viscosity units | `shared/templates/units.ts`: dynamic viscosity mPa·s (= cP), Pa·s, P; kinematic viscosity mm²/s (= cSt), m²/s. The two kinds never convert into each other (that needs the density). |
+| Every production edition | One link per TrueBatch edition (`TRUEBATCH_<EDITION>_DATABASE_URL`, `shared/engine/links.ts` `TB_EDITIONS`), read as one provider "TrueBatch": `batch_fact_v1` of truebatch, truebatch_capsules, truebatch_liquids, truebatch_injectables and truebatch_api. A list is the rows of the editions that answer (down only when none does); a lookup that finds nothing while one edition is down answers down, so the batch may be typed by hand. Each batch names its edition ("TrueBatch Liquids batch TL260004"). |
+| Bulk release sample | A batch takes its release sample from production on (the bulk at its QA hold, before packing) until it is released; never when rejected or cancelled (`batchWaiting`). |
+| OOS as reported | The OOS screens and `oos_v1` (value and shown, migration `0024`) give the result rounded half up as its limit is written, the CoA's rule (`reportedFigure`); the full value stays in the OOS record and its worked line. Found on the demo: OOS260001 showed 0.8991… % for 0.9 %. |

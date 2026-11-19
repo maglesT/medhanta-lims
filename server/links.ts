@@ -1,6 +1,6 @@
 import type postgres from 'postgres';
 import type { Sql } from './db.js';
-import type { LinkState, Provider } from '../shared/engine/links.js';
+import { TB_EDITIONS, TB_PRODUCTION, type Edition, type LinkState, type Provider } from '../shared/engine/links.js';
 import type { TrainingRead } from '../shared/engine/training.js';
 import { qualificationProblem, type QualPick, type QualRead } from '../shared/engine/qualification.js';
 import type { SupplierApproval } from '../shared/engine/reduced.js';
@@ -203,38 +203,103 @@ export const recruitmentClient = (l: Link) => ({
     order by skill_code, skill_title nulls last limit 500`).map((r) => ({ code: r.code, ...(r.title ? { title: r.title } : {}) }))),
 });
 
-// ---- TrueBatch: report.batch_fact_v1 (published), one row per batch of any edition. A batch with completed_at set and
-// not released waits for its finished-product sample.
+// ---- TrueBatch: report.batch_fact_v1 (published by each production edition), one row per batch. A batch with
+// completed_at set and not released waits for its finished-product sample. report.lab_request_v1 (every edition): one
+// row per in-process lab request a step opens (owner 19 Nov 2026).
 export interface BatchRead {
   batchNumber: string; productCode: string | null; productName: string | null; status: string; completedAt: string | null;
-  released: boolean; dataAsOf: string | null; quantity: string | null;
+  released: boolean; dataAsOf: string | null; quantity: string | null; edition?: Edition;
 }
 type BatchRow = { batch_number: string; product_code: string | null; product_name: string | null; status: string; completed_at: string | null;
   released: boolean | null; data_as_of: string | null; good_quantity: string | null; good_unit: string | null };
-const batchOf = (r: BatchRow): BatchRead => ({ batchNumber: r.batch_number, productCode: r.product_code, productName: r.product_name, status: r.status,
-  completedAt: r.completed_at, released: r.released === true, dataAsOf: r.data_as_of, quantity: r.good_quantity ? `${r.good_quantity} ${r.good_unit ?? ''}`.trim() : null });
+const batchOf = (r: BatchRow, edition?: Edition): BatchRead => ({ batchNumber: r.batch_number, productCode: r.product_code, productName: r.product_name, status: r.status,
+  completedAt: r.completed_at, released: r.released === true, dataAsOf: r.data_as_of, quantity: r.good_quantity ? `${r.good_quantity} ${r.good_unit ?? ''}`.trim() : null,
+  ...(edition ? { edition } : {}) });
 // product_name, good_quantity and good_unit through to_jsonb: null on a view from before they were appended.
 const BATCH_COLS = `batch_number, product_code, to_jsonb(b) ->> 'product_name' as product_name, status, completed_at::text, released, data_as_of::text,
   to_jsonb(b) ->> 'good_quantity' as good_quantity, to_jsonb(b) ->> 'good_unit' as good_unit`;
-export const batchWaiting = (b: BatchRead) => b.completedAt !== null && !b.released;
-export const truebatchClient = (l: Link) => ({
-  batch: (batchNumber: string) => l.read(async (q, v) => {
-    const [r] = await q<BatchRow[]>`select ${q.unsafe(BATCH_COLS)} from ${v('batch_fact_v1')} b where batch_number = ${batchNumber} order by completed_at desc nulls last limit 1`;
-    return r ? batchOf(r) : null;
-  }),
-  waiting: () => l.read(async (q, v) => (await q<BatchRow[]>`
-    select ${q.unsafe(BATCH_COLS)} from ${v('batch_fact_v1')} b where completed_at is not null and released is not true
-    order by completed_at, batch_number limit 500`).map(batchOf)),
-  // Stability (LIMS-27, plan 2.6): the completed batches of a product, newest first, to put on study; and the batches
-  // released since a plant date (released_at through to_jsonb: the completion on a view from before it was appended).
-  ofProduct: (productCode: string) => l.read(async (q, v) => (await q<BatchRow[]>`
-    select ${q.unsafe(BATCH_COLS)} from ${v('batch_fact_v1')} b where product_code = ${productCode} and completed_at is not null and status <> 'REJECTED'
-    order by completed_at desc, batch_number limit 100`).map(batchOf)),
-  releasedSince: (date: string) => l.read(async (q, v) => (await q<BatchRow[]>`
-    select ${q.unsafe(BATCH_COLS)} from ${v('batch_fact_v1')} b where released is true
-      and (coalesce((to_jsonb(b) ->> 'released_at')::timestamptz, completed_at) at time zone 'Asia/Kolkata')::date >= ${date}::date
-    order by product_code, batch_number limit 2000`).map(batchOf)),
-});
+// A batch takes its release sample from production on (a bulk sampled at its QA hold, before packing; owner 19 Nov
+// 2026) until it is released; never a rejected or cancelled one.
+export const BATCH_DONE_WITH = ['REJECTED', 'CANCELLED', 'RELEASED'];
+export const batchWaiting = (b: BatchRead) => !b.released && !BATCH_DONE_WITH.includes(b.status.toUpperCase());
+
+/** An in-process lab request of a TrueBatch step (lab_request_v1). `individual`: the number of units tested one by one. */
+export interface LabRequestTest { name: string; label: string; unit: string | null; individual: number | null }
+export interface LabRequest { edition: Edition; requestId: string; batchNo: string; productCode: string; stageTitle: string | null; stepKey: string; stepTitle: string | null;
+  tests: LabRequestTest[]; requestedAt: string; status: string }
+type RequestRow = { request_id: string; batch_no: string; product_code: string; stage_title: string | null; step_key: string; step_title: string | null;
+  tests: LabRequestTest[] | null; requested_at: string; status: string };
+const requestOf = (r: RequestRow, edition: Edition): LabRequest => ({ edition, requestId: r.request_id, batchNo: r.batch_no, productCode: r.product_code, stageTitle: r.stage_title,
+  stepKey: r.step_key, stepTitle: r.step_title, requestedAt: r.requested_at, status: r.status,
+  tests: (r.tests ?? []).map((t) => ({ name: String(t.name), label: String(t.label ?? t.name), unit: t.unit ?? null, individual: t.individual ?? null })) });
+const REQUEST_COLS = `request_id, batch_no, product_code, stage_title, step_key, step_title, tests, requested_at::text, status`;
+
+/**
+ * One read over the editions' links: absent when none is linked; ok when at least one answers (the rows of those that
+ * answer); down when none answers. A single lookup that finds nothing while an edition is down answers down, so the
+ * person may type it by hand.
+ */
+type EditionLink = { edition: Edition; link: Link };
+async function allEditions<T>(ls: EditionLink[], f: (q: Sql, v: View, edition: Edition) => Promise<T[]>): Promise<Read<T[]>> {
+  const reads = await Promise.all(ls.map((e) => e.link.read((q, v) => f(q, v, e.edition))));
+  const ok = reads.filter((r): r is { state: 'ok'; value: T[] } => r.state === 'ok');
+  if (ok.length) return { state: 'ok', value: ok.flatMap((r) => r.value) };
+  return { state: reads.some((r) => r.state === 'down') ? 'down' : 'absent' };
+}
+async function oneOf<T>(ls: EditionLink[], f: (q: Sql, v: View, edition: Edition) => Promise<T | null>): Promise<Read<T | null>> {
+  const reads = await Promise.all(ls.map((e) => e.link.read((q, v) => f(q, v, e.edition))));
+  const found = reads.find((r) => r.state === 'ok' && r.value !== null);
+  if (found) return found as Read<T | null>;
+  if (reads.some((r) => r.state === 'down')) return { state: 'down' };
+  return reads.some((r) => r.state === 'ok') ? { state: 'ok', value: null } : { state: 'absent' };
+}
+
+/** TrueBatch: one link (a test's) or one per edition. */
+export const truebatchClient = (links: Link | EditionLink[]) => {
+  const all: EditionLink[] = Array.isArray(links) ? links : [{ edition: 'truebatch', link: links }];
+  const production = all.filter((e) => TB_PRODUCTION.includes(e.edition));
+  return {
+    batch: (batchNumber: string) => oneOf(production, async (q, v, ed) => {
+      const [r] = await q<BatchRow[]>`select ${q.unsafe(BATCH_COLS)} from ${v('batch_fact_v1')} b where batch_number = ${batchNumber} order by completed_at desc nulls last limit 1`;
+      return r ? batchOf(r, ed) : null;
+    }),
+    waiting: () => allEditions(production, async (q, v, ed) => (await q<BatchRow[]>`
+      select ${q.unsafe(BATCH_COLS)} from ${v('batch_fact_v1')} b where released is not true and upper(status) <> all(${BATCH_DONE_WITH})
+      order by completed_at nulls last, batch_number limit 500`).map((r) => batchOf(r, ed))),
+    // Stability (LIMS-27, plan 2.6): the completed batches of a product, newest first, to put on study; and the batches
+    // released since a plant date (released_at through to_jsonb: the completion on a view from before it was appended).
+    ofProduct: async (productCode: string) => {
+      const r = await allEditions(production, async (q, v, ed) => (await q<BatchRow[]>`
+        select ${q.unsafe(BATCH_COLS)} from ${v('batch_fact_v1')} b where product_code = ${productCode} and completed_at is not null and status <> 'REJECTED'
+        order by completed_at desc, batch_number limit 100`).map((x) => batchOf(x, ed)));
+      return r.state === 'ok' ? { ...r, value: r.value.sort((a, b) => (b.completedAt ?? '').localeCompare(a.completedAt ?? '') || a.batchNumber.localeCompare(b.batchNumber)) } : r;
+    },
+    releasedSince: async (date: string) => {
+      const r = await allEditions(production, async (q, v, ed) => (await q<BatchRow[]>`
+        select ${q.unsafe(BATCH_COLS)} from ${v('batch_fact_v1')} b where released is true
+          and (coalesce((to_jsonb(b) ->> 'released_at')::timestamptz, completed_at) at time zone 'Asia/Kolkata')::date >= ${date}::date
+        order by product_code, batch_number limit 2000`).map((x) => batchOf(x, ed)));
+      return r.state === 'ok' ? { ...r, value: r.value.sort((a, b) => (a.productCode ?? '').localeCompare(b.productCode ?? '') || a.batchNumber.localeCompare(b.batchNumber)) } : r;
+    },
+    // In-process (owner 19 Nov 2026): the open requests of every edition, oldest first; one request; the test names a
+    // product's requests have used (for the in-process specification's pick list).
+    openRequests: async () => {
+      const r = await allEditions(all, async (q, v, ed) => (await q<RequestRow[]>`
+        select ${q.unsafe(REQUEST_COLS)} from ${v('lab_request_v1')} where status = 'open' order by requested_at limit 500`).map((x) => requestOf(x, ed)));
+      return r.state === 'ok' ? { ...r, value: r.value.sort((a, b) => a.requestedAt.localeCompare(b.requestedAt)) } : r;
+    },
+    request: (edition: string, requestId: string) => oneOf(all.filter((e) => e.edition === edition), async (q, v, ed) => {
+      const [x] = await q<RequestRow[]>`select ${q.unsafe(REQUEST_COLS)} from ${v('lab_request_v1')} where request_id = ${requestId} limit 1`;
+      return x ? requestOf(x, ed) : null;
+    }),
+    requestFields: async (productCode: string) => {
+      const r = await allEditions(all, async (q, v) => q<{ name: string; label: string; unit: string | null }[]>`
+        select distinct t ->> 'name' as name, coalesce(t ->> 'label', t ->> 'name') as label, t ->> 'unit' as unit
+        from ${v('lab_request_v1')} r, jsonb_array_elements(r.tests) t where r.product_code = ${productCode} limit 500`);
+      return r.state === 'ok' ? { ...r, value: [...new Map(r.value.map((x) => [x.name, x])).values()].sort((a, b) => a.name.localeCompare(b.name)) } : r;
+    },
+  };
+};
 
 // ---- Qualification: report.qualification_v1 (published), one row per qualified item; a machine is matched by its
 // master-data id (master_id). conditions (of a conditional qualification) through to_jsonb: null until Qualification
@@ -265,14 +330,15 @@ export interface Links {
   qual: ReturnType<typeof qualClient>;
 }
 /** The links, from their connections (null: absent). `schema` lets tests point a provider at its own schema. */
-export function links(c: Partial<Record<Provider, Sql | null>> = {}, schema: Partial<Record<Provider, string>> = {}): Links {
+export function links(c: Partial<Record<Provider | Edition, Sql | null>> = {}, schema: Partial<Record<Provider | Edition, string>> = {}): Links {
   return {
     deviations: deviationsClient(link('deviations', c.deviations ?? null, schema.deviations)),
     qms: qmsClient(link('qms', c.qms ?? null, schema.qms)),
     logbook: logbookClient(link('logbook', c.logbook ?? null, schema.logbook)),
     mms: mmsClient(link('mms', c.mms ?? null, schema.mms)),
     recruitment: recruitmentClient(link('recruitment', c.recruitment ?? null, schema.recruitment)),
-    truebatch: truebatchClient(link('truebatch', c.truebatch ?? null, schema.truebatch)),
+    // Every TrueBatch edition linked (start.ts); a test may give only "truebatch".
+    truebatch: truebatchClient(TB_EDITIONS.filter((e) => e === 'truebatch' || c[e]).map((e) => ({ edition: e, link: link('truebatch', c[e] ?? null, schema[e]) }))),
     qual: qualClient(link('qual', c.qual ?? null, schema.qual)),
   };
 }

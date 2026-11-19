@@ -81,6 +81,7 @@ test('LIMS-07 a sample of a waiting MMS lot is registered, received and stored o
   // Back on the list: the sample, stored; the lot is no longer offered for a release sample.
   await page.getByRole('button', { name: '← Samples' }).click();
   await expect(page.getByRole('table', { name: 'Samples' }).getByRole('row', { name: /RM-E1/ })).toContainText('Stored');
-  await expect(page.getByRole('region', { name: 'Waiting to be sampled' })).toContainText('Nothing waiting.');
+  // (Other journeys' lots may still wait here: the reduced testing journey's packing material lots.)
+  await expect(page.getByRole('region', { name: 'Waiting to be sampled' })).toContainText(/Already sampled for release: .*RM-E1 \(LS\d{7}\)/);
   await ctx.close();
 });

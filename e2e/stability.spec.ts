@@ -112,7 +112,7 @@ test('LIMS-26 LIMS-28 stability journey: a protocol approved, a study placed for
   await smp.page.getByRole('button', { name: 'New study' }).click();
   const dlg = smp.page.getByRole('dialog', { name: 'New study' });
   await dlg.getByLabel('Protocol').selectOption({ label: 'STP-FG-DEM100 · FG-DEM100 Demolol 100 mg tablets · Alu-Alu blister, 10 tablets (version 1)' });
-  await expect(dlg.getByLabel('Batch')).toContainText('TrueBatch batch DEM-STB-01');
+  await expect(dlg.getByLabel('Batch')).toContainText('TrueBatch Tablets batch DEM-STB-01');
   await dlg.getByLabel('Batch').selectOption('DEM-STB-01');
   await dlg.getByLabel('Chamber for lt').selectOption('eq-ch1');
   await dlg.getByLabel('Quantity for lt').fill('140');
@@ -122,7 +122,7 @@ test('LIMS-26 LIMS-28 stability journey: a protocol approved, a study placed for
   const heading = smp.page.getByRole('heading', { level: 1 });
   await expect(heading).toHaveText(/^STB\d{5}$/);
   const studyNo = await heading.innerText();
-  await expect(smp.page.getByRole('region', { name: 'The study' })).toContainText('From TrueBatch: TrueBatch batch DEM-STB-01');
+  await expect(smp.page.getByRole('region', { name: 'The study' })).toContainText('From TrueBatch: TrueBatch Tablets batch DEM-STB-01');
   const stock = smp.page.getByRole('table', { name: 'Stock per condition' });
   await expect(stock.getByRole('row', { name: /30 °C/ })).toContainText('140 tablets');
 

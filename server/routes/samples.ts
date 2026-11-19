@@ -5,6 +5,7 @@ import { audit } from '../audit.js';
 import { parseId, requirePermission } from '../auth.js';
 import { usableItem } from '../master.js';
 import { LOT_USABLE, LOT_WAITING, batchWaiting, type BatchRead, type LotRead } from '../links.js';
+import { EDITION_NAME } from '../../shared/engine/links.js';
 import { SignError, authenticateSigner, contentHash, sign, signBody } from '../signatures.js';
 import { SAMPLING_DETAILS, identityContainers, limitFor, sampledProblem, samplingPlan, limitText, limitWords, outOfTrend, purposeLimits, type SpecDoc } from '../../shared/master/spec.js';
 import { OOT_ANSWERS, approvalProblems, ootRefusal, rejectionRefusal, sampleDecision, type TestState } from '../../shared/engine/sample.js';
@@ -77,7 +78,7 @@ async function releaseSample(q: Sql | Tx, of: Of, lotNo: string) {
 }
 
 export const lotShown = (l: LotRead) => `MMS lot ${l.lotNumber}: ${l.materialCode ?? '—'}, ${l.status.replaceAll('_', ' ')}, expiry ${l.expiryDate ? plantDate(l.expiryDate) : '—'}, retest ${l.retestDate ? plantDate(l.retestDate) : '—'}${l.stock ? `, ${l.stock} ${l.unit ?? ''} in stock`.trimEnd() : ''}`;
-export const batchShown = (b: BatchRead) => `TrueBatch batch ${b.batchNumber}: ${b.productCode ?? '—'}${b.productName ? ` ${b.productName}` : ''}, ${b.status.replaceAll('_', ' ').toLowerCase()}, completed ${b.completedAt ?? '—'}${b.quantity ? `, ${b.quantity} made` : ''}`;
+export const batchShown = (b: BatchRead) => `${b.edition ? EDITION_NAME[b.edition] : 'TrueBatch'} batch ${b.batchNumber}: ${b.productCode ?? '—'}${b.productName ? ` ${b.productName}` : ''}, ${b.status.replaceAll('_', ' ').toLowerCase()}, completed ${b.completedAt ?? '—'}${b.quantity ? `, ${b.quantity} made` : ''}`;
 
 async function loadSample(q: Sql | Tx, id: number): Promise<{ s: SampleRow; events: EventRow[] } | null> {
   const [s] = await q<SampleRow[]>`
@@ -266,7 +267,7 @@ export function sampleRoutes(app: FastifyInstance, sql: Sql) {
         } else {
           const t = read.value as BatchRead | null;
           if (!t) throw new SampleError(409, 'not_found', [`Batch ${lotNo} is not in TrueBatch.`]);
-          if (!batchWaiting(t)) throw new SampleError(409, 'not_waiting', [`Batch ${lotNo} is ${t.released ? 'already released' : 'not completed'} in TrueBatch: only a completed batch, not yet released, waits to be sampled.`]);
+          if (!batchWaiting(t)) throw new SampleError(409, 'not_waiting', [`Batch ${lotNo} is ${t.released ? 'already released' : t.status.toLowerCase().replaceAll('_', ' ')} in TrueBatch: a batch is sampled from production until it is released, never when rejected.`]);
           const m = (await app.master.products()).find((p) => p.code === t.productCode);
           if (!m) throw new SampleError(409, 'unknown_item', [`Product ${t.productCode ?? '—'} of batch ${lotNo} is not in master data.`]);
           const ok = usableItem([m], m.itemId, 'product');

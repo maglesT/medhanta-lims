@@ -10,6 +10,16 @@ import type { BlockField } from '../blocks/format.js';
 // qualification_v1, read when a machine is recorded (shared/engine/qualification.ts, LIMS-12).
 export const PROVIDERS = ['deviations', 'qms', 'logbook', 'mms', 'recruitment', 'truebatch', 'qual'] as const;
 export type Provider = (typeof PROVIDERS)[number];
+// The TrueBatch editions LIMS reads (owner 19 Nov 2026: every product's batches and in-process requests are picked, not
+// typed): one link each (<EDITION>_DATABASE_URL), read as one provider "TrueBatch". Production editions publish
+// batch_fact_v1 (release samples); every edition publishes lab_request_v1 (in-process requests).
+export const TB_EDITIONS = ['truebatch', 'truebatch_packing', 'truebatch_capsules', 'truebatch_capsules_packing', 'truebatch_liquids', 'truebatch_liquids_packing',
+  'truebatch_injectables', 'truebatch_injectables_packing', 'truebatch_api'] as const;
+export type Edition = (typeof TB_EDITIONS)[number];
+export const TB_PRODUCTION: readonly Edition[] = ['truebatch', 'truebatch_capsules', 'truebatch_liquids', 'truebatch_injectables', 'truebatch_api'];
+export const EDITION_NAME: Record<Edition, string> = { truebatch: 'TrueBatch Tablets', truebatch_packing: 'TrueBatch Tablets Packing', truebatch_capsules: 'TrueBatch Capsules',
+  truebatch_capsules_packing: 'TrueBatch Capsules Packing', truebatch_liquids: 'TrueBatch Liquids', truebatch_liquids_packing: 'TrueBatch Liquids Packing',
+  truebatch_injectables: 'TrueBatch Injectables', truebatch_injectables_packing: 'TrueBatch Injectables Packing', truebatch_api: 'TrueBatch API' };
 export type LinkState = 'absent' | 'down' | 'ok';
 export const PROVIDER_NAME: Record<Provider, string> = { deviations: 'Deviations', qms: 'QMS', logbook: 'Logbook', mms: 'MMS', recruitment: 'Recruitment', truebatch: 'TrueBatch', qual: 'Qualification' };
 

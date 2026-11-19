@@ -210,6 +210,17 @@ describe('OOS on the server', () => {
     expect(((await as('analyst', 'GET', `/api/analyses/${aid}`)).json() as { oos: { oosNo: string }[] }).oos).toMatchObject([{ oosNo: o.oos.oosNo }]);
     expect(await view(o.oos.oosNo)).toEqual({ oos_number: o.oos.oosNo, status: 'OPEN', phase_ii_needed: false, deviation_number: null, test_name: 'pH', shown: '7.4', closed: false });
     expect((await detail(sid)).approvalProblems).toContain(`${o.oos.oosNo} (pH) is open: the sample is approved only after the OOS is concluded.`);
+    // LIMS-15: an OOS shows the result as reported, rounded as the limit is written (found on the demo: OOS260001 showed
+    // the loss on drying to 49 decimals); the full value stays in the record.
+    const s2 = await sampleOf();
+    await analysed(s2, '7.4567', false);
+    const o2 = await get((await oosOf(s2))[0]!.id);
+    expect(o2.oos.result.shown).toBe('7.5');
+    expect((await view(o2.oos.oosNo))!.shown).toBe('7.5');
+    const [pub] = await t.owner.unsafe(`select value::text from ${t.schema}_report.oos_v1 where oos_number = '${o2.oos.oosNo}'`);
+    expect(pub!.value).toBe('7.5');
+    const [rec] = await t.owner<{ value: string }[]>`select result->>'value' as value from oos where oos_no = ${o2.oos.oosNo}`;
+    expect(rec!.value).toBe('7.4567');
   });
 
   it('LIMS-24 LIMS-48 phase I finds a laboratory error; QA invalidates; the original analysis stays, marked invalidated; the authorised retest passes and the sample is approved', async () => {
