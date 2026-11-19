@@ -613,10 +613,11 @@ Found making the TrueBatch Liquids release CoA (TL260004) on the demo screens.
 | Every production edition | One link per TrueBatch edition (`TRUEBATCH_<EDITION>_DATABASE_URL`, `shared/engine/links.ts` `TB_EDITIONS`), read as one provider "TrueBatch": `batch_fact_v1` of truebatch, truebatch_capsules, truebatch_liquids, truebatch_injectables and truebatch_api. A list is the rows of the editions that answer (down only when none does); a lookup that finds nothing while one edition is down answers down, so the batch may be typed by hand. Each batch names its edition ("TrueBatch Liquids batch TL260004"). |
 | Bulk release sample | A batch takes its release sample from production on (the bulk at its QA hold, before packing) until it is released; never when rejected or cancelled (`batchWaiting`). |
 | OOS as reported | The OOS screens and `oos_v1` (value and shown, migration `0024`) give the result rounded half up as its limit is written, the CoA's rule (`reportedFigure`); the full value stays in the OOS record and its worked line. Found on the demo: OOS260001 showed 0.8991… % for 0.9 %. |
+| Bare reported figure | The TrueBatch–LIMS contract: `result_v1.reported` is the figure as reported, rounded as the limit is written, as text without its unit ('1.25', '0.500'); a result with no number gives its text ('Conforms: …'). Every row, those decided before `reported` was kept too (rounded in the view). `reported_text` appended at the end: the printed text with its unit, as on the CoA. Migration `0025`. |
 
 ## In-process samples, individual values, sample_v1 (owner 19 Nov 2026)
 
-In-process tests in every TrueBatch edition (Injectables and Liquids bulk tests, API IPC, Tablets and Capsules BU/CU) are picked from LIMS, not typed. Migration `0025`. No new mechanism: a sample purpose, a column, a counter and published columns.
+In-process tests in every TrueBatch edition (Injectables and Liquids bulk tests, API IPC, Tablets and Capsules BU/CU) are picked from LIMS, not typed. Migration `0026`. No new mechanism: a sample purpose, a column, a counter and published columns.
 
 | What | How |
 |---|---|
