@@ -335,6 +335,15 @@ describe('EM and water on the server', () => {
     expect(rows).toEqual([expect.objectContaining({ point_code: 'B101-SP1', point_kind: 'ROOM', room_code: 'B101', room_grade: 'B', sampling_kind: 'settle plate', state: 'in operation',
       value: '7', unit: 'CFU', alert_limit: '3', action_limit: '5', level: 'ACTION', excursion_status: 'CLOSED', deviation_number: 'DEV-26-201', decision: 'REJECTED' })]);
     expect((await t.owner.unsafe(`select em_id from ${t.schema}_report.em_v1`))[0]!.em_id).toMatch(/^[0-9a-f-]{36}$/);
+    // At its end (owner 19 Nov 2026): the time taken, and the batch it was taken during (none here; TrueBatch is not
+    // linked in this test, so a batch given is typed by hand and checked).
+    const [first] = await t.owner.unsafe(`select sampled_at, batch_number from ${t.schema}_report.em_v1`);
+    expect(first!.sampled_at).toBeInstanceOf(Date);
+    expect(first!.batch_number).toBeNull();
+    const again = await as('sampler', 'POST', '/api/em/take', { planVersionId: planId, point: 'p1', sampling: 'sp', batch: 'B26-077', reason: 'Filling of batch B26-077' });
+    expect(again.statusCode, again.body).toBe(200);
+    const [withBatch] = await t.owner.unsafe(`select batch_number from ${t.schema}_report.em_v1 where sample_number = '${(again.json() as { sampleNo: string }).sampleNo}'`);
+    expect(withBatch!.batch_number).toBe('B26-077');
   });
 
   it('LIMS-36 EM adverse trends: the first Staphylococcus epidermidis at B101 is a new organism QC acknowledges with the reason (insert-only, once)', async () => {

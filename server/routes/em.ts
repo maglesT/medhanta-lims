@@ -122,6 +122,13 @@ export function emRoutes(app: FastifyInstance, sql: Sql) {
 
   // ---- The schedule (LIMS-36, LIMS-37) ----
 
+  // The TrueBatch batches an EM sampling may be taken during (owner 19 Nov 2026: picked, never typed): those in
+  // production or waiting for release, of every edition; the link's state (absent or down: typed, then checked).
+  app.get('/api/em/batches', reader, async () => {
+    const r = await app.links.truebatch.waiting();
+    return { link: r.state, batches: r.state === 'ok' ? r.value.map((b) => ({ batchNumber: b.batchNumber, productCode: b.productCode, status: b.status, edition: b.edition ?? 'truebatch' })) : [] };
+  });
+
   // What the effective plans make due today, overdue (the previous period missed), and the per-batch samplings.
   app.get('/api/em/due', reader, async () => {
     const plans = await effectivePlans(sql);

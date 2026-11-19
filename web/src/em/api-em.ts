@@ -53,6 +53,7 @@ export const getPlan = (id: number) => api<PlanVersion>('GET', `/api/master-vers
 export const savePlan = (id: number, doc: MonitoringDoc) => api<{ ok: true }>('PUT', `/api/master-versions/${id}`, { doc });
 export const createPlan = (doc: MonitoringDoc) => api<{ id: number }>('POST', '/api/masters', { kind: 'monitoring', doc });
 export const getDue = () => api<Due>('GET', '/api/em/due');
+export const emBatches = () => api<{ link: string; batches: { batchNumber: string; productCode: string | null; status: string; edition: string }[] }>('GET', '/api/em/batches');
 export const take = (b: object) => api<{ ok: true; sampleId: number; sampleNo: string; byHand: boolean }>('POST', '/api/em/take', b);
 export const getMap = (point?: string) => api<{ groups: MapGroup[] }>('GET', `/api/em/map${point ? `?point=${encodeURIComponent(point)}&n=20` : ''}`);
 export const listExcursions = () => api<Excursions>('GET', '/api/em/excursions');

@@ -13,7 +13,7 @@ import { SampleScreen } from '../samples/SampleScreen.js';
 import { PlanEditor } from './PlanEditor.js';
 import { ExcursionScreen } from './ExcursionScreen.js';
 import {
-  DUE_CHIP, LEVEL_CHIP, LEVEL_WORDS, STATUS_CHIP, createPlan, getDue, getMap, importReport, listExcursions, listImports, listPlans, openExcursion, take,
+  DUE_CHIP, LEVEL_CHIP, LEVEL_WORDS, STATUS_CHIP, createPlan, getDue, emBatches, getMap, importReport, listExcursions, listImports, listPlans, openExcursion, take,
   type Due, type DueRow, type Excursions, type Imports, type MapGroup, type Pending, type PlanRow,
 } from './api-em.js';
 import '../designer/designer.css';
@@ -114,6 +114,9 @@ function DueTab({ me, onSample }: { me: Me; onSample: (id: number) => void }) {
 function TakeDialog({ row, onDone, onCancel }: { row: Due['perBatch'][number] & Partial<Pick<DueRow, 'due' | 'shifts' | 'shiftsTaken' | 'taken' | 'needed'>>; onDone: (no: string) => void; onCancel: () => void }) {
   const [shift, setShift] = useState('');
   const [batch, setBatch] = useState('');
+  // The batches running now, from TrueBatch: picked (per batch: needed; otherwise: during which batch, if any).
+  const [batches, setBatches] = useState<Awaited<ReturnType<typeof emBatches>> | null>(null);
+  useEffect(() => { emBatches().then(setBatches, () => setBatches({ link: 'down', batches: [] })); }, []);
   const [person, setPerson] = useState('');
   const [reason, setReason] = useState('');
   const [error, setError] = useState('');
@@ -134,7 +137,11 @@ function TakeDialog({ row, onDone, onCancel }: { row: Due['perBatch'][number] & 
         <p className="muted small">Tested to {row.spec?.number}, {row.spec?.testName}: {row.spec?.limit}.</p>
         {row.frequency === 'per shift' && <label>Shift<select aria-label="Shift" value={shift} onChange={(e) => setShift(e.target.value)}><option value="">(choose)</option>
           {Array.from({ length: row.shifts ?? 3 }, (_, i) => i + 1).map((n) => <option key={n} value={n} disabled={row.shiftsTaken?.includes(n)}>{n}{row.shiftsTaken?.includes(n) ? ' (taken)' : ''}</option>)}</select></label>}
-        {row.frequency === 'per batch' && <label>Batch number<input aria-label="Batch number" value={batch} onChange={(e) => setBatch(e.target.value)} /></label>}
+        {batches?.link === 'ok' ? (
+          <label>{row.frequency === 'per batch' ? 'Batch' : 'Taken during batch (if any)'}<select aria-label="Batch number" value={batch} onChange={(e) => setBatch(e.target.value)}>
+            <option value="">{row.frequency === 'per batch' ? '(choose)' : '(none)'}</option>
+            {batches.batches.map((b) => <option key={`${b.edition}:${b.batchNumber}`} value={b.batchNumber}>{b.batchNumber} · {b.productCode ?? ''} · {b.status.toLowerCase().replaceAll('_', ' ')}</option>)}</select></label>
+        ) : row.frequency === 'per batch' && <label>Batch number (TrueBatch not answering: typed, a second person checks)<input aria-label="Batch number" value={batch} onChange={(e) => setBatch(e.target.value)} /></label>}
         {row.person && <label>Person sampled<input aria-label="Person sampled" value={person} onChange={(e) => setPerson(e.target.value)} /></label>}
         {again && <label>Already taken this period: why again<input aria-label="Reason" value={reason} onChange={(e) => setReason(e.target.value)} /></label>}
         {error && <p className="error" role="alert">{error}</p>}
