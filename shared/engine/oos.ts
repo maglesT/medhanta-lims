@@ -132,6 +132,8 @@ export const OOS_ACTIONS: Record<OosAction, { event: OosEventKind; permissions: 
 };
 export const OOS_ACTION_NAMES = Object.keys(OOS_ACTIONS) as OosAction[];
 
+/** A phase II deviation QA concludes the OOS after: closed, or cancelled in Deviations as not a deviation (owner, 20 Nov 2026). */
+export const OOS_DEVIATION_ENDED = ['closed', 'cancelled'];
 /** What the server read of the phase II deviation now: its status in Deviations, or the link's state when it did not answer. */
 export type DeviationNow = { state: 'ok'; status: string | null } | { state: 'absent' | 'down' };
 
@@ -200,7 +202,7 @@ export function oosRefusal(action: OosAction, f: OosFacts, events: readonly OosE
       if (p.typed && !p.checked) return 'A second person checks the deviation number typed by hand first.';
       if (deviation?.state === 'ok') {
         if (deviation.status === null) return `${p.reference} is not in the Deviations system.`;
-        if (deviation.status !== 'closed') return `${p.reference} is ${deviation.status.replaceAll('_', ' ')} in Deviations: QA concludes once it is closed there.`;
+        if (!OOS_DEVIATION_ENDED.includes(deviation.status)) return `${p.reference} is ${deviation.status.replaceAll('_', ' ')} in Deviations: QA concludes once it is closed there.`;
       }
       // LIMS-24: an invalidation needs an assignable laboratory cause, here one found by the phase II investigation.
       if (input.outcome === 'invalidated' && !input.cause?.trim()) return 'An invalidation needs the assignable laboratory cause found.';

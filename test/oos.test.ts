@@ -82,6 +82,9 @@ describe('the OOS rules', () => {
     // Read now from Deviations: open there, QA waits; closed, QA concludes; unreachable, QA confirms by hand.
     expect(oosRefusal('conclude', facts, ev, qa, { outcome: 'confirmed' }, { state: 'ok', status: 'investigation' })).toMatch(/is investigation in Deviations: QA concludes once it is closed there/);
     expect(oosRefusal('conclude', facts, ev, qa, { outcome: 'confirmed' }, { state: 'ok', status: 'closed' })).toBeNull();
+    // Cancelled in Deviations as not a deviation (owner, 20 Nov 2026): ended, QA concludes; rejected is not an end for phase II.
+    expect(oosRefusal('conclude', facts, ev, qa, { outcome: 'confirmed' }, { state: 'ok', status: 'cancelled' })).toBeNull();
+    expect(oosRefusal('conclude', facts, ev, qa, { outcome: 'confirmed' }, { state: 'ok', status: 'rejected' })).toMatch(/is rejected in Deviations/);
     expect(oosRefusal('conclude', facts, ev, qa, { outcome: 'confirmed' }, { state: 'down' })).toBeNull();
     expect(oosRefusal('conclude', facts, ev, qa, { outcome: 'invalidated' }, { state: 'ok', status: 'closed' })).toBe('An invalidation needs the assignable laboratory cause found.');
   });

@@ -7,7 +7,7 @@ import { plantTime, type Me } from '../api.js';
 import { analysisLink, go, plainError } from '../api-floor.js';
 import { SignDialog } from '../components/SignDialog.js';
 import { IssueDialog } from '../floor/IssueDialog.js';
-import { OOS_STATUS_WORDS, oosClosed, type OosAction } from '../../../shared/engine/oos.js';
+import { OOS_DEVIATION_ENDED, OOS_STATUS_WORDS, oosClosed, type OosAction } from '../../../shared/engine/oos.js';
 import { OOS_CHIP, OOS_LABEL, getOos, oosAction, type OosDetail, type OosEntry } from './api-oos.js';
 import '../designer/designer.css';
 import '../floor/floor.css';
@@ -105,7 +105,7 @@ export function OosScreen({ me, id }: { me: Me; id: number }) {
       {(d.status === 'phase II' || d.phase2) && (
         <Phase title="Phase II: manufacturing investigation" sub="in Deviations; QA concludes when its deviation is closed">
           {d.phase2 && (
-            <p className={d.phase2.deviation?.status === 'closed' ? 'all-good' : 'notice info'}>
+            <p className={OOS_DEVIATION_ENDED.includes(d.phase2.deviation?.status ?? '') ? 'all-good' : 'notice info'}>
               Deviation <b>{d.phase2.reference}</b>{d.phase2.typed ? ' (typed by hand)' : ''}{d.phase2.filed ? ' (filed in Deviations from this OOS)' : ''} · {d.phase2.link === 'ok' ? (d.phase2.deviation ? `${d.phase2.deviation.status.replaceAll('_', ' ')} in Deviations${d.phase2.deviation.title ? `: ${d.phase2.deviation.title}` : ''}` : 'not in Deviations') : 'Deviations does not answer now'}
               {d.phase2.typed && (d.phase2.checked ? ' · checked by a second person' : ' · waiting for a second person\'s check')}
             </p>)}

@@ -314,7 +314,9 @@ describe('EM and water on the server', () => {
     expect(d.excursion.status).toBe('open');
     expect((await as('sampler', 'POST', `/api/em/excursions/${excursionId}/close`, { text: 'x' })).statusCode).toBe(403);
     expect((await as('qcman', 'POST', `/api/em/excursions/${excursionId}/close`, { text: 'Gowning breach' })).json().message).toMatch(/still open in Deviations/);
-    await t.owner.unsafe(`update ${dv}.deviation_v1 set status = 'closed', closed_at = now() where number = 'DEV-26-201'`);
+    // Cancelled in Deviations as not a deviation (owner, 20 Nov 2026; closed_at stays empty): ended, as closed.
+    await t.owner.unsafe(`update ${dv}.deviation_v1 set status = 'cancelled' where number = 'DEV-26-201'`);
+    expect((await detail()).deviation).toMatchObject({ number: 'DEV-26-201', closed: true });
     expect((await as('qcman', 'POST', `/api/em/excursions/${excursionId}/close`, { text: 'Gowning breach; operator retrained' })).statusCode).toBe(200);
     expect((await detail()).excursion.status).toBe('closed');
   });

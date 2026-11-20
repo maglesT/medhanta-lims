@@ -36,7 +36,7 @@ export function stoppedText<T extends string | Date>(t: { personName: string; at
 
 /**
  * A note with a reference is a linked deviation. While the Deviations link answers, its status is Deviations' (LIMS-20):
- * open until closed (or rejected) there. Otherwise it is open until QA closes it by hand with a reason.
+ * open until closed, rejected or cancelled ('Not a deviation', owner 20 Nov 2026) there. Otherwise it is open until QA closes it by hand with a reason.
  * The number comes back too (owner, 17 Nov 2026): a note written without a number that Deviations filed a deviation
  * from (its deviation_v1.source_ref names the note, deviation_note_v1) is that deviation, read live while the link
  * answers (`filed`). `typed`: the number was typed by hand while the link was off or down.
@@ -47,8 +47,8 @@ export interface Deviation { note: number; step: string; reference: string; text
 export interface DeviationStatus { status: string; closedAt: string | null; number?: string }
 /** The key, in the deviations read, of the deviation filed from a note (its number is not in the note). */
 export const filedKey = (note: number) => `note:${note}`;
-export const DEVIATION_DONE = ['closed', 'rejected'];
-const DEVIATION_WORDS: Record<string, string> = { classification: 'waiting for classification', investigation: 'under investigation', capa: 'waiting for its CAPA', closure: 'waiting for closure' };
+export const DEVIATION_DONE = ['closed', 'rejected', 'cancelled'];
+const DEVIATION_WORDS: Record<string, string> = { classification: 'waiting for classification', investigation: 'under investigation', capa: 'waiting for its CAPA', closure: 'waiting for closure', cancelled: 'cancelled as not a deviation' };
 /** A status of the Deviations system in plain words (its workflow step names are not shown as keys). */
 export const deviationStatusWords = (s: string) => DEVIATION_WORDS[s] ?? s.replaceAll('_', ' ');
 export function deviations(events: readonly StepEvent[], analysisEvents: readonly AnalysisEvent[], read?: ReadonlyMap<string, DeviationStatus> | null): Deviation[] {

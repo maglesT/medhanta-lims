@@ -294,14 +294,15 @@ describe('LIMS-20 Deviations: the deviation number and its status come from the 
     expect(await devs()).toMatchObject({ deviations: [{ reference: 'DEV-26-0001', open: false, status: 'closed' }] });
   });
 
-  it('LIMS-20 a deviation is open until Deviations has it closed or rejected (the server passes the statuses in); without them, until closed by hand', () => {
+  it('LIMS-20 a deviation is open until Deviations has it closed, rejected or cancelled (the server passes the statuses in); without them, until closed by hand', () => {
     const doc = small([{ steps: [{ checker: true }] }]);
     const events = [ev('started', '0.1.0.1', { min: 1 }), ev('done', '0.1.0.1', { min: 2 }), ev('checked', '0.1.0.1', { person: 2, min: 3 }),
       ev('note', '0.1.0.1', { min: 4, payload: { text: 'pH', reference: 'DEV-26-001' } })];
     const open = (status?: string) => analysisView(doc, events, [], at(10), status ? new Map([['DEV-26-001', { status, closedAt: null }]]) : null).deviations
       .map((d) => [d.reference, d.where, d.open, d.status]);
     expect(open('investigation')).toEqual([['DEV-26-001', 'Stage 0 › Check a value against limits: pH', true, 'investigation']]);
-    expect([open('closed')[0]![2], open('rejected')[0]![2]]).toEqual([false, false]);
+    expect([open('closed')[0]![2], open('rejected')[0]![2], open('cancelled')[0]![2]]).toEqual([false, false, false]);
+    expect(deviationText({ reference: 'DEV-26-001', open: false, status: 'cancelled' })).toBe('DEV-26-001 · cancelled as not a deviation (Deviations)');
     expect(open()).toEqual([['DEV-26-001', 'Stage 0 › Check a value against limits: pH', true, undefined]]);
   });
 

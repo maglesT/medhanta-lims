@@ -10,6 +10,7 @@ import { plantToday } from './inventory.js';
 import { sampleTestResults } from './analyses.js';
 import type { SpecDoc } from '../../shared/master/spec.js';
 import { limitText } from '../../shared/master/spec.js';
+import { DEVIATION_DONE } from '../../shared/engine/release.js';
 import { COLONY_KINDS, PERSON_KINDS, WATER_SYSTEMS, pointWhere, type MonitoringDoc, type MonitoringPoint, type Sampling, type SamplingKind } from '../../shared/master/monitoring.js';
 import {
   REPORT_LAYOUTS, dueList, excursionLevel, excursionRefusal, excursionStatus, parseReport, periodOf, rowWords,
@@ -107,7 +108,7 @@ async function deviationNow(app: FastifyInstance, number: string) {
   if (r.state !== 'ok') return { link: r.state, known: null, closed: null, shown: null };
   const d = r.value.get(number);
   if (!d) return { link: 'ok' as const, known: false, closed: null, shown: null };
-  return { link: 'ok' as const, known: true, closed: d.closedAt !== null || /^(closed|rejected)$/i.test(d.status), shown: `${d.number}: ${d.title ?? ''} (${d.status})` };
+  return { link: 'ok' as const, known: true, closed: d.closedAt !== null || DEVIATION_DONE.includes(d.status.toLowerCase()), shown: `${d.number}: ${d.title ?? ''} (${d.status})` };
 }
 
 export function emRoutes(app: FastifyInstance, sql: Sql) {
