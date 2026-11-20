@@ -187,10 +187,13 @@ describe('trends on the server', () => {
     const rows = await t.owner.unsafe(`select lot_number, test_key, value::text, limit_text, limit_low, limit_high, result_status, out_of_trend, oot_answer, oos_number, spec_number, decision, purpose, item_code
       from ${t.schema}_report.trend_v1 where item_code = 'RM-081' order by decided_at`);
     expect(rows).toHaveLength(11);
-    expect(rows.at(-1)).toEqual({ lot_number: 'RM81-012', test_key: 'ph', value: '6.6', limit_text: '5.0 to 7.0', limit_low: '5.0', limit_high: '7.0', result_status: 'PASS',
+    expect(rows.at(-1)).toEqual({ lot_number: 'RM81-012', test_key: 'SPEC-RM-081:ph', value: '6.6', limit_text: '5.0 to 7.0', limit_low: '5.0', limit_high: '7.0', result_status: 'PASS',
       out_of_trend: true, oot_answer: 'INVESTIGATION', oos_number: null, spec_number: 'SPEC-RM-081', decision: 'APPROVED', purpose: 'release', item_code: 'RM-081' });
     const [{ id }] = (await t.owner.unsafe(`select trend_id::text as id from ${t.schema}_report.trend_v1 limit 1`)) as unknown as [{ id: string }];
     expect(id).toMatch(/^[0-9a-f-]{36}$/);
+    // test_key names one test of an item across all its samples and specifications (Operations CPV picks by it).
+    const mixed = await t.owner.unsafe(`select item_code, test_key from ${t.schema}_report.trend_v1 group by 1, 2 having count(distinct test_name) > 1`);
+    expect(mixed).toEqual([]);
   });
 
   it('LIMS-42 the APQR summary of the material over a period: results with Cpk, lots, OOT, the specification and method made effective, exported as CSV and PDF', async () => {
