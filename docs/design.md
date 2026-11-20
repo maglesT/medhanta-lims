@@ -47,7 +47,8 @@ answering) or **ok**.
   QA's review and the PDF, and it blocks release until closed there. A number typed while the link was off says
   "typed by hand".
 - **QMS** (`change_v1`, planned): the change control at approval must exist and be QA-approved, in a step of
-  `CHANGE_STEPS`, and its products must name the master's product (code or name, without case); one that names no
+  `CHANGE_STEPS`, and it must name the master's product: its code in `product_codes` (read when QMS gives it), or its
+  code or whole name in `products` (names carry commas, so a name counts between separators); one that names no
   product is taken with a warning to QA. By hand: another person makes the version effective.
 - **Logbook** (`equipment_status_v1`, planned): a machine or room must be fit for use and not in use by another batch,
   and not kept for another product: after an antibiotic the Logbook names in `only_product` (its last column, read

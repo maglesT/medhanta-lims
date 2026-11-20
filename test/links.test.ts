@@ -31,7 +31,7 @@ beforeAll(async () => {
       create table ${S.dv}.deviation_v1 (number text, status text, classification text, opened_at timestamptz, closed_at timestamptz, product text, batch text,
         batch_norm text, outcome text, read_at timestamptz default now(), data_as_of timestamptz default now(), title text, source_ref text);
       create table ${S.qms}.change_v1 (number text, status text, title text, products text, qa_approved_at timestamptz, closed_at timestamptz,
-        read_at timestamptz default now(), data_as_of timestamptz default now());
+        product_codes text[], read_at timestamptz default now(), data_as_of timestamptz default now());
       create table ${S.lb}.equipment_status_v1 (master_id text, code text, kind text, state text, fit_for_use boolean, blockers text[], warnings text[],
         in_use_batch text, clean_until timestamptz, cleaned_at timestamptz, cleaned_by text, calibration_due date, qualification text,
         checked_at timestamptz default now(), read_at timestamptz default now(), data_as_of timestamptz default now());
@@ -367,6 +367,15 @@ describe('LIMS-01 QMS: a new master version needs a QA-approved change control',
     const api = { productCode: 'API-ATV', productName: 'Atorvastatin calcium' };
     expect([c('FG-ATV20 Atorvastatin calcium film-coated tablets 20 mg'), c('Atorvastatin calcium'), c('API-ATV Atorvastatin calcium'), c('API-ATV, FG-ATV20')].map((x) => namesProduct(x, api)))
       .toEqual(['no', 'yes', 'yes', 'yes']);
+    // Product names carry commas: a name counts whole between separators; QMS's product codes count first.
+    const omz = 'Omeprazole delayed-release capsules 20 mg (enteric-coated pellets in hard capsules, size 2), Omeprazole delayed-release capsules 20 mg, blister 10 x 10 (India)';
+    const cap = { productCode: 'CAP-OMZ20', productName: 'Omeprazole delayed-release capsules 20 mg (enteric-coated pellets in hard capsules, size 2)' };
+    const pk = { productCode: 'PK-OMZ20-B10', productName: 'Omeprazole delayed-release capsules 20 mg, blister 10 x 10 (India)' };
+    const apiOmz = { productCode: 'API-OMZ', productName: 'Omeprazole' };
+    expect([cap, pk, apiOmz].map((x) => namesProduct(c(omz), x))).toEqual(['yes', 'yes', 'no']);
+    const coded = { ...c('Omeprazole capsules and blister'), productCodes: ['CAP-OMZ20', 'PK-OMZ20-B10'] };
+    expect([cap, pk, apiOmz].map((x) => namesProduct(coded, x))).toEqual(['yes', 'yes', 'no']);
+    expect([namesProduct({ ...c(null), productCodes: ['CAP-OMZ20'] }, cap), namesProduct({ ...c(null), productCodes: ['CAP-OMZ20'] }, apiOmz), namesProduct({ ...c(null), productCodes: [] }, cap)]).toEqual(['yes', 'no', 'none']);
   });
 
   it('LIMS-01 QMS down: the number is typed, and another person makes the version effective', async () => {

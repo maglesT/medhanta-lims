@@ -67,33 +67,36 @@ export const deviationsClient = (l: Link) => ({
 // ---- QMS: report.change_v1 (planned). A change control counts as approved once QA approved it and it is in one
 // of these steps (an easy-to-change constant; the plan's question Q7).
 export const CHANGE_STEPS = ['implementation', 'closure', 'closed'];
-export interface ChangeRead { number: string; status: string; title: string | null; products: string | null; qaApprovedAt: string | null }
-type CcRow = { number: string; status: string; title: string | null; products: string | null; qa_approved_at: string | null };
-const cc = (r: CcRow): ChangeRead => ({ number: r.number, status: r.status, title: r.title, products: r.products, qaApprovedAt: r.qa_approved_at });
+export interface ChangeRead { number: string; status: string; title: string | null; products: string | null; qaApprovedAt: string | null; productCodes?: string[] | null }
+type CcRow = { number: string; status: string; title: string | null; products: string | null; qa_approved_at: string | null; product_codes: string[] | null };
+const cc = (r: CcRow): ChangeRead => ({ number: r.number, status: r.status, title: r.title, products: r.products, qaApprovedAt: r.qa_approved_at, productCodes: r.product_codes });
 export const approvedChange = (c: ChangeRead) => c.qaApprovedAt !== null && CHANGE_STEPS.includes(c.status);
 const word = (x: string) => new RegExp(`(^|[^a-z0-9])${x.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}($|[^a-z0-9])`);
 // What QMS writes when a change control names no product ("None" ticked on its form).
 const NO_PRODUCT = ['none', 'n/a', 'na', 'nil', '-', '—'];
 /**
- * Whether a change control's products name this product or material: by its code (a whole word, case-insensitive) or
- * by its whole name as one entry of the list ("Atorvastatin calcium" does not match "… Atorvastatin calcium tablets");
- * 'none' when it names no product (empty, or QMS's "none").
+ * Whether a change control names this product or material: by its code in QMS's product codes, or by its code (a whole
+ * word, case-insensitive) or its whole name in the products text. Product names can carry commas, so a name counts
+ * when it stands between separators (start, end, or a comma, semicolon or line break): "Atorvastatin calcium" does
+ * not match "… Atorvastatin calcium tablets". 'none' when it names no product (empty, or QMS's "none").
  */
 export function namesProduct(c: ChangeRead, product: { productCode: string; productName: string }): 'yes' | 'no' | 'none' {
-  const p = c.products?.trim().toLowerCase();
-  if (!p || NO_PRODUCT.includes(p)) return 'none';
   const code = product.productCode.trim().toLowerCase();
+  const codes = (c.productCodes ?? []).map((x) => x.trim().toLowerCase()).filter(Boolean);
+  if (code && codes.includes(code)) return 'yes';
+  const p = c.products?.trim().toLowerCase();
+  if (!p || NO_PRODUCT.includes(p)) return codes.length ? 'no' : 'none';
   const name = product.productName.trim().toLowerCase();
-  const entries = p.split(/[,;\n]/).map((x) => x.trim()).filter(Boolean);
-  return (code && word(code).test(p)) || (name && entries.some((x) => x === name || x === `${code} ${name}`)) ? 'yes' : 'no';
+  const entry = (x: string) => new RegExp(`(^|[,;\\n])\\s*${x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*($|[,;\\n])`);
+  return (code && word(code).test(p)) || (name && (entry(name).test(p) || entry(`${code} ${name}`).test(p))) ? 'yes' : 'no';
 }
 export const qmsClient = (l: Link) => ({
   change: (number: string) => l.read(async (q, v) => {
-    const [r] = await q<CcRow[]>`select number, status, title, products, qa_approved_at::text from ${v('change_v1')} where number = ${number} limit 1`;
+    const [r] = await q<CcRow[]>`select number, status, title, products, qa_approved_at::text, array(select jsonb_array_elements_text(coalesce(nullif(to_jsonb(c) -> 'product_codes', 'null'), '[]'))) as product_codes from ${v('change_v1')} c where number = ${number} limit 1`;
     return r ? cc(r) : null;
   }),
   approved: () => l.read(async (q, v) => (await q<CcRow[]>`
-    select number, status, title, products, qa_approved_at::text from ${v('change_v1')}
+    select number, status, title, products, qa_approved_at::text, array(select jsonb_array_elements_text(coalesce(nullif(to_jsonb(c) -> 'product_codes', 'null'), '[]'))) as product_codes from ${v('change_v1')} c
     where qa_approved_at is not null and status = any(${CHANGE_STEPS}) order by number desc limit 200`).map(cc)),
   // LIMS-09: QMS's approval of a material from a manufacturer through a supplier (report.supplier_approval_v1).
   supplierApproval: (materialId: string, manufacturerId: string, supplierId: string) => l.read(async (q, v) => {
