@@ -3,10 +3,11 @@
 // it, QA approves it with a change control number, then makes it effective (the previous effective one retires).
 import { useEffect, useState, type FormEvent } from 'react';
 import { ApiError, can, plantTime, type Me } from '../api.js';
-import { addComment, getReview, loadMasterData, reviewAction, STATE_LABEL, type MasterEvent, type ReviewAction, type ReviewData, type Version } from '../api-designer.js';
+import { addComment, getReview, getVersion, listMasters, loadMasterData, reviewAction, STATE_LABEL, type MasterEvent, type ReviewAction, type ReviewData, type Version } from '../api-designer.js';
 import { SignDialog } from '../components/SignDialog.js';
 import { useLinked } from '../api-floor.js';
-import { describeMaster, diffMasters, docTitle, type AnyDoc, type DiffSection, type Units } from './describe.js';
+import { describeMaster, diffMasters, docTitle, isSpec, type AnyDoc, type DiffSection, type ResultNames, type Units } from './describe.js';
+import { resultsOf } from '../../../shared/master/spec.js';
 import { placeLabel } from './model.js';
 
 const EVENT_TEXT: Record<MasterEvent['kind'], string> = { submitted: 'Sent for review', passed: 'Checked (passed)', returned: 'Returned to the author', approved: 'Approved by QA', effective: 'Made effective', retired: 'Retired' };
@@ -34,6 +35,19 @@ export function Review({ me, version, doc, blocked, onChanged, onGo }: {
   // Master data's units of the materials, named as master data names them (nos for units); without it, as in the master.
   const [units, setUnits] = useState<Units>();
   useEffect(() => { void loadMasterData().then((md) => setUnits(new Map(md.materials.flatMap((m) => (m.unit?.trim() ? [[m.itemId, m.unit.trim()]] : [])))), () => {}); }, []);
+  // A specification's tests name their results by the method's step names: read from each method's latest approved or
+  // effective version (the versions a test may pick); without them the plain view leaves the result out.
+  const [results, setResults] = useState<ResultNames>();
+  const methodIds = isSpec(doc) ? [...new Set(doc.tests.map((t) => t.method.masterId))].join(',') : '';
+  useEffect(() => {
+    if (!methodIds) return;
+    void listMasters().then(async (rows) => {
+      const ids = methodIds.split(',').map(Number);
+      const latest = ids.flatMap((m) => rows.filter((r) => r.masterId === m && (r.state === 'approved' || r.state === 'effective')).sort((a, b) => b.versionNo - a.versionNo).slice(0, 1));
+      const docs = await Promise.all(latest.map(async (r) => [r.masterId, (await getVersion(r.id)).doc] as const));
+      setResults(new Map(docs.flatMap(([m, d]) => resultsOf(d).map((x) => [`${m}|${x.ref}`, x.label] as const))));
+    }, () => {});
+  }, [methodIds]);
   if (!data) return <div className="skel skel-block" />;
 
   const close = () => { setDoing(null); setCc(''); setCcDone(false); setReason(''); setError(''); };
@@ -46,8 +60,8 @@ export function Review({ me, version, doc, blocked, onChanged, onGo }: {
     data.actions.includes(a) || (a === 'submit' && version.state === 'draft' && can(me, 'master.author'))
     // QA who typed the change control by hand sees why another person makes the version effective.
     || (a === 'make-effective' && version.state === 'approved' && can(me, 'master.approve')));
-  const sections: DiffSection[] = view === 'changes' && data.previous ? diffMasters(data.previous.doc, doc, units)
-    : describeMaster(doc, units).map((s) => ({ ...s, change: 'same', lines: s.lines.map((l) => ({ ...l, change: 'same' })) }));
+  const sections: DiffSection[] = view === 'changes' && data.previous ? diffMasters(data.previous.doc, doc, units, results)
+    : describeMaster(doc, units, results).map((s) => ({ ...s, change: 'same', lines: s.lines.map((l) => ({ ...l, change: 'same' })) }));
   const changed = data.previous ? diffMasters(data.previous.doc, doc).filter((s) => s.change !== 'same').length : 0;
 
   return (

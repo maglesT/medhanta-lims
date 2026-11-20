@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { Sql } from '../db.js';
 import { audit } from '../audit.js';
@@ -158,8 +158,9 @@ export function authRoutes(app: FastifyInstance, sql: Sql, signOn: SignOn) {
     });
   });
 
-  app.get('/api/me', { preHandler: requirePermission() }, async (req) => {
-    const u = req.user!;
-    return { id: u.id, username: u.username, fullName: u.fullName, permissions: u.permissions, ...(app.demo ? { demo: true } : {}) };
-  });
+  const meOf = (u: NonNullable<FastifyRequest['user']>) =>
+    ({ id: u.id, username: u.username, fullName: u.fullName, permissions: u.permissions, ...(app.demo ? { demo: true } : {}) });
+  app.get('/api/me', { preHandler: requirePermission() }, async (req) => meOf(req.user!));
+  // The screen's first look (backlog item 7): signed out is an answer here, not an error, so the browser logs no 401.
+  app.get('/api/session', async (req) => ({ me: req.user ? meOf(req.user) : null }));
 }

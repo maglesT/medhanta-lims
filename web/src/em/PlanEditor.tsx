@@ -140,12 +140,12 @@ export function PlanEditor({ me, versionId, onBack, onOpen }: { me: Me; versionI
                           <option value="">(choose)</option>{STATES.map((x) => <option key={x}>{x}</option>)}</select></label>}
                         <label>Specification<select aria-label={`${label} specification`} value={s.spec?.masterId ?? ''} onChange={(e) => {
                           const sp = specs.find((x) => x.masterId === Number(e.target.value));
-                          setS(i, k, { spec: sp ? { masterId: sp.masterId, testKey: sp.tests[0]?.key ?? 'test', number: sp.number, testName: sp.tests[0]?.name ?? '', method: '', limit: sp.tests[0] ? limitText(sp.tests[0]) : '' } : null });
+                          setS(i, k, { spec: sp ? { masterId: sp.masterId, testKey: sp.tests[0]?.key ?? 'test', number: sp.number, testName: sp.tests[0]?.name ?? '', method: sp.tests[0] ? `${sp.tests[0].method.code} ${sp.tests[0].method.name}` : '', limit: sp.tests[0] ? limitText(sp.tests[0]) : '' } : null });
                         }}><option value="">(choose the specification)</option>
                           {specs.filter((x) => x.type === type).map((x) => <option key={x.masterId} value={x.masterId}>{x.number}, version {x.versionNo} ({x.state})</option>)}</select></label>
                         {spec && <label>Test (its limits apply)<select aria-label={`${label} test`} value={s.spec?.testKey ?? ''} onChange={(e) => {
                           const t = spec.tests.find((x) => x.key === e.target.value)!;
-                          setS(i, k, { spec: { ...s.spec!, testKey: t.key, testName: t.name, limit: limitText(t) } });
+                          setS(i, k, { spec: { ...s.spec!, testKey: t.key, testName: t.name, method: `${t.method.code} ${t.method.name}`, limit: limitText(t) } });
                         }}>{spec.tests.map((t) => <option key={t.key} value={t.key}>{t.name}: {limitText(t)}</option>)}</select></label>}
                         <label>Taken each time<input aria-label={`${label} quantity`} value={s.quantity} onChange={(e) => setS(i, k, { quantity: e.target.value })} /></label>
                         <label>Isolates identified<select aria-label={`${label} identify`} value={s.identify} onChange={(e) => setS(i, k, { identify: e.target.value as Sampling['identify'] })}>

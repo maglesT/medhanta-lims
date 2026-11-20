@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { findBlock } from '../shared/blocks/index.js';
 import { doneProblems, evaluate, openSteps, timers, type StepEvent, type Value } from '../shared/engine/index.js';
+import { askedFields } from '../shared/engine/analysis.js';
 import { masterChecks } from '../shared/master/checks.js';
 import { masterSchema, type MasterDoc } from '../shared/master/schema.js';
 import { specSchema, type SpecDoc } from '../shared/master/spec.js';
@@ -231,5 +232,14 @@ describe('LIMS-38 a positive sterility test on the server', () => {
     expect((await get()).status).toBe('invalidated');
     const an = (await as('micro', 'GET', `/api/analyses/${a.id}`)).json() as { analysis: { status: string } };
     expect(an.analysis.status).toBe('invalidated');
+  });
+});
+
+describe('count colonies: the fields asked (display round 20 Nov)', () => {
+  it('a plate count asks the plates of the dilutions the method sets, never the MPN tubes; an MPN method asks only the tubes', () => {
+    const b = findBlock({ id: 'count', version: 1 })!;
+    const names = (settings: Record<string, unknown>) => askedFields(method([]), b, settings).map((f) => f.name).filter((n) => n !== 'counter' && n !== 'negativeControl');
+    expect(names({ method: 'plate count', dilution1: '10', dilution2: '100' })).toEqual(['plates1', 'tntc1', 'plates2', 'tntc2']);
+    expect(names({ method: 'MPN' })).toEqual(['tubes1', 'tubes2', 'tubes3']);
   });
 });

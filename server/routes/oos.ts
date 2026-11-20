@@ -76,7 +76,7 @@ export async function openOutsideOos(tx: Tx, o: { id: number; sampleId: number; 
 }
 
 type Row = { id: number; oosNo: string; sampleId: number; analysisId: number | null; outsideResultId: number | null; testKey: string; result: OosResult; openedBy: number; openedByName: string; openedAt: Date;
-  sampleNo: string; lotNo: string; purpose: string; item: { of: string; code: string; name: string }; analysisNo: string; spec: SpecDoc; specNumber: string; specVersionNo: number };
+  sampleNo: string; lotNo: string; purpose: string; item: { of: string; code: string; name: string }; duringBatch: string | null; analysisNo: string; spec: SpecDoc; specNumber: string; specVersionNo: number };
 type EventRow = OosEvent & { personName: string; at: Date; signature: { printedName: string; meaning: string; signedAt: Date } | null };
 
 /** The result as reported: rounded half up as the limit is written (an OOS opened before this kept the full value). */
@@ -90,6 +90,7 @@ const rounded = (r: Row): Row => {
 const ROW = (q: Sql | Tx) => q`
   select o.id::int, o.oos_no as "oosNo", o.sample_id::int as "sampleId", o.analysis_id::int as "analysisId", o.outside_result_id::int as "outsideResultId", o.test_key as "testKey", o.result,
     o.opened_by::int as "openedBy", u.full_name as "openedByName", o.opened_at as "openedAt", s.sample_no as "sampleNo", s.lot_no as "lotNo", s.purpose, s.item,
+    s.monitoring->>'batch' as "duringBatch",
     coalesce(a.analysis_no, x.report_no) as "analysisNo", v.doc as spec, v.doc->'header'->>'number' as "specNumber", v.version_no as "specVersionNo"
   from oos o join users u on u.id = o.opened_by join samples s on s.id = o.sample_id left join analyses a on a.id = o.analysis_id
   left join outside_results x on x.id = o.outside_result_id

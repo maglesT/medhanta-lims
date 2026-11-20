@@ -52,7 +52,7 @@ export function OosScreen({ me, id }: { me: Me; id: number }) {
       <div className="home-head">
         <div>
           <h1>{o.oosNo} <span className={OOS_CHIP[d.status]}>{OOS_LABEL[d.status]}</span></h1>
-          <p className="greeting">{OOS_STATUS_WORDS[d.status]} · <b>{o.item.code}</b> {o.item.name} · {o.item.of === 'material' ? 'lot' : 'batch'} {o.lotNo}</p>
+          <p className="greeting">{OOS_STATUS_WORDS[d.status]} · <b>{o.item.code}</b> {o.item.name} · {o.item.of === 'material' ? 'lot' : o.item.of === 'product' ? 'batch' : 'point'} {o.lotNo}{o.duringBatch ? ` · taken during batch ${o.duringBatch}` : ''}</p>
         </div>
       </div>
       {error && <p className="notice bad" role="alert">{error}</p>}

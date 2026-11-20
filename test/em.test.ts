@@ -293,6 +293,8 @@ describe('EM and water on the server', () => {
     expect(list.pending).toEqual([expect.objectContaining({ sampleId: plateSample, level: 'action', point: expect.objectContaining({ code: 'B101-SP1' }) })]);
     // The analysis's out-of-limit result opened its OOS (the existing flow).
     expect((await as('sampler', 'GET', `/api/samples/${plateSample}`)).json().oos).toHaveLength(1);
+    // oos_v1 says where an EM OOS is: the point and its room (no batch picked here); lot_number as before.
+    expect(await t.owner.unsafe(`select item_kind, point_code, room_code, batch_number from ${t.schema}_report.oos_v1`)).toEqual([{ item_kind: 'ROOM', point_code: 'B101-SP1', room_code: 'B101', batch_number: null }]);
     const open = (b: object) => as('sampler', 'POST', '/api/em/excursions', { sampleId: plateSample, ...b });
     expect((await open({})).json().message).toMatch(/over its action limit: give the deviation number/);
     expect((await open({ deviation: 'DEV-26-999' })).json().message).toMatch(/not in the Deviations system/);

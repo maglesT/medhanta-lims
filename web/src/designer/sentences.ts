@@ -14,21 +14,12 @@ type Calc = Block['calcs'][number];
 /** A label inside a sentence: each word lower-cased, except one with a capital after its first letter (pH, RSD, CFU). */
 export const lower = (label: string) => label.split(' ').map((w) => (/^.+[A-Z]/u.test(w) ? w : w.toLowerCase())).join(' ');
 /** "is" or "are" after a label: "the good tablets are", "the yield is". */
-const isAre = (label: string) => (/[^su]s$/.test(label.split(' ').at(-1) ?? '') ? 'are' : 'is');
-
-// Packing: the master's pack facts and the analysis facts recorded at issue, in words.
-const FACTS: Record<string, string> = {
-  'pack.unitsPerPack': 'the tablets per pack', 'pack.packsPerCarton': 'the packs per carton', 'pack.shelfLifeMonths': 'the approved shelf life',
-  'pack.expiryRule': 'the expiry rule', 'pack.type': 'the pack type', 'pack.destination': 'the destination', 'pack.gtin': 'the pack GTIN', 'pack.mrp': 'the MRP of the master',
-  'analysis.bulk': 'the bulk analysis number', 'analysis.mfgDate': 'the date of manufacture of the bulk', 'analysis.tablets': 'the bulk tablets issued',
-  'analysis.packs': 'the theoretical packs', 'analysis.line': 'the packing line',
-};
+const isAre = (label: string) => (/[^su]s$/.test(label.split(' ').at(-1) ?? '') && !/sis$/.test(label) ? 'are' : 'is');
 
 /** One input of a calculation as a part: "$gross" is a field, "$target" a setting, "$net" an earlier calculation. */
 function input(block: Block, x: unknown): Part {
   if (typeof x !== 'string' || !x.startsWith('$')) return written(block, x);
   const raw = x.slice(1).replace(/\?$/, '');
-  if (FACTS[raw]) return FACTS[raw];
   if (raw.startsWith('earlier.')) return `the ${lower(block.fields.find((f) => f.name === raw.slice(8))?.label ?? raw)} read in earlier rounds`;
   if (raw.startsWith('prev.')) return { prev: raw.slice(5) };
   if (block.settings.some((s) => s.name === raw)) return { setting: raw };

@@ -31,7 +31,7 @@ export function Em({ me }: { me: Me }) {
   const back = () => setScreen(null);
   if (screen && 'plan' in screen) return <PlanEditor me={me} versionId={screen.plan} onBack={back} onOpen={(plan) => setScreen({ plan })} />;
   if (screen && 'excursion' in screen) return <ExcursionScreen id={screen.excursion} onBack={back} onSample={(sample) => setScreen({ sample })} />;
-  if (screen && 'sample' in screen) return <SampleScreen me={me} id={screen.sample} onBack={back} />;
+  if (screen && 'sample' in screen) return <SampleScreen me={me} id={screen.sample} onBack={back} backTo="EM and water" />;
   if (screen && 'point' in screen) return <PointTrend point={screen.point} onBack={back} onSample={(sample) => setScreen({ sample })} />;
   return (
     <>

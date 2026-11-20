@@ -22,6 +22,9 @@ const sid = (cookie: string) => sessionKey(cookie.slice(4));
 describe('sign-on through core', () => {
   it('PL-01: the API refuses requests without a session', async () => {
     expect((await t.app.inject({ method: 'GET', url: '/api/me' })).statusCode).toBe(401);
+    // The screen's first look: signed out is a plain answer, no 401 in the browser console (backlog item 7).
+    const first = await t.app.inject({ method: 'GET', url: '/api/session' });
+    expect([first.statusCode, first.json()]).toEqual([200, { me: null }]);
     expect((await t.app.inject({ method: 'GET', url: '/api/master/products' })).statusCode).toBe(401);
   });
 
@@ -34,6 +37,7 @@ describe('sign-on through core', () => {
     expect(res.statusCode).toBe(302);
     expect(res.headers.location).toBe('/');
     expect((await call(t.app, cookie, 'GET', '/api/me')).json()).toEqual({ id, username, fullName: username.toUpperCase(), permissions: ['lims.analysis.perform'] });
+    expect((await call(t.app, cookie, 'GET', '/api/session')).json()).toEqual({ me: { id, username, fullName: username.toUpperCase(), permissions: ['lims.analysis.perform'] } });
     expect(await auditRows('login', id)).toHaveLength(1);
   });
 

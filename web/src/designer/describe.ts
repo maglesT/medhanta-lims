@@ -65,23 +65,26 @@ function describeMonitoring(doc: MonitoringDoc): Section[] {
     ...doc.points.map((p) => ({ key: `point:${p.key}`, title: `Point ${p.code}`, lines: [
       { key: 'where', text: `${p.code}, ${p.name || '(no description)'}: ${pointWhere(p)}${p.critical ? ', a critical location' : ''}.` },
       ...p.samplings.map((s) => ({ key: s.key, text: `${s.kind[0]!.toUpperCase()}${s.kind.slice(1)}, ${s.frequency}${s.state ? `, ${s.state}` : ''}, ${s.quantity}: ${s.spec
-        ? `specification ${s.spec.number}, ${s.spec.testName} (${s.spec.limit || 'no limit'}), method ${s.spec.method}` : '(no specification test)'}. Isolates identified: ${s.identify}.${s.adverse ? ` Adverse trend: ${s.adverse.n} alert or action results in the last ${s.adverse.m} samplings.` : ' Adverse trend: the default for its grade.'}` })),
+        ? `specification ${s.spec.number}, ${s.spec.testName} (${s.spec.limit || 'no limit'})${s.spec.method ? `, method ${s.spec.method}` : ''}` : '(no specification test)'}. Isolates identified: ${s.identify}.${s.adverse ? ` Adverse trend: ${s.adverse.n} alert or action results in the last ${s.adverse.m} samplings.` : ' Adverse trend: the default for its grade.'}` })),
     ] })),
   ];
 }
 
 const limitWords = (l: Limit) => [l.low !== undefined ? `${l.lowStrict ? 'more than' : 'not less than'} ${l.low}` : '', l.high !== undefined ? `${l.highStrict ? 'less than' : 'not more than'} ${l.high}` : '']
   .filter(Boolean).join(' and ') + (l.unit ? ` ${l.unit}` : '') + (l.alertLow !== undefined || l.alertHigh !== undefined ? ` (alert ${[l.alertLow && `below ${l.alertLow}`, l.alertHigh && `above ${l.alertHigh}`].filter(Boolean).join(', ')})` : '');
+/** A spec test's result by its step names ("Assay › HPLC run › Content"), keyed '<method master id>|<result ref>'. */
+export type ResultNames = ReadonlyMap<string, string>;
 /** A specification test in plain words: the limit as its type says, the method, the values it gives the method. */
-export function testText(t: SpecTest, n: number): string {
+export function testText(t: SpecTest, n: number, results?: ResultNames): string {
+  const result = results?.get(`${t.method.masterId}|${t.result}`);
   const limit = t.limitType === 'conforms' ? `Conforms: ${t.conforms ?? '(not said)'}` : t.limitType === 'report only' ? 'Reported only, no limit'
     : t.limitType === 'release and shelf life' ? `Release ${t.limit ? limitWords(t.limit) : '(not set)'}; shelf life ${t.shelfLifeLimit ? limitWords(t.shelfLifeLimit) : '(not set)'}`
     : t.limit ? `${t.limitType === 'alert and action' ? 'Action limit' : 'Limit'} ${limitWords(t.limit)}` : 'Limit (not set)';
   const trend = t.trendLimit ? `; trend limit ${limitWords(t.trendLimit)}` : '';
   const values = Object.entries(t.values).map(([k, v]) => `${k} ${typeof v === 'string' ? v : limitWords(v)}`).join('; ');
-  return `${n + 1}. ${t.name}: ${limit}${trend}. Method ${t.method.code} ${t.method.name}, result ${t.result}. Applies ${t.use === 'release and stability' ? 'at release and on stability' : t.use === 'release' ? 'at release' : 'on stability'}.${t.identity ? ' Identity test: on each container of a starting material.' : ''}${t.ipcField ? ` Answers the TrueBatch in-process field ${t.ipcField}.` : ''}${values ? ` Gives the method: ${values}.` : ''}`;
+  return `${n + 1}. ${t.name}: ${limit}${trend}. Method ${t.method.code} ${t.method.name}${result ? `, result ${result}` : ''}. Applies ${t.use === 'release and stability' ? 'at release and on stability' : t.use === 'release' ? 'at release' : 'on stability'}.${t.identity ? ' Identity test: on each container of a starting material.' : ''}${t.ipcField ? ` Answers the TrueBatch in-process field ${t.ipcField}.` : ''}${values ? ` Gives the method: ${values}.` : ''}`;
 }
-function describeSpec(doc: SpecDoc): Section[] {
+function describeSpec(doc: SpecDoc, results?: ResultNames): Section[] {
   const h = doc.header;
   return [
     { key: 'header', title: 'Header', lines: [
@@ -91,7 +94,7 @@ function describeSpec(doc: SpecDoc): Section[] {
       { key: 'sampling', text: h.sampling ? `Sampling plan: ${h.sampling.plan === 'square root' ? '1 + √N containers' : 'every container'}.${(['method', 'equipment', 'amount', 'subdivision', 'precautions', 'storage'] as const).map((k) => h.sampling?.[k] ? ` ${k[0]!.toUpperCase()}${k.slice(1)}: ${h.sampling[k]}.` : '').join('')}` : 'No sampling plan.' },
       { key: 'reduced', text: h.reducedTesting ? `Reduced testing on the supplier's certificate allowed for a QMS-approved supplier: identity tested on every lot; full testing every ${h.reducedTesting.fullEvery} lots and at least every ${h.reducedTesting.months} months.` : 'Every lot tested in full.' },
     ] },
-    { key: 'tests', title: 'Tests', lines: doc.tests.map((t, n) => ({ key: t.key, text: testText(t, n) })) },
+    { key: 'tests', title: 'Tests', lines: doc.tests.map((t, n) => ({ key: t.key, text: testText(t, n, results) })) },
   ];
 }
 
@@ -115,8 +118,8 @@ function describeProtocol(doc: ProtocolDoc): Section[] {
   ];
 }
 
-export function describeMaster(doc: AnyDoc, units?: Units): Section[] {
-  if (isSpec(doc)) return describeSpec(doc);
+export function describeMaster(doc: AnyDoc, units?: Units, results?: ResultNames): Section[] {
+  if (isSpec(doc)) return describeSpec(doc, results);
   if (isProtocol(doc)) return describeProtocol(doc);
   if (isMonitoring(doc)) return describeMonitoring(doc);
   const h = doc.header;
@@ -145,9 +148,9 @@ export interface DiffLine extends Line { change: Change; was?: string }
 export interface DiffSection { key: string; title: string; change: Change; lines: DiffLine[] }
 
 /** The changes from the previous version, line by line (by key; a step that moved shows its new number). */
-export function diffMasters(prev: AnyDoc, next: AnyDoc, units?: Units): DiffSection[] {
-  const before = new Map(describeMaster(prev, units).map((s) => [s.key, s]));
-  const after = describeMaster(next, units);
+export function diffMasters(prev: AnyDoc, next: AnyDoc, units?: Units, results?: ResultNames): DiffSection[] {
+  const before = new Map(describeMaster(prev, units, results).map((s) => [s.key, s]));
+  const after = describeMaster(next, units, results);
   const out: DiffSection[] = after.map((s) => {
     const old = before.get(s.key);
     const lines: DiffLine[] = s.lines.map((l) => {

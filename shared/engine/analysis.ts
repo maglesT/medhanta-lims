@@ -34,7 +34,17 @@ export function stepTitle(_doc: MasterDoc, st: Step): string {
   return [block?.name ?? st.key, what].filter(Boolean).join(': ');
 }
 /** The fields a step asks for: a pack without a leaflet is not asked about a leaflet. */
-export function askedFields(doc: MasterDoc, block: Block): Block['fields'] {
+export function askedFields(doc: MasterDoc, block: Block, settings: Record<string, unknown> = {}): Block['fields'] {
+  // Count colonies: the MPN tubes only in an MPN method; in a plate count, the plates of the dilutions the method sets.
+  if (block.id === 'count') {
+    const mpn = settings.method === 'MPN';
+    return block.fields.filter((f) => {
+      const k = /^(?:plates|tntc)(\d)$/.exec(f.name)?.[1];
+      if (/^tubes\d$/.test(f.name)) return mpn;
+      if (k) return !mpn && (k === '1' || (settings[`dilution${k}`] ?? '') !== '');
+      return true;
+    });
+  }
   return block.fields;
 }
 /** Where a step instance is, in words: "Granulation › Dry to an LOD limit (round 2)". */

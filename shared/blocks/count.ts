@@ -19,8 +19,8 @@ export const countSettings: BlockSetting[] = [
   { name: 'amount', label: 'Amount plated or filtered at each dilution (mL; air sampled for per m³)', kind: 'quantity', optional: true },
   { name: 'per', label: 'Result per', kind: 'text', options: ['CFU/g', 'CFU/mL', 'CFU/m³', 'CFU'] },
   { name: 'countable', label: 'Counting range', kind: 'text', options: ['TAMC: fewer than 250 per plate', 'TYMC: fewer than 50 per plate', '30 to 300 per plate', '25 to 250 per plate', '15 to 150 per plate', 'membrane: up to 100'] },
-  { name: 'acceptance', label: 'The limit is', kind: 'text', options: ['10^n', 'as written'] },
-  { name: 'limit', label: 'Limit (with the alert level when the specification has one)', kind: 'limit', optional: true },
+  { name: 'acceptance', label: 'How the limit is read (10^n: a limit of 10^n is met up to 2 × 10^n, so 1000 CFU/g up to 2000)', kind: 'text', options: ['10^n', 'as written'] },
+  { name: 'limit', label: 'Limit as the specification writes it (with the alert level when it has one)', kind: 'limit', optional: true },
 ];
 /** The L11 plate-count levels, by number (a level whose dilution the method leaves out is not used). */
 export const levelArgs = Object.fromEntries(levels.map((k) => [String(k), { dilution: k === 1 ? '$dilution1' : `$dilution${k}?`, counts: `$plates${k}?`, tntc: `$tntc${k}?` }]));

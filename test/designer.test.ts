@@ -166,6 +166,19 @@ describe('method designer', () => {
         spec: { masterId: 10, testKey: 'sp', number: 'SPEC-EM', testName: '', method: '', limit: '' }, quantity: '1 plate', identify: 'on action', ...(adverse ? { adverse } : {}) }] }] });
     const em = diffMasters(point(), point({ n: 2, m: 4 })).flatMap((s) => s.lines.filter((l) => l.change !== 'same').map((l) => l.text));
     expect(em.join(' ')).toContain('Adverse trend: 2 alert or action results in the last 4 samplings.');
+    // Display round 20 Nov: a plan saved without the method leaves it out ("method ." was shown); a test's result is named
+    // by the method's step names when they are read, never by its keys.
+    expect(em.join(' ')).not.toContain('method .');
+    expect(describeMaster(b)[1]!.lines[0]!.text).toContain('Method PH pH. Applies');
+    expect(describeMaster(b, undefined, new Map([['1|s0/t0/readingCheck', 'pH › Read the pH › pH within limits']]))[1]!.lines[0]!.text)
+      .toContain('Method PH pH, result pH › Read the pH › pH within limits.');
+  });
+
+  it('display round 20 Nov: the sieve analysis is singular and its pan reads as a weight', () => {
+    const b = block('sieve-analysis');
+    const text = sentenceText(method(), b, {}, sentence(b, b.calcs[0]!));
+    expect(text).toMatch(/^The sieve analysis is worked out from /);
+    expect(text).toContain('the weight in the pan');
   });
 
   it('LIMS-02 safety net: a change that no plain line shows is listed under "Other changes", never "No changes"', () => {

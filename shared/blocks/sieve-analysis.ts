@@ -10,7 +10,7 @@ export const sieveAnalysis: Block = {
     { name: 'machine', label: 'Sieve shaker', kind: 'machine', types: ['sieve'] },
     { name: 'sample', label: 'Sample weight', kind: 'number', unit: 'g' },
     ...sieves.map((n) => ({ name: `retained${n}`, label: `Retained on sieve ${n}`, kind: 'number' as const, unit: 'g' })),
-    { name: 'pan', label: 'In the pan', kind: 'number', unit: 'g' },
+    { name: 'pan', label: 'Weight in the pan', kind: 'number', unit: 'g' },
   ],
   settings: [
     ...sieves.map((n) => ({ name: `sieve${n}`, label: `Sieve ${n} aperture${n === 1 ? ' (coarsest)' : ''}`, kind: 'quantity' as const })),

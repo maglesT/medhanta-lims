@@ -16,7 +16,7 @@ test('PL-01: a tap or a key on the screen renews the idle session, at most once 
   await page.clock.install();
   await logIn(page, 'op1');
   await page.clock.fastForward(61_000);
-  const renewal = page.waitForRequest((r) => r.url().endsWith('/api/me'));
+  const renewal = page.waitForRequest((r) => r.url().endsWith('/api/session'));
   await page.keyboard.press('Tab');
   expect((await renewal).headers()['x-background-poll']).toBeUndefined();
 });

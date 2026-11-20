@@ -1,6 +1,7 @@
 // LIMS-21: the certificate of analysis of an approved sample, the way the analysis record PDF is made: what was sampled
 // (item, lot or batch, source), the specification, and each test with its limit, method and the reviewed result decided
 // on at approval (kept with the signed decision), then the decision with its e-signature. Nothing is typed again.
+import { reportName } from '../shared/engine/sample.js';
 import type { Content, TDocumentDefinitions } from 'pdfmake/interfaces.js';
 import { limitFor, purposeLimits, type SpecDoc } from '../shared/master/spec.js';
 import { Dec, roundHalfUp, writtenDecimals } from '../shared/templates/index.js';
@@ -53,14 +54,15 @@ export function coaDoc(c: CoaInput, by: string, printedAt = new Date(), demo = f
   };
   const figure = (r: Decided) => resultFigure(r.shown, r.value, r.unit, reported(r));
   // In-process: a test report of the step's request, not a certificate (owner 19 Nov 2026).
-  const title = s.purpose === 'in_process' ? 'In-process test report' : 'Certificate of analysis';
+  const title = reportName(s.purpose, s.item.of);
   const req = (s as { request?: { requestId: string; stageTitle: string | null; stepTitle: string | null } | null }).request;
   const content: Content[] = [
     { text: runs(`${title} ${p.coaNo ?? ''}`), fontSize: 16, bold: true },
     ...(req ? [small(`Request ${req.requestId}: ${[req.stageTitle, req.stepTitle].filter(Boolean).join(' › ')}`, { margin: [0, 2, 0, 0] })] : []),
     { text: runs(`${s.item.code} · ${s.item.name}`), fontSize: 11, margin: [0, 2, 0, 8] },
     { table: { widths: [95, '*', 95, '*'], body: [
-      [th(s.item.of === 'material' ? 'Material' : 'Product'), small(`${s.item.code} · ${s.item.name}`), th(s.item.of === 'material' ? 'Lot' : 'Batch'), small(s.lotNo, { bold: true })],
+      [th(s.item.of === 'material' ? 'Material' : s.item.of === 'room' ? 'Room' : s.item.of === 'water' ? 'Water system' : 'Product'), small(`${s.item.code} · ${s.item.name}`),
+        th(s.item.of === 'material' ? 'Lot' : s.item.of === 'room' || s.item.of === 'water' ? 'Point' : 'Batch'), small(s.lotNo, { bold: true })],
       [th('Sample'), small(`${s.sampleNo} (${s.purpose}), ${s.quantity}`), th('Source'), small(isHand(s.source) ? 'typed by hand (link not available), checked by a second person' : s.source.shown)],
       [th('Specification'), small(`${h.number}, version ${c.specVersion}`), th('Pharmacopoeia'), small(`${h.pharmacopoeia}${h.edition ? ` ${h.edition}` : ''}${h.market ? ` · market ${h.market}` : ''}`)],
     ] }, layout: 'lightHorizontalLines' },

@@ -9,6 +9,12 @@ import { reserveShortfall, type ReserveNeed } from './reserve.js';
 // in_process (owner 19 Nov 2026): made by picking a TrueBatch step's lab request (server/routes/in-process.ts).
 export const SAMPLE_PURPOSES = ['release', 'retest', 'stability', 'investigation', 'monitoring', 'in_process'] as const;
 export type SamplePurpose = (typeof SAMPLE_PURPOSES)[number];
+/**
+ * The name of an approved sample's report: a certificate of analysis for a lot or batch; a test report of an in-process
+ * request (owner 19 Nov 2026); an EM or water result report for a monitoring sample (backlog 19 Nov: not a CoA).
+ */
+export const reportName = (purpose: string, of?: string) => (purpose === 'in_process' ? 'In-process test report'
+  : purpose === 'monitoring' ? (of === 'water' ? 'Water result report' : 'EM result report') : 'Certificate of analysis');
 export const SAMPLE_EVENT_KINDS = ['checked', 'received', 'stored', 'handed_over', 'disposed', 'note', 'approved', 'rejected', 'oot_answered', 'reduced_testing'] as const;
 export type SampleEventKind = (typeof SAMPLE_EVENT_KINDS)[number];
 

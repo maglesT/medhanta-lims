@@ -4,10 +4,10 @@ import type { Block } from './format.js';
 // the first 10 do not pass.
 export const contentUniformity: Block = {
   id: 'content-uniformity', version: 1, name: 'Content uniformity sampling', checker: true,
-  instruction: 'Take the tablets for content uniformity as the sampling plan says, and assay each unit by the method. Record the content of each tablet; if 20 more are tested, record those too.',
+  instruction: 'Take the dosage units (tablets or capsules) for content uniformity as the sampling plan says, and assay each unit by the method. Record the content of each unit; if 20 more are tested, record those too.',
   fields: [
-    { name: 'results', label: 'Content of 10 tablets (% of label claim)', kind: 'number', unit: '%', count: 10 },
-    { name: 'moreResults', label: 'Content of 20 more tablets (% of label claim)', kind: 'number', unit: '%', count: 20, optional: true },
+    { name: 'results', label: 'Content of 10 dosage units (% of label claim)', kind: 'number', unit: '%', count: 10 },
+    { name: 'moreResults', label: 'Content of 20 more dosage units (% of label claim)', kind: 'number', unit: '%', count: 20, optional: true },
   ],
   units: ['results', 'moreResults'],
   settings: [{ name: 'coating', label: 'Coating', kind: 'text', options: ['uncoated', 'film-coated', 'sugar-coated', 'other coated'] }],

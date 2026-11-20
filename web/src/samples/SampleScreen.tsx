@@ -6,7 +6,10 @@ import { analysisLink, oosLink, plainError, sourceWords } from '../api-floor.js'
 import { IssueDialog } from '../floor/IssueDialog.js';
 import { SignDialog } from '../components/SignDialog.js';
 import { testText } from '../designer/describe.js';
-import type { SampleAction } from '../../../shared/engine/sample.js';
+import { reportName, type SampleAction } from '../../../shared/engine/sample.js';
+
+// The report of an approved sample in a sentence: "certificate COA…", "EM result report COA…".
+const reportWord = (purpose: string, of: string) => { const n = reportName(purpose, of); return n === 'Certificate of analysis' ? 'certificate' : n.replace(/^In-/, 'in-'); };
 import { ReservePanel } from './Reserve.js';
 import { PURPOSE_LABEL, STATUS_CHIP, STATUS_LABEL, answerOot, coaLink, decide, getSample, labelsLink, recordReduced, sampleEntry, type ReducedBasis, type SampleDetail, type SampleEntry } from './api-samples.js';
 import { FormsPanel, OutsideDialog, OutsideLine } from './Paper.js';
@@ -32,7 +35,7 @@ const FORMS: Partial<Record<SampleAction, { title: string; button: string; field
 };
 const BUTTON: Record<SampleAction, string> = { check: 'Check (second person)', receive: 'Receive', store: 'Store', 'hand-over': 'Hand over', dispose: 'Dispose of', note: 'Add note' };
 
-export function SampleScreen({ me, id, onBack, onOpenReserve }: { me: Me; id: number; onBack: () => void; onOpenReserve?: (id: number) => void }) {
+export function SampleScreen({ me, id, onBack, onOpenReserve, backTo = 'Samples' }: { me: Me; id: number; onBack: () => void; onOpenReserve?: (id: number) => void; backTo?: string }) {
   const [d, setD] = useState<SampleDetail | null>(null);
   const [error, setError] = useState('');
   const [form, setForm] = useState<SampleAction | null>(null);
@@ -45,7 +48,7 @@ export function SampleScreen({ me, id, onBack, onOpenReserve }: { me: Me; id: nu
   const waitingWhy = !d.actions.includes('receive') && d.status !== 'disposed' && d.refusals.receive;
   return (
     <>
-      <button className="link dark" onClick={onBack}>← Samples</button>
+      <button className="link dark" onClick={onBack}>← {backTo}</button>
       <div className="home-head">
         <div>
           <h1>{s.sampleNo} <span className={STATUS_CHIP[d.status]}>{STATUS_LABEL[d.status]}</span></h1>
@@ -233,17 +236,17 @@ function Decision({ d, me, reload }: { d: SampleDetail; me: Me; reload: () => Pr
   const may = can(me, 'qc.approve');
   return (
     <section className="dash-panel samples-waiting" aria-label="QC decision">
-      <div className="panel-head"><h2>QC decision</h2>{d.decision === 'approved' && <a className="button" href={coaLink(d.sample.id)} download>{d.sample.purpose === 'in_process' ? 'In-process test report (PDF)' : 'Certificate of analysis (PDF)'}</a>}</div>
+      <div className="panel-head"><h2>QC decision</h2>{d.decision === 'approved' && <a className="button" href={coaLink(d.sample.id)} download>{reportName(d.sample.purpose, d.sample.item.of)} (PDF)</a>}</div>
       {decided && (
         <p className={decided.kind === 'approved' ? 'all-good' : 'notice bad'}><span aria-hidden="true">{decided.kind === 'approved' ? '✓' : '✕'}</span>
-          {decided.kind === 'approved' ? `Approved, ${d.sample.purpose === 'in_process' ? 'in-process test report' : 'certificate'} ${decided.payload.coaNo}` : `Rejected: ${decided.payload.reason}`} · {decided.signature?.printedName ?? decided.personName}, {plantTime(decided.signature?.signedAt ?? decided.at)}</p>
+          {decided.kind === 'approved' ? `Approved, ${reportWord(d.sample.purpose, d.sample.item.of)} ${decided.payload.coaNo}` : `Rejected: ${decided.payload.reason}`} · {decided.signature?.printedName ?? decided.personName}, {plantTime(decided.signature?.signedAt ?? decided.at)}</p>
       )}
       <OosBlocks d={d} reload={reload} />
       {decided ? null : !may ? <p className="muted">QC decides when every test has a reviewed result.</p> : (<>
         {d.approvalProblems.length > 0 && <div className="notice" role="note"><p><b>Not ready for approval:</b></p><ul>{d.approvalProblems.map((p, i) => <li key={i}>{p}</li>)}</ul></div>}
         {error && <p className="notice bad" role="alert">{error}</p>}
         <div className="decide">
-          <p className="why">Your signature means: every test of the specification that applies has a reviewed result within its limit; the sample is approved and its certificate issued.</p>
+          <p className="why">Your signature means: every test of the specification that applies has a reviewed result within its limit; the sample is approved and its {reportWord(d.sample.purpose, d.sample.item.of)} issued.</p>
           <button className="big ok" disabled={d.approvalProblems.length > 0} onClick={() => setSigning('approve')}>Sign: QC approved</button>
         </div>
         <div className="decide reject">

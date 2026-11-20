@@ -22,6 +22,8 @@ type Page = 'home' | 'masters' | 'specs' | 'samples' | 'inventory' | 'stability'
 export function App() {
   const [me, setMe] = useState<Me | null | undefined>(undefined);
   const [page, setPage] = useState<Page>('home');
+  // A tab clicked again (or from one of its sub-screens) opens the tab's own list: its screen starts afresh.
+  const [visit, setVisit] = useState(0);
   // A demo installation says so on every screen, the sign-in screen too (GET /api/health needs no session).
   const [demo, setDemo] = useState(false);
   useEffect(() => { void api<{ demo?: boolean }>('GET', '/api/health', undefined, true).then((h) => setDemo(!!h.demo), () => {}); }, []);
@@ -35,7 +37,7 @@ export function App() {
 
   const refresh = useCallback(async () => {
     try {
-      setMe(await api<Me>('GET', '/api/me'));
+      setMe((await api<{ me: Me | null }>('GET', '/api/session')).me);
     } catch (e) {
       if (e instanceof ApiError && e.status === 401) setMe(null);
       else throw e;
@@ -74,33 +76,33 @@ export function App() {
       <header className="bar">
         <span className="brand"><img className="brand-mark" src="/truebatch-mark.svg" alt="" /><span><b>{product.name}</b><small>by Medhanta</small></span></span>
         <nav>
-          <button className={page === 'home' && !route.analysis && !release && !oos ? 'tab on' : 'tab'} onClick={() => { setPage('home'); go('#/'); }}>My work</button>
+          <button className={page === 'home' && !route.analysis && !release && !oos ? 'tab on' : 'tab'} onClick={() => { setVisit((v) => v + 1); setPage('home'); go('#/'); }}>My work</button>
           {can(me, 'analysis.review') && (
-            <button className={release ? 'tab on' : 'tab'} onClick={() => { setPage('home'); go('#/release'); }}>To review</button>
+            <button className={release ? 'tab on' : 'tab'} onClick={() => { setVisit((v) => v + 1); setPage('home'); go('#/release'); }}>To review</button>
           )}
           {['master.author', 'master.check', 'master.approve', 'analysis.perform', 'analysis.review', 'view'].some((c) => can(me, c)) && (
-            <button className={page === 'masters' && !release && !oos ? 'tab on' : 'tab'} onClick={() => { setPage('masters'); go('#/'); }}>{product.masters}</button>
+            <button className={page === 'masters' && !release && !oos ? 'tab on' : 'tab'} onClick={() => { setVisit((v) => v + 1); setPage('masters'); go('#/'); }}>{product.masters}</button>
           )}
           {['master.author', 'master.check', 'master.approve', 'view'].some((c) => can(me, c)) && (
-            <button className={page === 'specs' && !release && !oos ? 'tab on' : 'tab'} onClick={() => { setPage('specs'); go('#/'); }}>Specifications</button>
+            <button className={page === 'specs' && !release && !oos ? 'tab on' : 'tab'} onClick={() => { setVisit((v) => v + 1); setPage('specs'); go('#/'); }}>Specifications</button>
           )}
           {['sample.register', 'view'].some((c) => can(me, c)) && (
-            <button className={page === 'samples' && !release && !oos ? 'tab on' : 'tab'} onClick={() => { setPage('samples'); go('#/'); }}>Samples</button>
+            <button className={page === 'samples' && !release && !oos ? 'tab on' : 'tab'} onClick={() => { setVisit((v) => v + 1); setPage('samples'); go('#/'); }}>Samples</button>
           )}
           {['sample.register', 'qc.approve', 'master.author', 'master.check', 'master.approve', 'view'].some((c) => can(me, c)) && (
-            <button className={page === 'stability' && !release && !oos ? 'tab on' : 'tab'} onClick={() => { setPage('stability'); go('#/'); }}>Stability</button>
+            <button className={page === 'stability' && !release && !oos ? 'tab on' : 'tab'} onClick={() => { setVisit((v) => v + 1); setPage('stability'); go('#/'); }}>Stability</button>
           )}
           {['sample.register', 'qc.approve', 'master.author', 'master.check', 'master.approve', 'view'].some((c) => can(me, c)) && (
-            <button className={page === 'em' && !release && !oos ? 'tab on' : 'tab'} onClick={() => { setPage('em'); go('#/'); }}>EM and water</button>
+            <button className={page === 'em' && !release && !oos ? 'tab on' : 'tab'} onClick={() => { setVisit((v) => v + 1); setPage('em'); go('#/'); }}>EM and water</button>
           )}
           {['view', 'qc.approve', 'analysis.review', 'sample.register', 'analysis.perform'].some((c) => can(me, c)) && (
-            <button className={page === 'trends' && !release && !oos ? 'tab on' : 'tab'} onClick={() => { setPage('trends'); go('#/'); }}>Trends</button>
+            <button className={page === 'trends' && !release && !oos ? 'tab on' : 'tab'} onClick={() => { setVisit((v) => v + 1); setPage('trends'); go('#/'); }}>Trends</button>
           )}
           {['view', 'analysis.perform', 'analysis.review', 'qc.approve', 'oos.approve'].some((c) => can(me, c)) && (
-            <button className={oos ? 'tab on' : 'tab'} onClick={() => go('#/oos')}>OOS</button>
+            <button className={oos ? 'tab on' : 'tab'} onClick={() => { setVisit((v) => v + 1); go('#/oos'); }}>OOS</button>
           )}
           {['analysis.perform', 'analysis.review', 'view'].some((c) => can(me, c)) && (
-            <button className={page === 'inventory' && !release ? 'tab on' : 'tab'} onClick={() => { setPage('inventory'); go('#/'); }}>Inventory</button>
+            <button className={page === 'inventory' && !release ? 'tab on' : 'tab'} onClick={() => { setVisit((v) => v + 1); setPage('inventory'); go('#/'); }}>Inventory</button>
           )}
         </nav>
         <span className="who">
@@ -108,7 +110,7 @@ export function App() {
           <button className="link" onClick={logout}>Log out</button>
         </span>
       </header>
-      <main className="page">
+      <main className="page" key={visit}>
         {oos ? (oos === 'list' ? <OosList me={me} /> : <OosScreen me={me} id={oos} />) : release ? (release === 'list' ? <ToReview me={me} /> : <ReleaseScreen me={me} id={release} />) : (<>
           {page === 'home' && (route.analysis ? <AnalysisScreen me={me} id={route.analysis} step={route.step} approve={route.approve} /> : <MyWork me={me} />)}
           {page === 'masters' && <Masters me={me} />}
