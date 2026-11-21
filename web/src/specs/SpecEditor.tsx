@@ -215,7 +215,8 @@ function TestCard({ t, n, methods, ipcFields, problems, onChange, onRemove }: {
             const limitType = e.target.value as SpecTest['limitType'];
             const { limit: _l, shelfLifeLimit: _s, conforms: _c, ...rest } = t;
             if (limitType === 'conforms') delete rest.trendLimit;
-            set({ ...rest, limitType, ...(['conforms', 'report only'].includes(limitType) ? {} : t.limit ? { limit: t.limit } : {}) } as SpecTest);
+            // The whole test, not merged into the old one: a conforms or report-only test keeps no limit.
+            onChange({ ...rest, limitType, ...(['conforms', 'report only'].includes(limitType) ? {} : t.limit ? { limit: t.limit } : {}) } as SpecTest);
           }}>
             {LIMIT_TYPES.map((x) => <option key={x}>{x}</option>)}
           </select>
