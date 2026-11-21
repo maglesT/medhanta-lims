@@ -186,7 +186,7 @@ function Slot({ doc, si, ti, block, settings, name, onChange }: {
       return <select className={cls} aria-label={s.label} value={typeof v === 'string' ? v : '?'} onChange={(e) => onChange(e.target.value === '?' ? undefined : e.target.value)}>
         <option value="?">(choose a unit)</option>{unitsOf().map((u) => <option key={u.symbol} value={u.symbol}>{unitLabel(u.symbol)}</option>)}</select>;
     }
-    return <input className={cls} aria-label={s.label} value={typeof v === 'string' ? v : ''} onChange={(e) => onChange(e.target.value || undefined)} />;
+    return <><input className={cls} aria-label={s.label} value={typeof v === 'string' ? v : ''} onChange={(e) => onChange(e.target.value || undefined)} />{fromSpec}</>;
   }
   if (s.kind === 'material') return <span className="muted">(not used in a method)</span>;
   if (s.kind === 'limit') {
