@@ -18,6 +18,8 @@ import { plantDate } from '../../../shared/plant-time.js';
 
 // What a sample's lot number is: a material's lot, a product's batch, an EM or water sample's point.
 const LOT_WORD = { material: 'Lot', product: 'Batch', room: 'Point', water: 'Point' } as const;
+// The meaning of a chain-of-custody e-signature, as the signature records it.
+const SIGNED_WORDS: Record<string, string> = { disposed: 'Disposed of', qc_approved: 'QC approved', rejected: 'QC rejected' };
 const ENTRY_WORDS: Record<SampleEntry['kind'], string> = {
   checked: 'Checked by a second person', received: 'Received in QC', stored: 'Stored', handed_over: 'Handed over', disposed: 'Disposed of', note: 'Note', approved: 'QC approved', rejected: 'QC rejected', oot_answered: 'Out-of-trend flag answered by QC',
 };
@@ -87,7 +89,7 @@ export function SampleScreen({ me, id, onBack, onOpenReserve, backTo = 'Samples'
             <li key={e.id}>
               <b>{ENTRY_WORDS[e.kind]}</b>
               {entryText(e) && <span>{entryText(e)}</span>}
-              <span className="muted"> {e.personName}, {plantTime(e.at)}{e.signature ? ` · signed “Disposed of” by ${e.signature.printedName}` : ''}</span>
+              <span className="muted"> {e.personName}, {plantTime(e.at)}{e.signature ? ` · signed “${SIGNED_WORDS[e.signature.meaning] ?? e.signature.meaning}” by ${e.signature.printedName}` : ''}</span>
             </li>
           ))}
         </ol>

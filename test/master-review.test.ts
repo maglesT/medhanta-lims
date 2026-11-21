@@ -186,4 +186,33 @@ describe('master review and approval', () => {
     expect((await act('author', id, 'submit')).statusCode).toBe(200);
     expect((await act('checker', id, 'pass')).statusCode).toBe(200);
   });
+
+  it('LIMS-01 a draft is discarded with its reason, by its author or QA: kept as a record, retired; a new draft can be made', async () => {
+    const { id, masterId } = await draft();
+    expect((await as('author2', 'POST', `/api/master-versions/${id}/discard`, { reason: 'Not mine' })).json()).toMatchObject({ error: 'not_author' });
+    expect((await as('author', 'POST', `/api/master-versions/${id}/discard`, { reason: ' ' })).statusCode).toBe(400);
+    const dr = await as('author', 'POST', `/api/master-versions/${id}/discard`, { reason: 'Duplicate draft made by a retry' });
+    expect(dr.statusCode).toBe(200);
+    expect(await state(id)).toBe('retired');
+    expect((await review(id)).events).toMatchObject([{ kind: 'retired', payload: { reason: 'Duplicate draft made by a retry', discarded: true } }]);
+    expect((await as('author', 'POST', `/api/master-versions/${id}/discard`, { reason: 'again' })).json()).toMatchObject({ error: 'wrong_state' });
+    // QA discards another person's draft (a stale copy).
+    const other = await draft();
+    expect((await as('quality', 'POST', `/api/master-versions/${other.id}/discard`, { reason: 'Stale draft' })).statusCode).toBe(200);
+    expect(masterId).toBeGreaterThan(0);
+  });
+
+  it('LIMS-01 QA retires an effective version with its reason and e-signature; no version is effective after it', async () => {
+    const v = await approved();
+    await validatedOutside(t.owner, v.id);
+    expect((await as('qachecker', 'POST', `/api/master-versions/${v.id}/make-effective`, {})).statusCode).toBe(200);
+    expect((await act('author', v.id, 'retire', { reason: 'Wrong material' })).statusCode).toBe(403);
+    expect((await act('quality', v.id, 'retire', {})).statusCode).toBe(400);
+    expect((await act('quality', v.id, 'retire', { reason: 'Written on the wrong material' })).statusCode).toBe(200);
+    expect(await state(v.id)).toBe('retired');
+    expect(await t.owner`select id from master_versions where master_id = ${v.masterId} and state = 'effective'`).toHaveLength(0);
+    const [g] = await t.owner<{ meaning: string }[]>`select g.meaning from signatures g join master_events e on g.object_type = 'master_event' and g.object_id = e.id where e.version_id = ${v.id} and e.kind = 'retired'`;
+    expect(g?.meaning).toBe('approved');
+    expect((await review(v.id)).events.at(-1)).toMatchObject({ kind: 'retired', payload: { reason: 'Written on the wrong material' } });
+  });
 });

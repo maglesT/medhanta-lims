@@ -39,7 +39,7 @@ export function SpecEditor({ me, versionId, onBack, onOpen }: { me: Me; versionI
       .filter((r, _, all) => !all.some((o) => o.masterId === r.masterId && o.versionNo > r.versionNo && (o.state === 'approved' || o.state === 'effective')))));
   }, [versionId]);
 
-  // In-process: the TrueBatch fields the product's lab requests have named, for each test's pick list.
+  // In-process: the TrueBatch fields of the product (its masters' blocks and its lab requests), for each test's pick list.
   const [ipcFields, setIpcFields] = useState<{ name: string; label: string; unit: string | null }[] | null>(null);
   const ipcProduct = doc?.header.type === 'In-process' ? doc.header.code : null;
   useEffect(() => {
@@ -129,6 +129,14 @@ export function SpecEditor({ me, versionId, onBack, onOpen }: { me: Me; versionI
               ))}
               <button type="button" className="primary" onClick={() => change({ ...doc, tests: [...doc.tests, newTest(doc.tests.map((x) => x.key))] })} disabled={!methods.length}>Add a test</button>
               {!methods.length && <p className="muted small">A test needs an approved or effective method: approve one in Methods first.</p>}
+              {ipcProduct && (() => {
+                // An in-process spec may cover some fields only; a request that names a field with no test cannot be tested.
+                const open = (ipcFields ?? []).filter((f) => !doc.tests.some((t) => t.ipcField === f.name));
+                return open.length > 0 && (
+                  <p className="notice small">TrueBatch asks {open.length === 1 ? 'this in-process field' : 'these in-process fields'}, with no test here yet: {open.map((f) => `${f.label} (${f.name})`).join(', ')}.
+                    {' '}A batch request that names {open.length === 1 ? 'it' : 'one of them'} can be tested only once an effective version has a test for it.</p>
+                );
+              })()}
             </fieldset>
           )}
           {tab === 'review' && <Review me={me} version={v} doc={doc} blocked={blocked} onChanged={load} onOpen={onOpen} onGo={go} />}

@@ -8,6 +8,7 @@ import { loadAnalysis, recordInput } from '../server/routes/analyses.js';
 import { call, freshApp, handLabels, login, proofFor, seedUser, TEST_DATABASE_URL, type TestApp, validatedOutside } from './helpers.js';
 import { at, ev, small, method, placed } from './engine-fixture.js';
 import { inLogbook } from '../shared/engine/picks.js';
+import { namesMaster } from '../server/routes/masters.js';
 
 // The links to Deviations, QMS, Logbook and MMS (owner 15 Nov 2026), each read through a fake provider schema in the
 // test database with this product's restricted login, as on the platform: absent (no URL), down (refused or not
@@ -375,6 +376,12 @@ describe('LIMS-01 QMS: a new master version needs a QA-approved change control',
     expect([cap, pk, apiOmz].map((x) => namesProduct(c(omz), x))).toEqual(['yes', 'yes', 'no']);
     const coded = { ...c('Omeprazole capsules and blister'), productCodes: ['CAP-OMZ20', 'PK-OMZ20-B10'] };
     expect([cap, pk, apiOmz].map((x) => namesProduct(coded, x))).toEqual(['yes', 'yes', 'no']);
+    // A material's spec also takes a change control of a product that uses the material (master data's item links).
+    const hpmc = { kind: 'spec', doc: { header: { of: 'material', code: 'EXC-HPMC', name: 'Hypromellose E5' } } } as never;
+    const usedBy = [{ code: 'CAP-OMZ20', name: cap.productName }];
+    expect([namesMaster(coded, hpmc, usedBy), namesMaster(coded, hpmc, []), namesMaster(c('none'), hpmc, usedBy), namesMaster(c('EXC-HPMC'), hpmc, [])]).toEqual(['yes', 'no', 'none', 'yes']);
+    const capSpec = { kind: 'spec', doc: { header: { of: 'product', code: 'FG-X', name: 'X tablets' } } } as never;
+    expect(namesMaster(coded, capSpec, usedBy)).toBe('no');
     expect([namesProduct({ ...c(null), productCodes: ['CAP-OMZ20'] }, cap), namesProduct({ ...c(null), productCodes: ['CAP-OMZ20'] }, apiOmz), namesProduct({ ...c(null), productCodes: [] }, cap)]).toEqual(['yes', 'no', 'none']);
   });
 

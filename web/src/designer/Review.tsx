@@ -15,8 +15,9 @@ const SIGNED: Partial<Record<ReviewAction, { meaning: string; what: string }>> =
   submit: { meaning: 'prepared', what: 'You sign that you prepared this version and send it to a second person to check.' },
   pass: { meaning: 'checked', what: 'You sign that you checked this version, independently of its author, and found it correct.' },
   approve: { meaning: 'approved', what: 'You approve this version for use in production (QA).' },
+  retire: { meaning: 'approved', what: 'You approve that this version is taken out of use (QA): nothing new is started from it.' },
 };
-const BUTTON: Record<ReviewAction, string> = { submit: 'Send for review', pass: 'Pass the check', return: 'Return to the author', approve: 'Approve', 'make-effective': 'Make effective' };
+const BUTTON: Record<ReviewAction, string> = { submit: 'Send for review', pass: 'Pass the check', return: 'Return to the author', approve: 'Approve', 'make-effective': 'Make effective', discard: 'Discard the draft', retire: 'Retire this version' };
 
 export function Review({ me, version, doc, blocked, onChanged, onGo }: {
   me: Me; version: Pick<Version, 'id' | 'versionNo' | 'state'>; doc: AnyDoc; blocked: boolean; onChanged: () => Promise<void>; onOpen: (id: number) => void; onGo: (path: string) => void;
@@ -26,6 +27,7 @@ export function Review({ me, version, doc, blocked, onChanged, onGo }: {
   const [doing, setDoing] = useState<ReviewAction | null>(null);
   const [cc, setCc] = useState('');
   const [ccDone, setCcDone] = useState(false);
+  const [reasonDone, setReasonDone] = useState(false);
   // QA-approved change controls in QMS, to pick from (empty without the link).
   const changes = useLinked<{ number: string; title: string | null; names: 'yes' | 'none' }>(doing === 'approve' ? `/api/change-controls?version=${version.id}` : null, 'changes');
   const [reason, setReason] = useState('');
@@ -50,13 +52,13 @@ export function Review({ me, version, doc, blocked, onChanged, onGo }: {
   }, [methodIds]);
   if (!data) return <div className="skel skel-block" />;
 
-  const close = () => { setDoing(null); setCc(''); setCcDone(false); setReason(''); setError(''); };
+  const close = () => { setDoing(null); setCc(''); setCcDone(false); setReason(''); setReasonDone(false); setError(''); };
   const done = async () => { close(); await onChanged(); await load(); };
   const run = async (action: ReviewAction, body: object) => {
     try { await reviewAction(version.id, action, body); await done(); }
     catch (e) { setError(e instanceof ApiError ? (e.problems[0] ?? e.message) : String(e)); }
   };
-  const shown: ReviewAction[] = (['submit', 'pass', 'return', 'approve', 'make-effective'] as const).filter((a) =>
+  const shown: ReviewAction[] = (['submit', 'pass', 'return', 'approve', 'make-effective', 'discard', 'retire'] as const).filter((a) =>
     data.actions.includes(a) || (a === 'submit' && version.state === 'draft' && can(me, 'master.author'))
     // QA who typed the change control by hand sees why another person makes the version effective.
     || (a === 'make-effective' && version.state === 'approved' && can(me, 'master.approve')));
@@ -72,7 +74,7 @@ export function Review({ me, version, doc, blocked, onChanged, onGo }: {
           <ol className="timeline">
             {data.events.map((e) => (
               <li key={e.id} className={e.kind}>
-                <b>{EVENT_TEXT[e.kind]}</b> · {e.personName} · {plantTime(e.at)}
+                <b>{e.payload.discarded ? 'Draft discarded' : EVENT_TEXT[e.kind]}</b> · {e.personName} · {plantTime(e.at)}
                 {e.payload.changeControl && <> · change control <b>{e.payload.changeControl}</b></>}
                 {e.payload.reason && <div className="muted">Reason: {e.payload.reason}</div>}
               </li>
@@ -85,7 +87,7 @@ export function Review({ me, version, doc, blocked, onChanged, onGo }: {
             const why = a === 'submit' && blocked ? 'Fix the ⛔ problems and answer the ⚠️ calculation checks of the master check first.' : data.refusals[a];
             return (
               <div key={a}>
-                <button className={a === 'return' ? '' : 'primary'} disabled={!!why} onClick={() => { setError(''); setDoing(a); }}>{BUTTON[a]}</button>
+                <button className={a === 'return' || a === 'discard' || a === 'retire' ? '' : 'primary'} disabled={!!why} onClick={() => { setError(''); setDoing(a); }}>{BUTTON[a]}</button>
                 {why && <p className="muted small">{why}</p>}
               </div>
             );
@@ -115,16 +117,17 @@ export function Review({ me, version, doc, blocked, onChanged, onGo }: {
 
       <Comments me={me} doc={doc} data={data} versionId={version.id} onAdded={load} onGo={onGo} />
 
-      {doing && SIGNED[doing] && (doing !== 'approve' || ccDone) && (
+      {doing && SIGNED[doing] && (doing !== 'approve' || ccDone) && (doing !== 'retire' || reasonDone) && (
         <SignDialog meaning={SIGNED[doing].meaning} what={SIGNED[doing].what} onCancel={close}
           onSign={async ({ proof }) => {
             const fresh = await getReview(version.id);
-            await reviewAction(version.id, doing, { proof, contentHash: fresh.contentHash, ...(doing === 'approve' ? { changeControl: cc } : {}) });
+            await reviewAction(version.id, doing, { proof, contentHash: fresh.contentHash, ...(doing === 'approve' ? { changeControl: cc } : {}), ...(doing === 'retire' ? { reason } : {}) });
             await done();
           }}>
           <div className="signbox">
             <p><b>{docTitle(doc)}</b>, version {version.versionNo}</p>
             {doing === 'approve' && <p>Change control number: <b>{cc}</b></p>}
+            {doing === 'retire' && <p>Reason: <b>{reason}</b></p>}
           </div>
         </SignDialog>
       )}
@@ -138,6 +141,18 @@ export function Review({ me, version, doc, blocked, onChanged, onGo }: {
       )}
       {doing === 'return' && (
         <Dialog title="Return to the author" onCancel={close} onSubmit={() => (reason.trim() ? void run('return', { reason }) : setError('Say why.'))} submit="Return" error={error}>
+          <label>Reason<textarea autoFocus value={reason} onChange={(e) => setReason(e.target.value)} /></label>
+        </Dialog>
+      )}
+      {doing === 'discard' && (
+        <Dialog title="Discard the draft" onCancel={close} onSubmit={() => (reason.trim() ? void run('discard', { reason }) : setError('Say why.'))} submit="Discard the draft" error={error}>
+          <p>Version {version.versionNo} is kept as a record, marked retired with your reason; nothing can use it, and a new draft can be made.</p>
+          <label>Reason<textarea autoFocus value={reason} onChange={(e) => setReason(e.target.value)} /></label>
+        </Dialog>
+      )}
+      {doing === 'retire' && !reasonDone && (
+        <Dialog title="Retire this version" onCancel={close} onSubmit={() => (reason.trim() ? setReasonDone(true) : setError('Say why.'))} submit="Continue to sign" error={error}>
+          <p>Version {version.versionNo} stops being effective and no other version takes its place: nothing new is started from it (samples, analyses, studies). Work already started keeps it.</p>
           <label>Reason<textarea autoFocus value={reason} onChange={(e) => setReason(e.target.value)} /></label>
         </Dialog>
       )}

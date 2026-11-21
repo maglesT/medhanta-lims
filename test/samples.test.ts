@@ -312,7 +312,7 @@ describe('the chain of custody (LIMS-07)', () => {
     expect(ok.statusCode, ok.body).toBe(200);
     const d = await detail(id);
     expect(d.status).toBe('disposed');
-    expect(d.events.at(-1)).toMatchObject({ kind: 'disposed', payload: { reason: 'Testing complete', method: 'Chemical waste' }, signature: { printedName: 'SAMPLER' } });
+    expect(d.events.at(-1)).toMatchObject({ kind: 'disposed', payload: { reason: 'Testing complete', method: 'Chemical waste' }, signature: { printedName: 'SAMPLER', meaning: 'disposed' } });
     const [sig] = await t.owner<{ meaning: string }[]>`select meaning from signatures where object_type = 'sample_event' and object_id = (select max(id) from sample_events)`;
     expect(sig!.meaning).toBe('disposed');
     expect(d.actions).toEqual([]);

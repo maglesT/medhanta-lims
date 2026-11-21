@@ -25,7 +25,7 @@ export function requestProblems(r: LabRequest, spec: SpecDoc | null): string[] {
   if (!spec) return [`No effective in-process specification for ${r.productCode}: QA makes one effective first.`];
   if (!r.tests.length) return [`Request ${r.requestId} names no test.`];
   const missing = r.tests.filter((t) => !spec.tests.some((x) => x.ipcField === testCode(t)));
-  return missing.length ? [`Specification ${spec.header.number} has no test for ${missing.map((t) => `${t.label} (${testCode(t)})`).join(', ')}: add it in a new version.`] : [];
+  return missing.length ? [`Specification ${spec.header.number} has no test for ${missing.map((t) => `${t.label} (${testCode(t)})`).join(', ')}, which this request asks: the sample is taken once a version with ${missing.length === 1 ? 'that test' : 'those tests'} is effective (write the version in Specifications; QA approves it).`] : [];
 }
 
 async function inProcessSpec(q: Sql | Tx, productCode: string) {

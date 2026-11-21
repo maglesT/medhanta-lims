@@ -13,7 +13,7 @@ import { monitoringChecks, monitoringSchema, type MonitoringDoc } from '../../sh
 import { limitText } from '../../shared/master/spec.js';
 import { masterSchema, type MasterDoc, type MasterState } from '../../shared/master/schema.js';
 import { isHand, type Source } from '../../shared/engine/links.js';
-import { CHANGE_STEPS, approvedChange, namesProduct } from '../links.js';
+import { CHANGE_STEPS, approvedChange, namesProduct, type ChangeRead } from '../links.js';
 import { methodReportFacts } from './method-reports.js';
 import { useRefusal, type ReportFacts } from '../../shared/engine/method-validation.js';
 
@@ -199,6 +199,10 @@ export const REVIEW_ACTIONS = {
   return: { from: 'in_review', to: 'draft', event: 'returned', meaning: null, needs: ['lims.master.check', 'lims.master.approve'] },
   approve: { from: 'in_review', to: 'approved', event: 'approved', meaning: 'approved', needs: ['lims.master.approve'] },
   'make-effective': { from: 'approved', to: 'effective', event: 'effective', meaning: null, needs: ['lims.master.approve'] },
+  // A draft that is not wanted (a mistake, a stale copy): kept as a record, retired with its reason; nothing uses it.
+  discard: { from: 'draft', to: 'retired', event: 'retired', meaning: null, needs: ['lims.master.author', 'lims.master.approve'] },
+  // QA takes an effective version out of use without a new one (a wrong or obsolete master), with its reason, signed.
+  retire: { from: 'effective', to: 'retired', event: 'retired', meaning: 'approved', needs: ['lims.master.approve'] },
 } as const satisfies Record<string, { from: MasterState; to: MasterState | null; event: string; meaning: Meaning | null; needs: Permission[] }>;
 export type ReviewAction = keyof typeof REVIEW_ACTIONS;
 const REVIEW_NAMES = Object.keys(REVIEW_ACTIONS) as ReviewAction[];
@@ -251,6 +255,9 @@ export function reviewRefusal(action: ReviewAction, l: Loaded, user: SessionUser
     const open = l.problems.filter(blocking);
     if (open.length) return no(409, 'master_has_errors', `The master check shows ${open.length} problem${open.length === 1 ? '' : 's'} to fix or answer first (LIMS-01).`);
   }
+  if (action === 'discard' && !author && !user.permissions.includes('lims.master.approve')) {
+    return no(403, 'not_author', 'Only a person who wrote this draft, or QA, discards it.');
+  }
   if (action === 'pass') {
     if (author) return no(403, 'author_cannot_check', 'The person who wrote this version cannot check it: a second person checks it.');
     if (passed) return no(409, 'already_checked', `${passed.personName} has already checked this version.`);
@@ -282,15 +289,30 @@ export function reviewRefusal(action: ReviewAction, l: Loaded, user: SessionUser
  *  many products). */
 const productOf = (v: VersionRow | undefined): { productCode: string; productName: string } | undefined =>
   (v?.kind === 'spec' || v?.kind === 'protocol' ? { productCode: v.doc.header.code, productName: v.doc.header.name } : undefined);
+/**
+ * Whether a change control names a master's product: a material's specification also takes a change control that names a
+ * product using the material (master data's item links); without master data, the material itself only.
+ */
+const isMaterialSpec = (v: VersionRow | undefined) => v?.kind === 'spec' && v.doc.header.of === 'material';
+const materialUsers = async (app: FastifyInstance, v: VersionRow | undefined) =>
+  (isMaterialSpec(v) ? await app.master.usedBy(productOf(v)!.productCode).catch(() => []) : []);
+export function namesMaster(c: ChangeRead, v: VersionRow | undefined, users: { code: string; name: string }[]): 'yes' | 'no' | 'none' {
+  const p = productOf(v);
+  if (!p) return 'yes';
+  const own = namesProduct(c, p);
+  if (own !== 'no' || !isMaterialSpec(v)) return own;
+  return users.some((u) => namesProduct(c, { productCode: u.code, productName: u.name }) === 'yes') ? 'yes' : 'no';
+}
 
-async function changeControlSource(app: FastifyInstance, number: string, product?: { productCode: string; productName: string }): Promise<Source> {
+async function changeControlSource(app: FastifyInstance, number: string, v: VersionRow | undefined): Promise<Source> {
+  const product = productOf(v);
   const r = await app.links.qms.change(number);
   if (r.state !== 'ok') return { from: 'hand', link: 'qms', state: r.state };
   const c = r.value;
   if (!c) throw new ReviewError(409, 'unknown_change_control', [`${number} is not a change control in QMS.`]);
   // The change control must name the master's product; one that names no product is taken, with a warning for QA.
-  const names = product ? namesProduct(c, product) : 'yes';
-  if (names === 'no') throw new ReviewError(409, 'other_product', [`${number} is for ${c.products} in QMS, not for ${product!.productCode} ${product!.productName}: pick the change control of this product.`]);
+  const names = namesMaster(c, v, await materialUsers(app, v));
+  if (names === 'no') throw new ReviewError(409, 'other_product', [`${number} is for ${c.products} in QMS, not for ${product!.productCode} ${product!.productName}${isMaterialSpec(v) ? ' or a product that uses it' : ''}: pick the change control of this ${isMaterialSpec(v) ? 'material' : 'product'}.`]);
   if (!approvedChange(c)) throw new ReviewError(409, 'change_not_approved', [`${number} is at the step “${c.status.replaceAll('_', ' ')}” in QMS${c.qaApprovedAt ? '' : ' and not approved by QA'}: only a QA-approved change control (${CHANGE_STEPS.join(', ')}) can carry a new version.`]);
   return { from: 'qms', asOf: c.qaApprovedAt, shown: `${c.number}: ${c.title ?? ''} (${c.status}, QA approved ${c.qaApprovedAt})${c.products ? `; products: ${c.products}` : `; QMS names no product: QA checked that it covers ${product?.productCode ?? 'this product'}`}` };
 }
@@ -304,6 +326,8 @@ const reviewBodies = {
   return: z.object({ reason: z.string().trim().min(1).max(1000) }),
   approve: z.object({ proof: z.string().min(1).max(2000), contentHash: z.string().regex(/^[0-9a-f]{64}$/), changeControl: z.string().trim().min(1, 'the change control number is required').max(60) }),
   'make-effective': z.object({}),
+  discard: z.object({ reason: z.string().trim().min(1, 'say why the draft is discarded').max(1000) }),
+  retire: z.object({ proof: z.string().min(1).max(2000), contentHash: z.string().regex(/^[0-9a-f]{64}$/), reason: z.string().trim().min(1, 'say why the version is retired').max(1000) }),
 } satisfies Record<ReviewAction, z.ZodTypeAny>;
 
 function reviewRoutes(app: FastifyInstance, sql: Sql) {
@@ -332,7 +356,8 @@ function reviewRoutes(app: FastifyInstance, sql: Sql) {
     const id = parseId(String(req.query.version ?? ''));
     const v = id === null ? undefined : await masterVersion(sql, id);
     const r = await app.links.qms.approved();
-    const changes = r.state === 'ok' ? r.value.map((c) => ({ ...c, names: productOf(v) ? namesProduct(c, productOf(v)!) : 'yes' })).filter((c) => c.names !== 'no') : [];
+    const users = r.state === 'ok' ? await materialUsers(app, v) : [];
+    const changes = r.state === 'ok' ? r.value.map((c) => ({ ...c, names: namesMaster(c, v, users) })).filter((c) => c.names !== 'no') : [];
     return { link: r.state, changes };
   });
 
@@ -361,7 +386,7 @@ function reviewRoutes(app: FastifyInstance, sql: Sql) {
       const user = req.user!;
       try {
         const signer = rule.meaning ? await authenticateSigner(sql, app.proofKey, user, { proof: b.proof! }, { objectType: 'master_version', objectId: id, meaning: rule.meaning }) : null;
-        const source = b.changeControl ? await changeControlSource(app, b.changeControl, productOf(await masterVersion(sql, id))) : null;
+        const source = b.changeControl ? await changeControlSource(app, b.changeControl, await masterVersion(sql, id)) : null;
         return await sql.begin(async (tx) => {
           await tx`select pg_advisory_xact_lock(${-id}::bigint)`;
           // 1. read
@@ -372,7 +397,7 @@ function reviewRoutes(app: FastifyInstance, sql: Sql) {
           if (no) throw new ReviewError(no.status, no.error, [no.message]);
           if (signer && b.contentHash !== versionHash(l)) throw new ReviewError(409, 'content_changed', ['The version changed since you opened it.']);
           // 3. insert the event; the state follows
-          const payload = { ...(b.reason ? { reason: b.reason } : {}), ...(b.changeControl ? { changeControl: b.changeControl } : {}), ...(source ? { source: { changeControl: source } } : {}) };
+          const payload = { ...(action === 'discard' ? { discarded: true } : {}), ...(b.reason ? { reason: b.reason } : {}), ...(b.changeControl ? { changeControl: b.changeControl } : {}), ...(source ? { source: { changeControl: source } } : {}) };
           const [ev] = await tx<{ id: number }[]>`
             insert into master_events (version_id, kind, payload, person_id) values (${id}, ${rule.event}, ${tx.json(payload)}, ${user.id}) returning id::int`;
           const retired: number[] = [];

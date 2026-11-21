@@ -43,7 +43,7 @@ describe('the rules', () => {
     expect(requestProblems({ ...r, status: 'cancelled' }, doc)).toEqual(['Request B1/blend is cancelled in TrueBatch: only an open request is tested.']);
     expect(requestProblems(r, null)).toEqual(['No effective in-process specification for FG-IP1: QA makes one effective first.']);
     expect(requestProblems({ ...r, tests: [...r.tests, { name: 'lod', label: 'LOD', unit: '%', individual: null }] }, doc))
-      .toEqual(['Specification SPEC-IP-FG-IP1 has no test for LOD (lod): add it in a new version.']);
+      .toEqual(['Specification SPEC-IP-FG-IP1 has no test for LOD (lod), which this request asks: the sample is taken once a version with that test is effective (write the version in Specifications; QA approves it).']);
   });
   it('individual values come from the block\'s unit fields in order (10, or 30 after the second stage); the figure is the AV of CU, the mean of BU', () => {
     const cu = findBlock({ id: 'content-uniformity', version: 1 })!;
@@ -75,6 +75,10 @@ beforeAll(async () => {
         ('B26100/blend', 'B26100', 'FG-IP1', 'Blending', 'blend', 'Blend uniformity', '[{"name":"bu","label":"Blend uniformity","unit":"%","individual":10}]', now() - interval '2 days', 'done');
       insert into ${S.lq}.lab_request_v1 values
         ('TL260004/bulk', 'TL260004', 'FG-IP1', 'Bulk', 'bulk', 'Bulk test', '[{"name":"ph","label":"pH","unit":null,"individual":null}]', now() - interval '10 minutes', 'open');
+      create table ${S.tb}.master_lab_field_v1 (product_code text, master_version int, master_state text, stage_title text, step_title text,
+        code text, label text, unit text, individual int, data_as_of timestamptz default now());
+      insert into ${S.tb}.master_lab_field_v1 values ('FG-IP1', 2, 'effective', 'Compression', 'Content uniformity', 'content-uniformity.results', 'Content uniformity', '%', 10),
+        ('FG-IP1', 2, 'effective', 'Blending', 'Blend uniformity', 'bu', 'Blend uniformity', '%', 10), ('FG-OTHER', 1, 'effective', 'x', 'x', 'other.f', 'Other', null, null);
       grant usage on schema ${S.tb}, ${S.lq} to lims_app; grant select on all tables in schema ${S.tb}, ${S.lq} to lims_app;`);
     provider = connect(TEST_DATABASE_URL, { role: 'lims_app', link: true });
     return links({ truebatch: provider, truebatch_liquids: provider }, { truebatch: S.tb, truebatch_liquids: S.lq });
@@ -147,8 +151,14 @@ describe('on the server', () => {
     expect(r.link).toBe('ok');
     expect(r.requests.map((x) => [x.requestId, x.editionName, x.spec?.number, x.problems])).toEqual([
       ['B26101/blend', 'TrueBatch Tablets', 'SPEC-IP-FG-IP1', []],
-      ['B26101/lub', 'TrueBatch Tablets', 'SPEC-IP-FG-IP1', ['Specification SPEC-IP-FG-IP1 has no test for LOD of the blend (lod): add it in a new version.']],
+      ['B26101/lub', 'TrueBatch Tablets', 'SPEC-IP-FG-IP1', ['Specification SPEC-IP-FG-IP1 has no test for LOD of the blend (lod), which this request asks: the sample is taken once a version with that test is effective (write the version in Specifications; QA approves it).']],
       ['TL260004/bulk', 'TrueBatch Liquids', 'SPEC-IP-FG-IP1', []]]);
+  });
+
+  it('the spec editor\'s field list: the fields the product\'s TrueBatch masters ask (master_lab_field_v1) and its requests have named; an edition without the master view gives its requests\' fields', async () => {
+    const r = (await as('author', 'GET', '/api/lab-requests/fields?product=FG-IP1')).json() as { link: string; fields: { name: string; label: string }[] };
+    expect(r.link).toBe('ok');
+    expect(r.fields.map((f) => f.name)).toEqual(['bu', 'content-uniformity.results', 'lod', 'ph']);
   });
 
   it('a picked request makes the in-process sample (nothing typed), once; tested for its fields only; QC approves an in-process test report; result_v1 gives the request, field, individual values and figure', async () => {

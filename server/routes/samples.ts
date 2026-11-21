@@ -57,7 +57,7 @@ export interface SampleRow {
 export interface SampleRequest { edition: string; requestId: string; batchNo: string; stageTitle: string | null; stepKey: string; stepTitle: string | null;
   tests: { name: string; label: string; unit: string | null; individual: number | null; code?: string | null }[]; requestedAt: string }
 export interface SamplingTaken { received: number; plan: 'square root' | 'every container'; line: string; numbers: number[]; details: Record<string, string> }
-export type EventRow = SampleEvent & { id: number; personName: string; at: Date; signature: { printedName: string; signedAt: Date } | null };
+export type EventRow = SampleEvent & { id: number; personName: string; at: Date; signature: { printedName: string; signedAt: Date; meaning: string } | null };
 
 class SampleError extends Error {
   constructor(public status: number, public code: string, public problems: string[] = []) { super(code); }
@@ -103,7 +103,7 @@ async function loadSample(q: Sql | Tx, id: number): Promise<{ s: SampleRow; even
   if (!s) return null;
   const events = await q<EventRow[]>`
     select e.id::int, e.kind, e.payload, e.person_id::int as person, u.full_name as "personName", e.at,
-      (select json_build_object('printedName', g.printed_name, 'signedAt', g.signed_at) from signatures g where g.object_type = 'sample_event' and g.object_id = e.id limit 1) as signature
+      (select json_build_object('printedName', g.printed_name, 'signedAt', g.signed_at, 'meaning', g.meaning) from signatures g where g.object_type = 'sample_event' and g.object_id = e.id limit 1) as signature
     from sample_events e join users u on u.id = e.person_id where e.sample_id = ${id} order by e.id`;
   return { s, events: [...events] };
 }

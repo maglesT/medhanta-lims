@@ -18,8 +18,8 @@ export interface Equipment extends Item { kind: 'equipment' | 'instrument'; type
 export interface Room extends Item { area: string | null; grade: string | null }
 export interface MasterData { products: Product[]; materials: Material[]; equipment: Equipment[]; rooms: Room[] }
 
-export type ReviewAction = 'submit' | 'pass' | 'return' | 'approve' | 'make-effective';
-export interface MasterEvent { id: number; kind: 'submitted' | 'passed' | 'returned' | 'approved' | 'effective' | 'retired'; payload: { reason?: string; changeControl?: string }; personName: string; at: string }
+export type ReviewAction = 'submit' | 'pass' | 'return' | 'approve' | 'make-effective' | 'discard' | 'retire';
+export interface MasterEvent { id: number; kind: 'submitted' | 'passed' | 'returned' | 'approved' | 'effective' | 'retired'; payload: { reason?: string; changeControl?: string; discarded?: boolean; by?: number }; personName: string; at: string }
 export interface Comment { id: number; path: string | null; text: string; personName: string; at: string }
 export interface ReviewData {
   events: MasterEvent[]; comments: Comment[]; contentHash: string;

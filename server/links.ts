@@ -302,11 +302,18 @@ export const truebatchClient = (links: Link | EditionLink[]) => {
       const [x] = await q<RequestRow[]>`select ${q.unsafe(REQUEST_COLS)} from ${v('lab_request_v1')} where request_id = ${requestId} limit 1`;
       return x ? requestOf(x, ed) : null;
     }),
+    // The in-process fields of a product, for the specification editor's pick list: the fields its requests have named,
+    // and the fields its TrueBatch masters' blocks will ask (master_lab_field_v1, every edition: the versions not
+    // retired), so a spec test can be written before a batch reaches the step. Without the master view: the requests'.
     requestFields: async (productCode: string) => {
       const r = await allEditions(all, async (q, v) => q<{ name: string; label: string; unit: string | null }[]>`
         select distinct coalesce(nullif(t ->> 'code', ''), t ->> 'name') as name, coalesce(t ->> 'label', t ->> 'name') as label, t ->> 'unit' as unit
         from ${v('lab_request_v1')} r, jsonb_array_elements(r.tests) t where r.product_code = ${productCode} limit 500`);
-      return r.state === 'ok' ? { ...r, value: [...new Map(r.value.map((x) => [x.name, x])).values()].sort((a, b) => a.name.localeCompare(b.name)) } : r;
+      const m = await allEditions(all, async (q, v) => q<{ name: string; label: string; unit: string | null }[]>`
+        select distinct code as name, coalesce(label, code) as label, unit from ${v('master_lab_field_v1')} where product_code = ${productCode} and code is not null limit 500`);
+      if (r.state !== 'ok' && m.state !== 'ok') return r;
+      const rows = [...(m.state === 'ok' ? m.value : []), ...(r.state === 'ok' ? r.value : [])];
+      return { state: 'ok' as const, value: [...new Map(rows.map((x) => [x.name, x])).values()].sort((a, b) => a.name.localeCompare(b.name)) };
     },
   };
 };

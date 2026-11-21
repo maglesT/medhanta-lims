@@ -121,7 +121,7 @@ test('LIMS-36 EM journey: a plan approved, a settle plate taken from "due today"
   await rev.ctx.close();
 
   // Over the action limit: the sampler opens the investigation with the deviation number (typed by hand).
-  await smp.page.getByRole('button', { name: '← Samples' }).click();
+  await smp.page.getByRole('button', { name: '← EM and water' }).click();
   await smp.page.getByRole('navigation', { name: 'EM and water' }).getByRole('button', { name: 'Excursions' }).click();
   const over = smp.page.getByRole('table', { name: 'Results over a limit' }).getByRole('row', { name: new RegExp(sampleNo) });
   await expect(over).toContainText('B101-SP1');

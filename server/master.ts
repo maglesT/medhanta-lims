@@ -20,6 +20,8 @@ export interface Master {
   rooms(): Promise<MasterRoom[]>;
   // LIMS-09: the manufacturer named on a supplier's certificate.
   suppliers(): Promise<MasterSupplier[]>;
+  // The active products that use a material (item_link_v1 'uses': product → material), by the material's code.
+  usedBy(materialCode: string): Promise<{ code: string; name: string }[]>;
 }
 
 export const CONNECTION_OFF = 'Connection to master data is off. Ask your administrator.';
@@ -56,6 +58,9 @@ export function sqlMaster(md: Sql): Master {
       select id as "itemId", code, name, version, active, area, grade from report.room_v1 order by code`]),
     suppliers: () => read(async () => [...await md<MasterSupplier[]>`
       select id::text as "itemId", code, name, version, active, address from report.supplier_v1 order by code`]),
+    usedBy: (materialCode) => read(async () => [...await md<{ code: string; name: string }[]>`
+      select distinct p.code, p.name from report.item_link_v1 l join report.product_v1 p on p.code = l.from_code
+      where l.type = 'uses' and l.from_kind = 'product' and l.to_code = ${materialCode} and p.active order by p.code`]),
   };
 }
 

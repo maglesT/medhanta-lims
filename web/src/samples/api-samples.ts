@@ -24,7 +24,7 @@ export interface SampleListRow {
 export interface SampleEntry {
   id: number; kind: 'checked' | 'received' | 'stored' | 'handed_over' | 'disposed' | 'note' | 'approved' | 'rejected' | 'oot_answered'; personName: string; at: string;
   payload: { condition?: string; where?: string; to?: string; reason?: string; method?: string; text?: string; coaNo?: string; test?: string; analysisNo?: string; answer?: string };
-  signature: { printedName: string; signedAt: string } | null;
+  signature: { printedName: string; signedAt: string; meaning: string } | null;
 }
 export interface SampleDetail {
   sample: { id: number; sampleNo: string; purpose: SamplePurpose; lotNo: string; item: SampleItem; source: Source; quantity: string; containers: number | null;
