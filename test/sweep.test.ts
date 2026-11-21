@@ -66,6 +66,7 @@ const SETTINGS: Record<string, Step['settings']> = {
     spike: '0.05 EU/mL', concentration: '10 mg/mL', dilution: '10', limit: { high: '0.25', unit: 'EU/mg' } },
   'microbial-assay': { design: 'randomised blocks', responseUnit: 'mm', stdDose1: '1 IU/mL', stdDose2: '2 IU/mL', stdDose3: '4 IU/mL', testDose1: '1 IU/mL', testDose2: '2 IU/mL',
     testDose3: '4 IU/mL', assumedPotency: '1000 IU/mg', checkOn: 'lower fiducial limit', precision: { low: '95', high: '105', unit: '%' }, limit: { low: '900', high: '1100', unit: 'IU/mg' } },
+  complies: { what: 'Description', conforms: 'White, round tablets' },
   'relative-density': { mode: 'weight per mL', waterDensity: '0.99820 g/mL', temperatureLimit: { low: '19.5', high: '20.5', unit: '°C' }, limit: { low: '1.010', high: '1.030', unit: 'g/mL' } },
   // The method validation blocks (build step 8).
   'specificity': { limit: { high: '0.5', unit: '%' }, resolutionLimit: { low: '2.0', unit: '' } },

@@ -31,7 +31,7 @@ const RED = '#b3261e';
 // else the value as written.
 export const resultFigure = (shown: string, value: string, unit: string, reported?: string) => reported
   ?? /=\s*([^=;]+?)\s*(?:;\s*limit\b[^=]*)?$/.exec(shown.replace(/:\s*(PASS|FAIL)$/i, '').trim())?.[1]?.trim()
-  ?? /^\s*([-+]?\d[\d.]*(?:\s*[^\s;]+)?)\s*;/.exec(shown)?.[1]?.trim() ?? `${value} ${unit}`.trim();
+  ?? /^\s*([-+]?\d[\d.]*(?:\s*[^\s;]+)?)\s*;/.exec(shown)?.[1]?.trim() ?? (`${value} ${unit}`.trim() || shown);
 
 /** The result as reported (CoA, result_v1): rounded half up to the decimals the limit is written with (the finer bound). */
 export function reportedFigure(value: string, unit: string, limit: { low?: string; high?: string } | undefined): string {

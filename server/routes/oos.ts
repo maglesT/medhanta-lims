@@ -50,7 +50,8 @@ export async function openOos(tx: Tx, analysisId: number, person: number): Promi
       on conflict (year) do update set last_no = oos_counters.last_no + 1 returning last_no as n, right(year::text, 2) as yy`;
     const oosNo = `${OOS_PREFIX}${c!.yy}${String(c!.n).padStart(4, '0')}`;
     // The value as reported (rounded as the limit is written, LIMS-15); the full value stays in `value` and the line.
-    const result: OosResult = { name: t.name, value: r.value, unit: r.unit, shown: shownOf(r.value, r.unit, limitFor(t, purposeLimits(l.sample.purpose))), line: r.shown, limit: limitText(t, purposeLimits(l.sample.purpose)), step: at.id };
+    const text = typeof r.text === 'string' ? r.text : null;   // a judgement (L35): its word, no number
+    const result: OosResult = { name: t.name, value: text ? '' : r.value, unit: text ? '' : r.unit, shown: text ?? shownOf(r.value, r.unit, limitFor(t, purposeLimits(l.sample.purpose))), line: r.shown, limit: limitText(t, purposeLimits(l.sample.purpose)), step: at.id };
     const [o] = await tx<{ id: number }[]>`
       insert into oos (oos_no, sample_id, analysis_id, test_key, result, opened_by)
       values (${oosNo}, ${l.sample.id}, ${analysisId}, ${t.key}, ${tx.json(result as never)}, ${person}) returning id::int`;

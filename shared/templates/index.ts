@@ -19,7 +19,7 @@ export { t27Expiry, c8PrintedData, c9SerialCodes, expiryMonth, printedMonth, gs1
 export { l1Assay, l2LabelClaim, l3OnBasis, l4Impurities, l9ResidualSolvents, l20ChromAdjustment } from './lab-assay.js';
 export {
   l5Dissolution, l6Titration, l7WaterKf, l8MassLoss, l10Reading, l14Statistics, l17Standardisation, l19SamplingPlan,
-  tQuantile, fQuantile, chi2Quantile,
+  tQuantile, fQuantile, chi2Quantile, l35Complies, COMPLIES,
 } from './lab-physchem.js';
 export { l21DilutionFactor, type L21Input } from './lab-dilution.js';
 export {

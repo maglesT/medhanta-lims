@@ -400,7 +400,9 @@ export async function sampleTestResults(q: Sql | Tx, sampleId: number, app?: Fas
       const units = at && block && r?.ok ? unitValues(block, at.values, r) : null;
       (out[t.key] ??= []).push({ analysisId: id, analysisNo: l.analysis.analysisNo, status, people: v.people, openDeviations: v.deviations.filter((d) => d.open).length,
         reviewedAt, method: l.doc.header.code, ...(container ? { container } : {}),
-        result: r?.ok ? { shown: r.shown, value: r.value, unit: r.unit, ...(r.check ? { pass: r.check.pass } : {}),
+        // A judgement (Complies / does not comply, L35) is its word, with no number.
+        result: r?.ok && typeof r.text === 'string' ? { shown: r.text, value: '', unit: '', ...(r.check ? { pass: r.check.pass } : {}), figure: 'result' as const }
+        : r?.ok ? { shown: r.shown, value: r.value, unit: r.unit, ...(r.check ? { pass: r.check.pass } : {}),
           ...(units ? { individual: units } : {}), figure: figureOf(block, name) } : null });
     }
   }

@@ -46,6 +46,7 @@ const ALL: [string, Record<string, unknown>, object?][] = [
   ['loss-on-drying', { mode: 'loss on drying', conditions: '105 °C, 3 hours', limit: { high: '0.5', unit: '%' } }],
   ['optical-rotation', { form: 'solution', pathLength: '1 dm', concentration: '2.0 %w/v', temperatureLimit: { low: '19.5', high: '20.5', unit: '°C' }, limit: { low: '-30', high: '-26', unit: '°' } }],
   ['ph', { readingUnit: '', limit: { low: '5.0', high: '7.0', unit: '' } }],
+  ['complies', { what: 'Description', conforms: 'White, round tablets' }],
   ['relative-density', { mode: 'relative density', temperatureLimit: { low: '19.5', high: '20.5', unit: '°C' }, limit: { low: '1.010', high: '1.030', unit: '' } }],
   // The microbiology blocks (build step 7).
   ['incubate', { what: 'TAMC plates (casein soya bean digest agar)', atmosphere: 'aerobic', temperatureLimit: { low: '30', high: '35', unit: '°C' }, timeLimit: { low: '72', high: '120', unit: 'h' } }],

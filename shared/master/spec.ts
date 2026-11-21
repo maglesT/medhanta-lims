@@ -117,6 +117,13 @@ export function resultsOf(doc: MasterDoc): { ref: string; label: string }[] {
   })));
 }
 
+/** Whether a method's result (stage/step/name) is a judgement, Complies or Does not comply (template L35). */
+export function judged(doc: MasterDoc, ref: string): boolean {
+  const [sk, tk, name] = ref.split('/');
+  const st = doc.stages.find((s) => s.key === sk)?.steps.find((x) => x.key === tk);
+  return !!st && findBlock(st.block)?.calcs.find((c) => c.name === name)?.template === 'L35';
+}
+
 /** The limit a test applies for a purpose: the shelf-life limit on stability when the spec has one. */
 export function limitFor(t: SpecTest, purpose: 'release' | 'stability'): Limit | undefined {
   return purpose === 'stability' && t.limitType === 'release and shelf life' ? t.shelfLifeLimit : t.limit;
@@ -136,13 +143,15 @@ export function applySpec(doc: MasterDoc, tests: SpecTest | readonly SpecTest[],
     return t && limitFor(t, purpose);
   };
   const valueOf = (name: string) => list.map((t) => t.values[name]).find((x) => x !== undefined);
+  const conformsAt = (where: string) => (list.find((x) => stepOf(x) === where) ?? (list.length === 1 ? list[0] : undefined))?.conforms?.trim() || undefined;
   return {
     ...doc,
     stages: doc.stages.map((s) => ({ ...s, steps: s.steps.map((st) => ({
       ...st,
       settings: Object.fromEntries(Object.entries(st.settings).flatMap(([n, v]): [string, SettingValue][] => {
         if (typeof v !== 'object' || !('spec' in v)) return [[n, v]];
-        const x = v.spec === 'limit' ? limitAt(`${s.key}/${st.key}`) : valueOf(v.spec);
+        // conforms: the words of the test whose result is this step (a Complies / does not comply step's requirement).
+        const x = v.spec === 'limit' ? limitAt(`${s.key}/${st.key}`) : v.spec === 'conforms' ? conformsAt(`${s.key}/${st.key}`) : valueOf(v.spec);
         return x === undefined ? (v.spec === 'limit' ? [] : [[n, v]]) : [[n, x]];
       })),
     })) })),
@@ -197,6 +206,8 @@ export function specChecks(doc: SpecDoc, methods: (masterId: number) => { doc: M
     const m = methods(t.method.masterId);
     if (!m) return void error(`${p}.method`, `${t.name}: method ${t.method.code} has no approved or effective version`, 'LIMS-01');
     if (!resultsOf(m.doc).some((x) => x.ref === t.result)) error(`${p}.result`, `${t.name}: method ${t.method.code} has no result ${t.result}`);
+    // A result that is Complies or Does not comply has no number: only a conforms test takes it.
+    if (judged(m.doc, t.result) && t.limitType !== 'conforms') error(`${p}.limitType`, `${t.name}: method ${t.method.code} gives Complies or Does not comply, with no number: make it a conforms test`);
     // The method with this test's values in place passes its own checks: a limit in a unit of another kind than the
     // result it checks (a pH limit in %) is refused here (LIMS-01), for release and for stability.
     for (const purpose of ['release', 'stability'] as const) {
@@ -206,6 +217,7 @@ export function specChecks(doc: SpecDoc, methods: (masterId: number) => { doc: M
       }
     }
     for (const n of specNames(m.doc)) {
+      if (n.name === 'conforms') continue;   // the test's own words (limitType conforms), not a value
       if (n.name === 'limit') {
         if (t.limitType === 'conforms' || t.limitType === 'report only') error(`${p}.limit`, `${t.name}: method ${t.method.code} checks its result against a limit; a ${t.limitType} test cannot give one`);
         continue;
@@ -298,8 +310,11 @@ export function limitText(t: SpecTest, purpose: 'release' | 'stability' = 'relea
   if (t.limitType === 'conforms') return `Conforms: ${t.conforms ?? ''}`.trim();
   if (t.limitType === 'report only') return 'Report';
   const l = limitFor(t, purpose);
-  return l ? limitWords(l) : '';
+  return l ? (isAv(t) ? `AV ${limitWords({ ...l, unit: '' })}` : limitWords(l)) : '';
 }
+/** A test whose result is a uniformity acceptance value (the `acceptance` result of content uniformity, uniformity by
+ *  weight): a number without a unit, written "AV NMT 15.0". */
+export const isAv = (t: Pick<SpecTest, 'result'>) => t.result.split('/')[2] === 'acceptance';
 
 /** A limit in words: "98.0 to 102.0 %", "NMT 0.5 %", "NLT 80 %". */
 export function limitWords(l: Limit): string {

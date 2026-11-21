@@ -1609,3 +1609,23 @@ export function l19SamplingPlan(i: L19Input): Outcome<{ readonly tests?: number;
     }
   });
 }
+
+// ---- L35 Complies / does not comply (owner 21 Nov 2026) ----
+/**
+ * A test whose result is a judgement, not a number (description, identification, visual checks of packing material):
+ * the analyst finds that the sample complies with what the specification says it must show, or does not. The result
+ * is that word; it has no number. "Does not comply" fails the check (an OOS, as an out-of-limit number).
+ */
+export interface L35Input { readonly answer: string; readonly requirement?: string; readonly what?: string }
+export const COMPLIES = ['Complies', 'Does not comply'] as const;
+export function l35Complies(i: L35Input): Outcome<{ readonly text: string }> {
+  return run(() => {
+    const a = (i.answer ?? '').trim().toLowerCase();
+    if (a !== 'complies' && a !== 'does not comply') refuse(`Pick Complies or Does not comply (not "${i.answer}")`);
+    const pass = a === 'complies';
+    const text = pass ? 'Complies' : 'DOES NOT COMPLY';
+    const req = i.requirement?.trim();
+    const shown = `${i.what?.trim() ? `${i.what.trim()}: ` : ''}${text}${req ? ` (must show: ${req})` : ''}`;
+    return { ok: true, value: pass ? ZERO : ONE, unit: '', shown, check: { pass, level: pass ? 'pass' : 'fail', rounded: text, shown }, text };
+  });
+}

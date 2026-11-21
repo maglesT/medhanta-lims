@@ -167,7 +167,7 @@ export function testStates(spec: SpecDoc, purpose: string, results: Record<strin
     const r0 = each ? used!.find((a) => a.result?.pass === false) ?? used!.at(-1) : reviewed.at(-1);
     const r = r0 && used?.length ? { ...r0, analysisNo: used.map((a) => a.analysisNo).join(', '), people: [...new Set(used.flatMap((a) => a.people))],
       openDeviations: used.reduce((n, a) => n + a.openDeviations, 0) } : r0;
-    const shown = r?.result ? `${r.result.value} ${r.result.unit}`.trim() : undefined;
+    const shown = r?.result ? `${r.result.value} ${r.result.unit}`.trim() || r.result.shown : undefined;
     // LIMS-25: within the limit but outside the spec's trend limit, or (a stability result, plan 2b-3) outside the
     // prediction interval of the earlier results (template L22), or breaking a Nelson rule on the control chart of the
     // earlier decided results (template L18): flagged (`trend`, from sampleTrend in server/routes/trends.ts).
@@ -181,7 +181,7 @@ export function testStates(spec: SpecDoc, purpose: string, results: Record<strin
         people: r.people, openDeviations: r.openDeviations,
         ...(oot ? { outOfTrend: oot } : {}) } : null,
       // The result as it goes on the certificate and into result_v1.
-      decided: r?.result ? { key: t.key, name: t.name, value: r.result.value, unit: r.result.unit, shown: r.result.shown, reported: reportedFigure(r.result.value, r.result.unit, limitFor(t, on)), ...(r.result.pass !== undefined ? { pass: r.result.pass } : {}),
+      decided: r?.result ? { key: t.key, name: t.name, value: r.result.value, unit: r.result.unit, shown: r.result.shown, reported: r.result.value ? reportedFigure(r.result.value, r.result.unit, limitFor(t, on)) : r.result.shown, ...(r.result.pass !== undefined ? { pass: r.result.pass } : {}),
         limit: limitText(t, on), method: r.method, analysisNo: r.analysisNo, reviewedAt: r.reviewedAt,
         // result_v1's end: the units' results (BU, CU), what the figure is, the TrueBatch in-process field answered.
         ...(r.result.individual ? { individual: r.result.individual } : {}), ...(r.result.figure && r.result.figure !== 'result' ? { figure: r.result.figure } : {}),

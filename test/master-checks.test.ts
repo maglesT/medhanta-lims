@@ -37,7 +37,7 @@ describe('blocks are data', () => {
   it('the library has only lab blocks: no production block is left', () => {
     expect(BLOCKS.map((b) => b.id)).toEqual(['line-clearance', 'weigh', 'mix', 'dilute', 'instrument-run', 'system-suitability', 'check', 'periodic-check',
       'dry-constant', 'disintegration', 'friability', 'uniformity-by-weight', 'content-uniformity', 'blend-uniformity', 'density-flow', 'sieve-analysis',
-      'assay', 'assay-absorbance', 'impurities', 'dissolution', 'titration', 'water-kf', 'loss-on-drying', 'optical-rotation', 'ph', 'relative-density',
+      'assay', 'assay-absorbance', 'impurities', 'dissolution', 'titration', 'water-kf', 'loss-on-drying', 'optical-rotation', 'ph', 'relative-density', 'complies',
       'incubate', 'count', 'sterility-test', 'bioburden', 'endotoxin', 'microbial-assay',
       'specificity', 'linearity', 'accuracy', 'precision', 'lod-loq', 'signal-to-noise', 'robustness', 'transfer-comparison']);
   });

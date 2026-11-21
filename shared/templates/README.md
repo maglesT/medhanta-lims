@@ -454,3 +454,11 @@ Decisions taken while building:
   and multivariate (PLS) calibration. The confidence interval of an SD, prediction and tolerance intervals stay with L14.
 - The range is worked out where its three inputs meet: in the report, from the last linearity, accuracy and precision
   steps of the analyses it covers; the use (Table 2) is a setting of the linearity step.
+
+## L35 Complies / does not comply (owner 21 Nov 2026)
+
+- For a test whose result is a judgement, not a number: description, identification by eye, the visual check of a
+  packing material. The block `complies` asks one choice, Complies or Does not comply; the requirement is the
+  specification test's own words (`{ spec: 'conforms' }`). The result is the word: no value, no unit, no rounding.
+- "Does not comply" fails the check: an OOS opens as for a number out of its limit (LIMS-23). Only a conforms test of a
+  specification takes this result; the certificate and `result_v1` give the word (`value` null, `reported` the word).

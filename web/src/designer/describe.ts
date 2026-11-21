@@ -3,7 +3,7 @@
 import { findBlock } from '../../../shared/blocks/index.js';
 import { masterChecks } from '../../../shared/master/checks.js';
 import type { Limit, MasterDoc, Stage, Step } from '../../../shared/master/schema.js';
-import type { SpecDoc, SpecTest } from '../../../shared/master/spec.js';
+import { isAv, type SpecDoc, type SpecTest } from '../../../shared/master/spec.js';
 import { conditionLabel, PURPOSE_WORDS, type ProtocolDoc } from '../../../shared/master/protocol.js';
 import { pointWhere, type MonitoringDoc } from '../../../shared/master/monitoring.js';
 import { stepTitle } from '../../../shared/engine/analysis.js';
@@ -79,7 +79,7 @@ export function testText(t: SpecTest, n: number, results?: ResultNames): string 
   const result = results?.get(`${t.method.masterId}|${t.result}`);
   const limit = t.limitType === 'conforms' ? `Conforms: ${t.conforms ?? '(not said)'}` : t.limitType === 'report only' ? 'Reported only, no limit'
     : t.limitType === 'release and shelf life' ? `Release ${t.limit ? limitWords(t.limit) : '(not set)'}; shelf life ${t.shelfLifeLimit ? limitWords(t.shelfLifeLimit) : '(not set)'}`
-    : t.limit ? `${t.limitType === 'alert and action' ? 'Action limit' : 'Limit'} ${limitWords(t.limit)}` : 'Limit (not set)';
+    : t.limit ? `${t.limitType === 'alert and action' ? 'Action limit' : 'Limit'} ${isAv(t) ? `AV ${limitWords({ ...t.limit, unit: '' })}` : limitWords(t.limit)}` : 'Limit (not set)';
   const trend = t.trendLimit ? `; trend limit ${limitWords(t.trendLimit)}` : '';
   const values = Object.entries(t.values).map(([k, v]) => `${k} ${typeof v === 'string' ? v : limitWords(v)}`).join('; ');
   return `${n + 1}. ${t.name}: ${limit}${trend}. Method ${t.method.code} ${t.method.name}${result ? `, result ${result}` : ''}. Applies ${t.use === 'release and stability' ? 'at release and on stability' : t.use === 'release' ? 'at release' : 'on stability'}.${t.identity ? ' Identity test: on each container of a starting material.' : ''}${t.ipcField ? ` Answers the TrueBatch in-process field ${t.ipcField}.` : ''}${values ? ` Gives the method: ${values}.` : ''}`;

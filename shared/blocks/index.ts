@@ -3,6 +3,7 @@ import type { Block } from './format.js';
 import { assay } from './assay.js';
 import { assayAbsorbance } from './assay-absorbance.js';
 import { check } from './check.js';
+import { complies } from './complies.js';
 import { contentUniformity } from './content-uniformity.js';
 import { blendUniformity } from './blend-uniformity.js';
 import { densityFlow } from './density-flow.js';
@@ -40,7 +41,7 @@ export type { Block, BlockField, BlockSetting } from './format.js';
 export const BLOCKS: readonly Block[] = [
   lineClearance, weigh, mix, dilute, instrumentRun, systemSuitability, check, periodicCheck, dryConstant, disintegration, friability,
   uniformityByWeight, contentUniformity, blendUniformity, densityFlow, sieveAnalysis,
-  assay, assayAbsorbance, impurities, dissolution, titration, waterKf, lossOnDrying, opticalRotation, ph, relativeDensity,
+  assay, assayAbsorbance, impurities, dissolution, titration, waterKf, lossOnDrying, opticalRotation, ph, relativeDensity, complies,
   // The microbiology lab (build step 7): incubation and the counts, and the result blocks of the micro lab.
   incubate, count, sterilityTest, bioburden, endotoxin, microbialAssay,
   // Method validation (build step 8): specificity, linearity, accuracy, precision, DL/QL, robustness, transfer comparison.

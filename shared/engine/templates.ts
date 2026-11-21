@@ -35,6 +35,8 @@ export const TEMPLATES: Record<string, Template> = {
   // transfer comparison, specificity.
   L27: T.l27Linearity, L28: T.l28Accuracy, L29: T.l29Precision, L30: T.l30DetectionLimits, L31: T.l31Range, L32: T.l32Robustness,
   L33: T.l33TransferComparison, L34: T.l34Specificity,
+  // Lab template: a result that is a judgement, Complies or Does not comply (owner 21 Nov 2026).
+  L35: T.l35Complies,
 };
 
 /** Calls a template with arguments already resolved; a bug-level throw becomes a refusal so a analysis never crashes. */
