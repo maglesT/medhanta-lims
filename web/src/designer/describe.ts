@@ -74,6 +74,12 @@ const limitWords = (l: Limit) => [l.low !== undefined ? `${l.lowStrict ? 'more t
   .filter(Boolean).join(' and ') + (l.unit ? ` ${l.unit}` : '') + (l.alertLow !== undefined || l.alertHigh !== undefined ? ` (alert ${[l.alertLow && `below ${l.alertLow}`, l.alertHigh && `above ${l.alertHigh}`].filter(Boolean).join(', ')})` : '');
 /** A spec test's result by its step names ("Assay › HPLC run › Content"), keyed '<method master id>|<result ref>'. */
 export type ResultNames = ReadonlyMap<string, string>;
+// A TrueBatch in-process field ('<block id>.<field>') in words: the block's name ("blend uniformity request"); the
+// field's code itself only when no block of that name is known.
+const ipcWords = (code: string) => {
+  const b = findBlock({ id: code.split('.')[0] ?? '', version: 1 });
+  return b ? `${b.name.toLowerCase()} request` : `in-process request (field ${code})`;
+};
 /** A specification test in plain words: the limit as its type says, the method, the values it gives the method. */
 export function testText(t: SpecTest, n: number, results?: ResultNames): string {
   const result = results?.get(`${t.method.masterId}|${t.result}`);
@@ -82,7 +88,7 @@ export function testText(t: SpecTest, n: number, results?: ResultNames): string 
     : t.limit ? `${t.limitType === 'alert and action' ? 'Action limit' : 'Limit'} ${isAv(t) ? `AV ${limitWords({ ...t.limit, unit: '' })}` : limitWords(t.limit)}` : 'Limit (not set)';
   const trend = t.trendLimit ? `; trend limit ${limitWords(t.trendLimit)}` : '';
   const values = Object.entries(t.values).map(([k, v]) => `${k} ${typeof v === 'string' ? v : limitWords(v)}`).join('; ');
-  return `${n + 1}. ${t.name}: ${limit}${trend}. Method ${t.method.code} ${t.method.name}${result ? `, result ${result}` : ''}. Applies ${t.use === 'release and stability' ? 'at release and on stability' : t.use === 'release' ? 'at release' : 'on stability'}.${t.identity ? ' Identity test: on each container of a starting material.' : ''}${t.ipcField ? ` Answers the TrueBatch in-process field ${t.ipcField}.` : ''}${values ? ` Gives the method: ${values}.` : ''}`;
+  return `${n + 1}. ${t.name}: ${limit}${trend}. Method ${t.method.code} ${t.method.name}${result ? `, result ${result}` : ''}. Applies ${t.use === 'release and stability' ? 'at release and on stability' : t.use === 'release' ? 'at release' : 'on stability'}.${t.identity ? ' Identity test: on each container of a starting material.' : ''}${t.ipcField ? ` Answers the batch record's ${ipcWords(t.ipcField)}.` : ''}${values ? ` Gives the method: ${values}.` : ''}`;
 }
 function describeSpec(doc: SpecDoc, results?: ResultNames): Section[] {
   const h = doc.header;

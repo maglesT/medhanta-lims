@@ -21,7 +21,7 @@ import {
   PROVIDER_NAME, SAMPLE_ACTIONS, SAMPLE_ACTION_NAMES, SAMPLE_PURPOSES, isHand, sampleRefusal, sampleStatus,
   type LinkState, type SampleAction, type SampleEvent, type SamplePurpose, type Source,
 } from '../../shared/engine/index.js';
-import { plantDate } from '../../shared/plant-time.js';
+import { plantDate, plantTimesIn } from '../../shared/plant-time.js';
 import { plantToday } from './inventory.js';
 
 // Samples (LIMS-05, LIMS-07): registered from an MMS lot or a TrueBatch batch waiting to be sampled (pull, don't type),
@@ -93,7 +93,7 @@ async function sentBack(q: Sql | Tx, lotNo: string): Promise<{ releaseDecided: b
 }
 
 export const lotShown = (l: LotRead) => `MMS lot ${l.lotNumber}: ${l.materialCode ?? '—'}, ${l.status.replaceAll('_', ' ')}, expiry ${l.expiryDate ? plantDate(l.expiryDate) : '—'}, retest ${l.retestDate ? plantDate(l.retestDate) : '—'}${l.stock ? `, ${l.stock} ${l.unit ?? ''} in stock`.trimEnd() : ''}`;
-export const batchShown = (b: BatchRead) => `${b.edition ? EDITION_NAME[b.edition] : 'TrueBatch'} batch ${b.batchNumber}: ${b.productCode ?? '—'}${b.productName ? ` ${b.productName}` : ''}, ${b.status.replaceAll('_', ' ').toLowerCase()}, completed ${b.completedAt ?? '—'}${b.quantity ? `, ${b.quantity} made` : ''}`;
+export const batchShown = (b: BatchRead) => `${b.edition ? EDITION_NAME[b.edition] : 'TrueBatch'} batch ${b.batchNumber}: ${b.productCode ?? '—'}${b.productName ? ` ${b.productName}` : ''}, ${b.status.replaceAll('_', ' ').toLowerCase()}, completed ${b.completedAt ? plantTimesIn(b.completedAt) : '—'}${b.quantity ? `, ${b.quantity} made` : ''}`;
 
 async function loadSample(q: Sql | Tx, id: number): Promise<{ s: SampleRow; events: EventRow[] } | null> {
   const [s] = await q<SampleRow[]>`
@@ -167,7 +167,9 @@ export function testStates(spec: SpecDoc, purpose: string, results: Record<strin
     const r0 = each ? used!.find((a) => a.result?.pass === false) ?? used!.at(-1) : reviewed.at(-1);
     const r = r0 && used?.length ? { ...r0, analysisNo: used.map((a) => a.analysisNo).join(', '), people: [...new Set(used.flatMap((a) => a.people))],
       openDeviations: used.reduce((n, a) => n + a.openDeviations, 0) } : r0;
-    const shown = r?.result ? `${r.result.value} ${r.result.unit}`.trim() || r.result.shown : undefined;
+    // As reported (rounded as the limit is written, like the certificate); a judgement is its word.
+    const roundedOf = (x: NonNullable<TestResult['result']>) => { try { return x.value ? reportedFigure(x.value, x.unit, limitFor(t, on)) : x.shown; } catch { return `${x.value} ${x.unit}`.trim(); } };
+    const shown = r?.result ? roundedOf(r.result) : undefined;
     // LIMS-25: within the limit but outside the spec's trend limit, or (a stability result, plan 2b-3) outside the
     // prediction interval of the earlier results (template L22), or breaking a Nelson rule on the control chart of the
     // earlier decided results (template L18): flagged (`trend`, from sampleTrend in server/routes/trends.ts).
@@ -348,7 +350,7 @@ export function sampleRoutes(app: FastifyInstance, sql: Sql) {
       order by s.id desc limit 1000`;
     const events = rows.length ? await sql<(SampleEvent & { sampleId: number })[]>`
       select sample_id::int as "sampleId", kind, payload, person_id::int as person from sample_events where sample_id = any(${rows.map((r) => r.id)}) order by id` : [];
-    return rows.map((r) => ({ ...r, status: sampleStatus(r, events.filter((e) => e.sampleId === r.id)) }));
+    return rows.map((r) => { const ev = events.filter((e) => e.sampleId === r.id); return { ...r, status: sampleStatus(r, ev), decision: sampleDecision(ev) }; });
   });
 
   // One sample with its specification, its chain of custody (LIMS-07), its status and what this person may do next.

@@ -39,3 +39,12 @@ export const plantText = (text: string, full = false) => text.replace(STAMP, (m)
   const d = new Date(m.replace(' ', 'T').replace(/([+-]\d{2})$/, '$1:00'));
   return Number.isNaN(d.getTime()) ? m : plantClock(d, full);
 }).replace(DATE, (m) => plantDate(m));
+
+/** A text kept with a record (a batch's source line) with its database time stamps written as plant time with the year:
+ *  "completed 2026-11-20 22:42:50.531719+00" → "completed 21 Nov 2026, 04:12 IST". The record keeps its text. */
+export const plantTimesIn = (text: string) =>
+  text.replace(/\b(\d{4}-\d\d-\d\d)[ T](\d\d:\d\d:\d\d(?:\.\d+)?)(Z|[+-]\d\d(?::?\d\d)?)\b/g, (_m, d: string, t: string, z: string) => {
+    const iso = `${d}T${t}${z === 'Z' ? 'Z' : z.length === 3 ? `${z}:00` : z.includes(':') ? z : `${z.slice(0, 3)}:${z.slice(3)}`}`;
+    const x = new Date(iso);
+    return Number.isNaN(x.getTime()) ? _m : plantClock(x, true);
+  });

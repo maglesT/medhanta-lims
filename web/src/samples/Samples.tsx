@@ -6,7 +6,7 @@ import { can, plantTime, type Me } from '../api.js';
 import { plainError } from '../api-floor.js';
 import { PROVIDER_NAME, type LinkState } from '../../../shared/engine/links.js';
 import { plantText } from '../../../shared/plant-time.js';
-import { PURPOSE_LABEL, STATUS_CHIP, STATUS_LABEL, listSamples, sampleRequests, type From, type Requests, type SampleListRow, type SampleRequest } from './api-samples.js';
+import { DECISION_CHIP, DECISION_LABEL, PURPOSE_LABEL, STATUS_CHIP, STATUS_LABEL, listSamples, sampleRequests, type From, type Requests, type SampleListRow, type SampleRequest } from './api-samples.js';
 import { RegisterDialog } from './RegisterDialog.js';
 import { SampleScreen } from './SampleScreen.js';
 import { ReserveList, ReserveScreen, RetestDueList } from './Reserve.js';
@@ -109,7 +109,7 @@ export function Samples({ me }: { me: Me }) {
                   <td><b>{r.item.code}</b><span className="cell-sub">{r.item.name}</span></td>
                   <td>{r.lotNo}{r.byHand && <span className="cell-sub">typed by hand</span>}</td>
                   <td>{PURPOSE_LABEL[r.purpose]}</td>
-                  <td><span className={STATUS_CHIP[r.status]}>{STATUS_LABEL[r.status]}</span></td>
+                  <td>{r.decision && r.status !== 'disposed' ? <span className={DECISION_CHIP[r.decision]}>{DECISION_LABEL[r.decision]}</span> : <span className={STATUS_CHIP[r.status]}>{STATUS_LABEL[r.status]}</span>}</td>
                   <td>{r.registeredByName}<span className="cell-sub">{plantTime(r.registeredAt)}</span></td>
                 </tr>
               ))}

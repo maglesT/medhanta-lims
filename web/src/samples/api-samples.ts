@@ -20,6 +20,7 @@ export interface SampleItem { of: 'material' | 'product' | 'room' | 'water'; ite
 export interface SampleListRow {
   id: number; sampleNo: string; purpose: SamplePurpose; lotNo: string; item: SampleItem; byHand: boolean; quantity: string; containers: number | null;
   registeredByName: string; registeredAt: string; specNumber: string; specVersionNo: number; status: SampleStatus;
+  decision?: 'approved' | 'rejected' | null;
 }
 export interface SampleEntry {
   id: number; kind: 'checked' | 'received' | 'stored' | 'handed_over' | 'disposed' | 'note' | 'approved' | 'rejected' | 'oot_answered'; personName: string; at: string;
@@ -99,3 +100,7 @@ export const issueForm = (id: number, body: { masterVersionId: number; reason: s
 export const listForms = (open = false) => api<FormRow[]>('GET', `/api/forms${open ? '?open=1' : ''}`);
 export const formLink = (id: number) => `/api/forms/${id}/pdf`;
 export const formEntry = (id: number, action: 'return' | 'void', body: object) => api<{ ok: true }>('POST', `/api/forms/${id}/${action}`, body);
+
+// A decided sample shows QC's decision as its state (it may still be stored, handed over or disposed of: the chain of custody says).
+export const DECISION_CHIP = { approved: 'chip chip-ok', rejected: 'chip chip-bad' } as const;
+export const DECISION_LABEL = { approved: 'QC approved', rejected: 'QC rejected' } as const;

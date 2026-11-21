@@ -11,7 +11,7 @@ import { reportName, type SampleAction } from '../../../shared/engine/sample.js'
 // The report of an approved sample in a sentence: "certificate COA…", "EM result report COA…".
 const reportWord = (purpose: string, of: string) => { const n = reportName(purpose, of); return n === 'Certificate of analysis' ? 'certificate' : n.replace(/^In-/, 'in-'); };
 import { ReservePanel } from './Reserve.js';
-import { PURPOSE_LABEL, STATUS_CHIP, STATUS_LABEL, answerOot, coaLink, decide, getSample, labelsLink, recordReduced, sampleEntry, type ReducedBasis, type SampleDetail, type SampleEntry } from './api-samples.js';
+import { DECISION_CHIP, DECISION_LABEL, PURPOSE_LABEL, STATUS_CHIP, STATUS_LABEL, answerOot, coaLink, decide, getSample, labelsLink, recordReduced, sampleEntry, type ReducedBasis, type SampleDetail, type SampleEntry } from './api-samples.js';
 import { FormsPanel, OutsideDialog, OutsideLine } from './Paper.js';
 import { SAMPLING_DETAILS } from '../../../shared/master/spec.js';
 import { plantDate } from '../../../shared/plant-time.js';
@@ -47,13 +47,13 @@ export function SampleScreen({ me, id, onBack, onOpenReserve, backTo = 'Samples'
 
   if (!d) return <>{error ? <p className="notice" role="alert">{error}</p> : <div className="skel skel-block" />}</>;
   const s = d.sample;
-  const waitingWhy = !d.actions.includes('receive') && d.status !== 'disposed' && d.refusals.receive;
+  const waitingWhy = !d.decision && !d.actions.includes('receive') && d.status !== 'disposed' && d.refusals.receive;
   return (
     <>
       <button className="link dark" onClick={onBack}>← {backTo}</button>
       <div className="home-head">
         <div>
-          <h1>{s.sampleNo} <span className={STATUS_CHIP[d.status]}>{STATUS_LABEL[d.status]}</span></h1>
+          <h1>{s.sampleNo} {d.decision && d.status !== 'disposed' ? <span className={DECISION_CHIP[d.decision]}>{DECISION_LABEL[d.decision]}</span> : <span className={STATUS_CHIP[d.status]}>{STATUS_LABEL[d.status]}</span>}</h1>
           <p className="greeting"><b>{s.item.code}</b> {s.item.name} · {LOT_WORD[s.item.of].toLowerCase()} {s.lotNo}</p>
         </div>
       </div>
@@ -188,7 +188,7 @@ function Tests({ d, me, reload }: { d: SampleDetail; me: Me; reload: () => Promi
       </div>
       {may && d.methods.length > 0 && (
         <div className="actions-row">
-          {inQc ? d.methods.map((m) => <button key={m.masterId} onClick={() => setStarting(m)}>Start {m.code} {m.name}</button>)
+          {d.decision ? <p className="muted small">QC has decided: no new analysis is started.</p> : inQc ? d.methods.map((m) => <button key={m.masterId} onClick={() => setStarting(m)}>Start {m.code} {m.name}</button>)
             : <p className="muted small">Analyses start once QC has received the sample.</p>}
           {inQc && !d.decision && <button onClick={() => setOutside(true)}>Outside lab result</button>}
           {inQc && !d.decision && d.reducedTesting?.recorded && <button onClick={() => setCertificate(true)}>Supplier's certificate result</button>}
