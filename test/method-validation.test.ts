@@ -10,7 +10,7 @@ import { methodReportDoc } from '../server/method-report-pdf.js';
 
 // Method validation, verification and transfer (plan 2.12): the report's rules (shared/engine/method-validation.ts),
 // then on the server: a validation worksheet run as an analysis, its report prepared, reviewed by QC and approved by QA,
-// and only then the method made effective (LIMS-02); a pharmacopoeial method verified, or validated outside LIMS on
+// and only then the method made effective (LIMS-02); a pharmacopoeial method verified, or validated outside QLIMS on
 // paper (QA as the second person); a transferred method used only after its transfer report (LIMS-04).
 
 // ---- The rules ----
@@ -63,7 +63,7 @@ describe('the validation report rules', () => {
     expect(methodUse(header({ origin: 'transferred' }), 1, [{ ...approved, kind: 'transfer' }]).status).toBe('transferred');
   });
 
-  it('LIMS-02 prepared, reviewed by QC and approved by QA: three people; outside LIMS: QA approves as a second person', () => {
+  it('LIMS-02 prepared, reviewed by QC and approved by QA: three people; outside QLIMS: QA approves as a second person', () => {
     const r = report();
     expect(reportStatus(r)).toBe('to review');
     expect(reportRefusal('review', r, 1)).toContain('cannot review');
@@ -208,7 +208,7 @@ describe('LIMS-02 method validation on the server', () => {
     expect((await as('analyst', 'POST', '/api/analyses', { masterVersionId: w.id, sampleId: 1, proof: proofFor('analyst') })).json()).toMatchObject({ error: 'validation_worksheet' });
   });
 
-  it('LIMS-02 a pharmacopoeial method validated on paper before LIMS: recorded with the paper report number, approved by QA as a second person', async () => {
+  it('LIMS-02 a pharmacopoeial method validated on paper before QLIMS: recorded with the paper report number, approved by QA as a second person', async () => {
     const m = await approved(routine('QC-M-803', { origin: 'pharmacopoeial', reference: 'Ph. Int. Demolol tablets', edition: '11th ed.' }));
     expect((await makeEffective(m.id)).json().message).toContain('not verified yet');
     const r = await as('author2', 'POST', '/api/method-reports', { ...draft('verification', m.id, 'assay', []), outside: true, reference: 'QC/VER/2019/044', proof: proofFor('author2') });
@@ -219,10 +219,10 @@ describe('LIMS-02 method validation on the server', () => {
     await ok(signReport('quality', id, 'approve'));
     await ok(makeEffective(m.id));
     const list = (await as('analyst', 'GET', '/api/method-reports')).json() as { methods: { code: string; status: string }[] };
-    expect(list.methods.find((x) => x.code === 'QC-M-803')?.status).toBe('verified (outside LIMS)');
+    expect(list.methods.find((x) => x.code === 'QC-M-803')?.status).toBe('verified (outside QLIMS)');
     const paper = (await storedReport(t.sql, id))!;
     const text = JSON.stringify(methodReportDoc(paper.report, paper.signatures, 'ANALYST'));
-    expect(text).toContain('Validated outside LIMS: paper report QC/VER/2019/044');
+    expect(text).toContain('Validated outside QLIMS: paper report QC/VER/2019/044');
     expect(text).toContain('pharmacopoeial method');
   });
 });

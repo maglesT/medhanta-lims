@@ -6,6 +6,7 @@ import { audit } from '../audit.js';
 import { parseId, requirePermission } from '../auth.js';
 import { usableItem } from '../master.js';
 import { batchShown, newSample, type MonitoringTaken, type SampleItem } from './samples.js';
+import { shownFigure } from '../coa.js';
 import { plantToday } from './inventory.js';
 import { sampleTestResults } from './analyses.js';
 import type { SpecDoc } from '../../shared/master/spec.js';
@@ -54,7 +55,7 @@ async function resultOf(q: Sql | Tx, t: Taken) {
   const r = (await sampleTestResults(q, t.id))[t.m.testKey]?.filter((a) => a.status === 'reviewed' && a.result).at(-1);
   if (!r?.result) return null;
   const lv = excursionLevel(r.result, t.m.limit ?? undefined, t.m.grade, t.m.kind as SamplingKind);
-  return { analysisNo: r.analysisNo, value: r.result.value, unit: r.result.unit, shown: r.result.shown, level: lv.level as Level, why: lv.why,
+  return { analysisNo: r.analysisNo, value: shownFigure(r.result.value, t.m.limit as { low?: string; high?: string } | null), unit: r.result.unit, shown: r.result.shown, level: lv.level as Level, why: lv.why,
     growth: COLONY_KINDS.includes(t.m.kind as SamplingKind) && Number(r.result.value) > 0 };
 }
 

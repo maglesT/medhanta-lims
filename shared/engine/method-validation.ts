@@ -5,7 +5,7 @@
  * template worked it out (met = no failed check). The conclusion is "met" only when every characteristic found is met
  * and none that the report's kind and test type require (ICH Q2(R2) Table 1) is missing. Signed by the person who
  * prepares it, reviewed by QC (another person) and approved by QA (a third person). A method validated on paper before
- * LIMS is recorded "outside LIMS" with the paper report's number; QA (another person) approves it.
+ * LIMS is recorded "outside QLIMS" with the paper report's number; QA (another person) approves it.
  */
 import { failed, type Stored } from './values.js';
 import { l31Range, type L31Input } from '../templates/index.js';
@@ -134,13 +134,13 @@ export function reportStatus(r: ReportFacts): ReportStatus {
 export function reportRefusal(action: 'review' | 'approve', r: ReportFacts, person: number): string | null {
   const status = reportStatus(r);
   if (action === 'review') {
-    if (status !== 'to review') return r.outside ? 'A record of a validation outside LIMS is approved by QA; there is no QC review.' : `This report is ${status === 'approved' ? 'approved' : 'already reviewed'}.`;
+    if (status !== 'to review') return r.outside ? 'A record of a validation outside QLIMS is approved by QA; there is no QC review.' : `This report is ${status === 'approved' ? 'approved' : 'already reviewed'}.`;
     if (person === r.preparedBy) return 'The person who prepared the report cannot review it: another person reviews it.';
     return null;
   }
   if (status === 'approved') return 'This report is already approved.';
   if (status === 'to review') return 'QC reviews the report before QA approves it.';
-  if (person === r.preparedBy) return r.outside ? 'The person who recorded the validation outside LIMS cannot approve it: QA approves it as a second person.' : 'The person who prepared the report cannot approve it.';
+  if (person === r.preparedBy) return r.outside ? 'The person who recorded the validation outside QLIMS cannot approve it: QA approves it as a second person.' : 'The person who prepared the report cannot approve it.';
   if (r.events.some((e) => e.kind === 'reviewed' && e.person === person)) return 'QA approval is by a person who neither prepared nor reviewed the report.';
   return null;
 }
@@ -156,12 +156,12 @@ export function methodUse(header: MasterDoc['header'], versionNo: number, report
   const needs = NEEDS[header.origin ?? 'in-house'];
   const report = reports.filter((r) => ACCEPTED[needs].includes(r.kind) && r.conclusion === 'met' && r.methodVersionNo <= versionNo && reportStatus(r) === 'approved')
     .sort((a, b) => b.methodVersionNo - a.methodVersionNo || b.id - a.id)[0] ?? null;
-  return { needs, report, status: report ? `${STATUS_WORD[report.kind]}${report.outside ? ' (outside LIMS)' : ''}` : `not yet ${STATUS_WORD[needs]}` };
+  return { needs, report, status: report ? `${STATUS_WORD[report.kind]}${report.outside ? ' (outside QLIMS)' : ''}` : `not yet ${STATUS_WORD[needs]}` };
 }
 export function useRefusal(header: MasterDoc['header'], versionNo: number, reports: readonly ReportFacts[]): string | null {
   const u = methodUse(header, versionNo, reports);
   if (!u.needs || u.report) return null;
   return u.needs === 'transfer'
     ? 'This method is transferred from another laboratory: it is used here only once its transfer report (protocol, comparative results, conclusion) is approved by QA (LIMS-04).'
-    : `This ${u.needs === 'verification' ? 'pharmacopoeial' : 'in-house'} method is not ${STATUS_WORD[u.needs]} yet: it becomes effective for routine use once its ${u.needs} report is approved by QA, or its validation outside LIMS is recorded and approved (LIMS-02).`;
+    : `This ${u.needs === 'verification' ? 'pharmacopoeial' : 'in-house'} method is not ${STATUS_WORD[u.needs]} yet: it becomes effective for routine use once its ${u.needs} report is approved by QA, or its validation outside QLIMS is recorded and approved (LIMS-02).`;
 }

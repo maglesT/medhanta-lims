@@ -108,7 +108,7 @@ export function ReleaseScreen({ me, id }: { me: Me; id: number }) {
         <Kpi n={openDevs.length} label={r.deviations.length ? `Open deviations (${r.deviations.length} in all)` : 'Open deviations'} tone="bad" />
         <Kpi n={r.hand.length} label="Typed by hand, not pulled through a link" tone="warn" />
       </div>
-      {r.deviationsLink === 'down' && <p className="notice warn">The DIVE link is down: the deviation statuses shown are LIMS's own (closed by hand).</p>}
+      {r.deviationsLink === 'down' && <p className="notice warn">The DIVE link is down: the deviation statuses shown are QLIMS's own (closed by hand).</p>}
 
       <section className="dash-panel" aria-label="Review of the record and its audit trail">
         <div className="panel-head"><h2>Review of the record and its audit trail</h2>

@@ -174,3 +174,4 @@ dl.details dd { margin: 0; }
 .brand b { font-size: 1.08rem; }
 .login-logo { display: block; width: 300px; max-width: 80%; height: auto; margin: 0 auto 14px; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+@media (max-width: 640px) { .bar nav { flex-wrap: nowrap; overflow-x: auto; } .bar nav .tab { white-space: nowrap; } }

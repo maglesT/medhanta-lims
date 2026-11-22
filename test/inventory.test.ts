@@ -155,7 +155,7 @@ describe('the worksheet takes items from the inventory', () => {
     // Typed before or after picking: refused.
     const typed = await step('assay', 'record', { values: { stdPotency: '100.0' } });
     expect(typed.statusCode).toBe(400);
-    expect(typed.json().problems).toEqual(['Standard: potency (from the inventory) comes from the LIMS inventory with the reference or working standard used and cannot be typed']);
+    expect(typed.json().problems).toEqual(['Standard: potency (from the inventory) comes from the QLIMS inventory with the reference or working standard used and cannot be typed']);
     const r = await step('assay', 'record', { values: { std: `lab:${ws.id}`, stdResponses: ['1000000'], responses1: ['995000'] } });
     expect(r.statusCode, r.body).toBe(200);
     const s = await values('assay');

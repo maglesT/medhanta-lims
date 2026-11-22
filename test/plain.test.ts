@@ -3,6 +3,7 @@ import { headline } from '../shared/engine/plain.js';
 import { store, type Stored } from '../shared/engine/values.js';
 import { t17LiquidMakeUp } from '../shared/templates/liquid.js';
 import { c1WithinLimits, c3AllIndividual } from '../shared/templates/series.js';
+import { shownFigure } from '../server/coa.js';
 import { c6StagedTest } from '../shared/templates/staged.js';
 
 // The headline of a result says the calc's own value (owner's confirmation run, 17 Nov 2026), rounded as its worked
@@ -63,5 +64,12 @@ describe('count words and the mean', () => {
     expect(one.ok && [one.value.toString(), one.unit, one.decision]).toEqual(['12.5', 'min', 'pass']);
     const two = c6StagedTest({ test: 'disintegration', maxTime: '15', noun: 'tablets', stages: [['5', '6', '7', '8', '9', '> 15'], ['5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '9', '8']] });
     expect(two.ok && [two.value.toString(), two.stageReached, two.decision]).toEqual(['15', 2, 'pass']);
+  });
+
+  it('screens show a result as reported: rounded as the limit is written, or to 3 decimals with no limit', () => {
+    expect(shownFigure('1.8971979337960496524445414707403976308352480816391', { high: '15.0' })).toBe('1.9');
+    expect(shownFigure('0.8991008991008991008991008991', { high: '1.0' })).toBe('0.9');
+    expect(shownFigure('0.8991008991008991', undefined)).toBe('0.899');
+    expect(shownFigure('99.4', undefined)).toBe('99.4');
   });
 });

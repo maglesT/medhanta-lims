@@ -1,6 +1,6 @@
 /**
  * Chromatography result files exported from the CDS (LIMS-33, LIMS-49, LIMS-50; plan 2.8, question 3). The CDS stays
- * the raw-data record: LIMS reads the peak table of its result export with a FIXED parser per layout (Empower report
+ * the raw-data record: QLIMS reads the peak table of its result export with a FIXED parser per layout (Empower report
  * CSV, Chromeleon export, OpenLab CDS CSV, and the generic layout documented in docs/design.md), and keeps the file's
  * name, size, SHA-256, the CDS run id, sequence and processing method with the values it took. Pure functions.
  */
@@ -79,7 +79,7 @@ export function parseCds(text: string): CdsFile | { error: string } {
     }
     if (!format && c.length >= 2 && c[0]) header[c[0]] = cells(line, sep)[1] ?? '';
   }
-  if (!format) return { error: `This file is not a CDS result export LIMS reads (${Object.values(CDS_FORMATS).join(', ')}): export the peak table with the injection, sample name, peak, retention time and area.` };
+  if (!format) return { error: `This file is not a CDS result export QLIMS reads (${Object.values(CDS_FORMATS).join(', ')}): export the peak table with the injection, sample name, peak, retention time and area.` };
   const key = (k: keyof typeof KEYS) => KEYS[k].map((x) => header[x]).find((v) => v !== undefined && v.trim() !== '')?.trim();
   const run = key('run');
   if (!run) return { error: 'The file does not give the CDS run (result set or sequence) id: export it with the run id, so the result links back to the CDS raw data.' };
@@ -117,6 +117,6 @@ export function parseCds(text: string): CdsFile | { error: string } {
   }
   if (problems.length) return { error: `The file cannot be read: ${problems.slice(0, 5).join(' ')}${problems.length > 5 ? ` (and ${problems.length - 5} more)` : ''}` };
   if (!rows.length) return { error: 'The file has no peaks.' };
-  if (rows.length > MAX_ROWS) return { error: `The file has ${rows.length} peaks; LIMS reads at most ${MAX_ROWS}: export only this run.` };
+  if (rows.length > MAX_ROWS) return { error: `The file has ${rows.length} peaks; QLIMS reads at most ${MAX_ROWS}: export only this run.` };
   return { format, run, sequence: key('sequence') ?? null, method: version ? `${method} version ${version}` : method, instrument: key('instrument') ?? null, rows };
 }

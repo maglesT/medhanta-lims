@@ -182,7 +182,7 @@ export function methodReportRoutes(app: FastifyInstance, sql: Sql) {
     const user = req.user!;
     try {
       if (d.kind === 'transfer' && (!d.sendingLab || !d.receivingLab)) throw new ReportError(400, 'labs_missing', ['A transfer report names the sending and the receiving laboratory (LIMS-04).']);
-      if (d.outside && d.analysisIds.length) throw new ReportError(400, 'outside_with_analyses', ['A validation outside LIMS has no analyses here: give the paper report\'s number.']);
+      if (d.outside && d.analysisIds.length) throw new ReportError(400, 'outside_with_analyses', ['A validation outside QLIMS has no analyses here: give the paper report\'s number.']);
       if (!d.outside && !d.analysisIds.length) throw new ReportError(400, 'no_analyses', ['Choose the reviewed analyses the report covers.']);
       const signer = await authenticateSigner(sql, app.proofKey, user, { proof: d.proof }, { objectType: 'method_report', objectId: 0, meaning: 'prepared' });
       return await sql.begin(async (tx) => {
@@ -194,7 +194,7 @@ export function methodReportRoutes(app: FastifyInstance, sql: Sql) {
           if (!v || v.kind !== 'method') throw new ReportError(404, 'no_such_method', ['There is no such method version.']);
           const no = kindRefusal(v.doc.header.origin, v.doc.header.use, d.kind);
           if (no) throw new ReportError(409, 'wrong_kind', [no]);
-          const outputs = { findings: [], characteristics: [], missing: [], met: true, why: `${d.kind} outside LIMS: paper report ${d.reference}` };
+          const outputs = { findings: [], characteristics: [], missing: [], met: true, why: `${d.kind} outside QLIMS: paper report ${d.reference}` };
           w = { v, steps: [], fs: [], c: outputs, inputs: { analyses: [], steps: [] }, outputs };
         } else {
           w = await work(tx, draft);

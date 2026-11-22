@@ -62,7 +62,7 @@ export interface FormRow { id: number; formNo: string; sampleId: number; sampleN
 // LIMS-22: an outside lab's result, as typed from its report.
 export interface OutsideFacts { id: number; certificate?: boolean; lab: string; reportNo: string; fileName: string; size: number; sha256: string; enteredBy: string; enteredAt: string; checkedBy: string | null; checkedAt: string | null }
 // A spec test's analysis: its status and, once worked out, its result (pass or fail against the test's limit).
-export interface TestResult { analysisId: number; analysisNo: string; status: string; result: { shown: string; value: string; unit: string; pass?: boolean } | null;
+export interface TestResult { analysisId: number; analysisNo: string; status: string; result: { shown: string; value: string; unit: string; reported?: string; pass?: boolean } | null;
   container?: number | null; outside?: OutsideFacts }
 export interface RegisterInput {
   source: From; lotNumber?: string; batchNumber?: string; byHand?: boolean; itemId?: string; specVersionId: number;

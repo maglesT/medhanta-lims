@@ -196,7 +196,7 @@ async function readValues(app: FastifyInstance, tx: Tx, l: LoadedAnalysis, key: 
     if (!f) { problems.push(`There is no field ${name}`); continue; }
     if (LINK_OF[f.kind] || f.kind === 'item') continue;
     // A standard's potency, a VS factor: only with the item picked from the inventory, never typed.
-    if (fills[name]) { problems.push(`${f.label} comes from the LIMS inventory with the ${fills[name].item.label.toLowerCase()} and cannot be typed`); continue; }
+    if (fills[name]) { problems.push(`${f.label} comes from the QLIMS inventory with the ${fills[name].item.label.toLowerCase()} and cannot be typed`); continue; }
     if (taken.has(name)) continue;
     // LIMS-32: read from the step's machine over its serial port; the server parses the raw lines itself.
     if (isCaptureRaw(x)) {
@@ -254,7 +254,7 @@ async function readValues(app: FastifyInstance, tx: Tx, l: LoadedAnalysis, key: 
 
 /**
  * LIMS-33, LIMS-49, LIMS-50: the values a CDS result file gives a step, from its bytes. The file must be one of the
- * layouts LIMS reads, of the run the analysis' instrument run recorded, with injections of this sample that fit the
+ * layouts QLIMS reads, of the run the analysis' instrument run recorded, with injections of this sample that fit the
  * step. Its SHA-256 is worked out here; the file itself is not kept (the CDS is the raw-data record). An import over an
  * earlier one needs a reason, and the earlier one stays in the record.
  */

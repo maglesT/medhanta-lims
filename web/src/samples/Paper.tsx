@@ -17,7 +17,7 @@ export function OutsideLine({ d, a, me, reload }: { d: SampleDetail; a: TestResu
   return (
     <div>
       {o.certificate ? <><span className="chip chip-info">supplier's certificate</span> {o.lab}, certificate {o.reportNo}</> : <><span className="chip chip-info">outside lab</span> {o.lab}, report {o.reportNo}</>}
-      {a.result && <> · <b>{a.result.value || a.result.shown}{a.result.value ? ` ${a.result.unit}` : ''}</b>{a.result.pass !== undefined && <span className={`chip ${a.result.pass ? 'chip-ok' : 'chip-bad'}`}>{a.result.pass ? 'within limits' : 'out of limits'}</span>}</>}
+      {a.result && <> · <b>{a.result.reported ?? (a.result.value || a.result.shown)}{a.result.value ? ` ${a.result.unit}` : ''}</b>{a.result.pass !== undefined && <span className={`chip ${a.result.pass ? 'chip-ok' : 'chip-bad'}`}>{a.result.pass ? 'within limits' : 'out of limits'}</span>}</>}
       <span className="cell-sub">File {o.fileName}, SHA-256 {o.sha256.slice(0, 16)}… · typed by {o.enteredBy}, {plantTime(o.enteredAt)} · {o.checkedBy ? `checked by ${o.checkedBy}, ${plantTime(o.checkedAt)}` : 'waits for a second person\'s check'}</span>
       {!o.checkedBy && !d.decision && can(me, 'analysis.review') && (
         <>{o.certificate && <label className="check small"><input type="checkbox" checked={fields} onChange={(e) => setFields(e.target.checked)} /> The certificate gives {CERTIFICATE_FIELDS}</label>}

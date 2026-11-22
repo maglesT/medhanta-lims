@@ -182,7 +182,7 @@ function Tests({ d, me, reload }: { d: SampleDetail; me: Me; reload: () => Promi
                 <td>{n !== null && t.identity && t.applies && <span className="cell-sub">On each of {n} container{n === 1 ? '' : 's'}: {Array.from({ length: n }, (_, k) => k + 1).map((c) => `${c} ${t.analyses.some((a) => a.container === c && a.status === 'reviewed') ? '✓' : '·'}`).join('  ')}</span>}
                   {t.analyses.length ? t.analyses.map((a) => a.outside ? <OutsideLine key={`o${a.outside.id}`} d={d} a={a} me={me} reload={reload} /> : (
                   <div key={a.analysisId}><a href={analysisLink(a.analysisId)}>{a.analysisNo}</a>{a.container ? ` · container ${a.container}` : ''} · {a.status}{STATUS_HINT[a.status] && <span className="muted small"> ({STATUS_HINT[a.status]})</span>}
-                    {a.result && <> · <b>{a.result.value} {a.result.unit}</b>{a.result.pass !== undefined && <span className={`chip ${a.result.pass ? 'chip-ok' : 'chip-bad'}`}>{a.result.pass ? 'within limits' : 'out of limits'}</span>}</>}
+                    {a.result && <> · <b>{a.result.reported ?? a.result.value} {a.result.unit}</b>{a.result.pass !== undefined && <span className={`chip ${a.result.pass ? 'chip-ok' : 'chip-bad'}`}>{a.result.pass ? 'within limits' : 'out of limits'}</span>}</>}
                     {d.oot.some((x) => x.key === t.key && x.analysisNo === a.analysisNo) && <span className="chip chip-warn">out of trend</span>}
                     {d.oos.filter((o) => o.testKey === t.key && o.analysisNo === a.analysisNo).map((o) => <a key={o.id} className="chip chip-bad" href={oosLink(o.id)}>{o.oosNo} · {o.status}</a>)}
                   </div>)) : <span className="muted">{t.applies ? 'not started' : '—'}</span>}</td>

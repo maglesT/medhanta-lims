@@ -137,7 +137,7 @@ export function CdsImport({ events, names, signed, onImport }: { events: FloorEv
   };
   return (
     <section className="dash-panel" aria-label="CDS result file">
-      <div className="panel-head"><h2>CDS result file</h2><span className="muted">the CDS stays the raw data; LIMS keeps the values, the file's hash and the run</span></div>
+      <div className="panel-head"><h2>CDS result file</h2><span className="muted">the CDS stays the raw data; QLIMS keeps the values, the file's hash and the run</span></div>
       {imports.length > 0 && (
         <ol className="timeline">{imports.map((x) => (
           <li key={x.e.id}><time>{plainClock(x.e.at)}</time><span><b>Import {x.cds.version}</b>: {x.cds.file} · run {x.cds.run} · {x.cds.method} · SHA-256 <code>{x.cds.hash.slice(0, 16)}…</code>

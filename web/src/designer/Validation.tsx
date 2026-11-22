@@ -139,7 +139,7 @@ function NewReport({ methods, onCancel, onDone }: { methods: MethodUse[]; onCanc
           <label>Remarks<input aria-label="Remarks" value={remarks} onChange={(e) => setRemarks(e.target.value)} /></label>
         </div>
         <label className="check"><input type="checkbox" checked={outside} onChange={(e) => setOutside(e.target.checked)} />
-          <span>Validated outside LIMS (a paper report from before LIMS; QA approves it as a second person)</span></label>
+          <span>Validated outside QLIMS (a paper report from before QLIMS; QA approves it as a second person)</span></label>
         {!outside && (
           <fieldset className="checklist">
             <legend>Reviewed worksheet analyses</legend>

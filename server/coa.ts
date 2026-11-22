@@ -41,6 +41,14 @@ export function reportedFigure(value: string, unit: string, limit: { low?: strin
   return `${v}${unit ? ` ${unit}` : ''}`;
 }
 
+/** The bare figure as the screens show it: as reported when the limit has decimals written; with no limit, to 3 decimals. */
+export function shownFigure(value: string, limit: { low?: string; high?: string } | undefined | null): string {
+  try {
+    if (limit && (limit.low !== undefined || limit.high !== undefined)) return reportedFigure(value, '', limit);
+    return /^-?\d+\.\d{4,}$/.test(value.trim()) ? roundHalfUp(new Dec(value), 3).toFixed(3).replace(/\.?0+$/, '') : value;
+  } catch { return value; }
+}
+
 export function coaDoc(c: CoaInput, by: string, printedAt = new Date(), demo = false): TDocumentDefinitions {
   const s = c.sample;
   const h = c.spec.header;

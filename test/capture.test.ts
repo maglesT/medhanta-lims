@@ -130,7 +130,7 @@ describe('LIMS-33 CDS result files: fixed parsers', () => {
   it('LIMS-49 LIMS-50 a file without its run id or processing method, of another layout, or with a broken number is refused with the reason', () => {
     expect(parseCds(fixture('generic-assay.csv').replace('# run: RUN-0042\n', ''))).toEqual({ error: 'The file does not give the CDS run (result set or sequence) id: export it with the run id, so the result links back to the CDS raw data.' });
     expect(parseCds(fixture('generic-assay.csv').replace(/# processing method.*\n/g, ''))).toEqual({ error: 'The file does not name its processing method: export it with the processing method (and its version).' });
-    expect(parseCds('Name,Value\nA,1\n')).toMatchObject({ error: expect.stringMatching(/^This file is not a CDS result export LIMS reads \(generic CSV layout, Empower report CSV, Chromeleon export, OpenLab CDS CSV\)/) });
+    expect(parseCds('Name,Value\nA,1\n')).toMatchObject({ error: expect.stringMatching(/^This file is not a CDS result export QLIMS reads \(generic CSV layout, Empower report CSV, Chromeleon export, OpenLab CDS CSV\)/) });
     expect(parseCds(fixture('generic-assay.csv').replace('1520345.2', '1,520,345'))).toEqual({ error: 'The file cannot be read: Line 9 has more cells than the header (a number with a thousands separator?).' });
     expect(parseCds(fixture('generic-assay.csv').replace('1520345.2', '1.52e6'))).toEqual({ error: 'The file cannot be read: Line 9: the area "1.52e6" is not a number.' });
   });

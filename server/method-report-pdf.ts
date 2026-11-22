@@ -39,7 +39,7 @@ export function methodReportDoc(r: ReportForPdf, signatures: readonly SignatureR
   const content: Content[] = [
     { text: runs(`${r.reportNo} · Method ${r.kind} report`), fontSize: 15, bold: true },
     { text: runs(`${r.code} · ${r.name} · version ${r.methodVersionNo} · ${r.origin} method`), fontSize: 11, margin: [0, 2, 0, 6] },
-    small(r.outside ? `Validated outside LIMS: paper report ${r.reference}` : `Protocol ${r.reference} · type of test ${r.testType}`, { bold: true }),
+    small(r.outside ? `Validated outside QLIMS: paper report ${r.reference}` : `Protocol ${r.reference} · type of test ${r.testType}`, { bold: true }),
     ...(r.sendingLab ? [small(`Transfer from ${r.sendingLab} (sending laboratory) to ${r.receivingLab ?? ''} (receiving laboratory)`)] : []),
     ...(r.remarks ? [small(`Remarks: ${r.remarks}`)] : []),
   ];

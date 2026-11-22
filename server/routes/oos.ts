@@ -8,7 +8,7 @@ import { SignError, authenticateSigner, contentHash, sign, signBody } from '../s
 import { loadAnalysis, sampleTestResults } from './analyses.js';
 import { c1WithinLimits } from '../../shared/templates/index.js';
 import { limitFor, limitText, purposeLimits, type SpecDoc } from '../../shared/master/spec.js';
-import { reportedFigure } from '../coa.js';
+import { reportedFigure, shownFigure } from '../coa.js';
 import { analysisView, openSteps } from '../../shared/engine/index.js';
 import {
   OOS_ACTIONS, OOS_ACTION_NAMES, OOS_CHECKLIST, checklistProblems, oosClosed, oosRefusal, oosStatus, phase1Conclusion, phase2, plans, retestRefusal, retests,
@@ -263,7 +263,7 @@ export function oosRoutes(app: FastifyInstance, sql: Sql) {
       phase2: p2 ? { ...p2, deviation: r2?.state === 'ok' ? r2.value.get(p2.reference) ?? null : null, link: r2?.state ?? 'absent' } : null,
       deviations: { link: picks.state, list: picks.state === 'ok' ? picks.value : [] },
       retests: { authorised: rt.authorised, by: l.events.find((e) => e.kind === 'concluded' && e.payload.outcome === 'invalidated') ?? null,
-        analyses: (results[l.o.testKey] ?? []).filter((r) => retestIds.includes(r.analysisId)) },
+        analyses: (results[l.o.testKey] ?? []).filter((r) => retestIds.includes(r.analysisId)).map((r) => (r.result?.value ? { ...r, result: { ...r.result, value: shownFigure(r.result.value, test ? limitFor(test, purposeLimits(l.o.purpose)) : undefined) } } : r)) },
       original: (results[l.o.testKey] ?? []).find((r) => (l.o.outsideResultId !== null ? r.outside?.id === l.o.outsideResultId : r.analysisId === l.o.analysisId)) ?? null,
       test: test ? { name: test.name, limit: limitText(test, purposeLimits(l.o.purpose)), method: test.method } : null,
       others, actions: OOS_ACTION_NAMES.filter((a) => refusals[a] === null), refusals, contentHash: oosHash(l),

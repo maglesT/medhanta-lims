@@ -10,7 +10,7 @@ import type { BlockField } from '../blocks/format.js';
 // qualification_v1, read when a machine is recorded (shared/engine/qualification.ts, LIMS-12).
 export const PROVIDERS = ['deviations', 'qms', 'logbook', 'mms', 'recruitment', 'truebatch', 'qual'] as const;
 export type Provider = (typeof PROVIDERS)[number];
-// The TrueBatch editions LIMS reads (owner 19 Nov 2026: every product's batches and in-process requests are picked, not
+// The TrueBatch editions QLIMS reads (owner 19 Nov 2026: every product's batches and in-process requests are picked, not
 // typed): one link each (<EDITION>_DATABASE_URL), read as one provider "TrueBatch". Production editions publish
 // batch_fact_v1 (release samples); every edition publishes lab_request_v1 (in-process requests).
 export const TB_EDITIONS = ['truebatch', 'truebatch_packing', 'truebatch_capsules', 'truebatch_capsules_packing', 'truebatch_liquids', 'truebatch_liquids_packing',
@@ -44,7 +44,7 @@ export type Imported = { file: string; size: number; hash: string; format: strin
 /** Typed by hand: a link absent or down, or a value an instrument or the CDS gives when it is read (typed instead). */
 export type HandLink = Provider | 'instrument' | 'cds';
 /** Where a pulled value came from, in words. */
-export const SOURCE_NAME: Record<Provider | 'inventory' | 'instrument' | 'cds' | 'plan', string> = { ...PROVIDER_NAME, inventory: 'the LIMS inventory', instrument: 'the instrument', cds: 'the CDS result file', plan: 'the monitoring plan' };
+export const SOURCE_NAME: Record<Provider | 'inventory' | 'instrument' | 'cds' | 'plan', string> = { ...PROVIDER_NAME, inventory: 'the QLIMS inventory', instrument: 'the instrument', cds: 'the CDS result file', plan: 'the monitoring plan' };
 export const isHand = (s: Source | undefined): s is Extract<Source, { from: 'hand' }> => s?.from === 'hand';
 /** Why a value was typed by hand, in a few words ("MMS link down", "not read from the instrument"). */
 export const handWords = (s: { link: HandLink; state: 'absent' | 'down' }) => (s.link === 'instrument' ? 'not read from the instrument'

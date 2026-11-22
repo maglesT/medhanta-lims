@@ -204,7 +204,7 @@ describe('LIMS-33 LIMS-49 the CDS result file', () => {
     const four = text.split('\n').filter((l) => !/^[56],/.test(l)).join('\n');
     expect(await problems(record(a.id, SST, { cds: file('a.csv', four) }))).toEqual(['Responses of the replicate injections: the file has 3 injections (2, 3, 4); this step takes 5 to 6.']);
     expect(await problems(record(a.id, SST, { cds: file('a.csv', 'not,a,result\n1,2,3\n') })))
-      .toEqual([expect.stringMatching(/^This file is not a CDS result export LIMS reads/)]);
+      .toEqual([expect.stringMatching(/^This file is not a CDS result export QLIMS reads/)]);
     await act('asha', a.id, WEIGH, 'start');
     expect(await problems(record(a.id, WEIGH, { cds: file('a.csv', text) }))).toEqual(['This step takes no CDS result file.']);
   });

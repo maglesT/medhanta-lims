@@ -66,6 +66,7 @@ export function AnalysisHeader({ d }: { d: AnalysisDetail }) {
       </div>
       <span className="bh-side">
         <span className={`chip ${STATUS_CHIP[d.analysis.status] ?? ''}`}>{statusText(d.analysis.status, true)}</span>
+        {(d.analysis.status === 'complete' || d.analysis.status === 'reviewed') && <a className="button" href={`#/release/${d.analysis.id}`}>Review record</a>}
         <a className="button" href={pdfLink(d.analysis.id)} download>Analysis record (PDF)</a>
       </span>
     </section>

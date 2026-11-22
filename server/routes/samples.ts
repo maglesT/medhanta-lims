@@ -7,7 +7,7 @@ import { usableItem } from '../master.js';
 import { LOT_USABLE, LOT_WAITING, batchWaiting, type BatchRead, type LotRead } from '../links.js';
 import { EDITION_NAME } from '../../shared/engine/links.js';
 import { SignError, authenticateSigner, contentHash, sign, signBody } from '../signatures.js';
-import { SAMPLING_DETAILS, identityContainers, limitFor, sampledProblem, samplingPlan, limitText, limitWords, outOfTrend, purposeLimits, sampleOnly, testApplies, type SpecDoc } from '../../shared/master/spec.js';
+import { SAMPLING_DETAILS, identityContainers, limitFor, sampledProblem, samplingPlan, limitText, limitWords, outOfTrend, purposeLimits, sampleOnly, testApplies, type SpecDoc, type SpecTest } from '../../shared/master/spec.js';
 import { OOT_ANSWERS, approvalProblems, ootRefusal, rejectionRefusal, sampleDecision, type TestState } from '../../shared/engine/sample.js';
 import { oosOfSample } from './oos.js';
 import { reducedState } from '../reduced.js';
@@ -96,7 +96,8 @@ export const lotShown = (l: LotRead) => `MMS lot ${l.lotNumber}: ${l.materialCod
 /** The analyses of the sample not yet reviewed, stopped or invalidated: they stand in the way of QC's decision. */
 const openOf = (results: Awaited<ReturnType<typeof sampleTestResults>>): string[] =>
   [...new Set(Object.values(results).flat().filter((a) => 'analysisId' in a && (a.status === 'in progress' || a.status === 'complete')).map((a) => a.analysisNo))];
-export const batchShown = (b: BatchRead) => `${b.edition ? EDITION_NAME[b.edition] : 'TrueBatch'} batch ${b.batchNumber}: ${b.productCode ?? '—'}${b.productName ? ` ${b.productName}` : ''}, ${b.status.replaceAll('_', ' ').toLowerCase()}, completed ${b.completedAt ? plantTimesIn(b.completedAt) : '—'}${b.quantity ? `, ${String(b.quantity).replace(/^\d{4,}/, (n) => Number(n).toLocaleString('en-US'))} made` : ''}`;
+const reportedOn = (t: SpecTest, purpose: string, x: { value: string }): string => { try { return shownFigure(x.value, limitFor(t, purposeLimits(purpose))); } catch { return x.value; } };
+export const batchShown = (b: BatchRead) => `${b.edition ? EDITION_NAME[b.edition] : 'TrueBatch'} batch ${b.batchNumber}: ${b.productCode ?? '—'}${b.productName ? ` ${b.productName}` : ''}, ${b.status.replaceAll('_', ' ').toLowerCase()}${b.completedAt ? `, completed ${plantTimesIn(b.completedAt)}` : ''}${b.quantity ? `, ${String(b.quantity).replace(/^\d{4,}/, (n) => Number(n).toLocaleString('en-US'))} made` : ''}`;
 
 async function loadSample(q: Sql | Tx, id: number): Promise<{ s: SampleRow; events: EventRow[] } | null> {
   const [s] = await q<SampleRow[]>`
@@ -153,7 +154,7 @@ const ACTION_BODIES: Record<SampleAction, z.ZodTypeAny> = {
  * The tests QC decides on (LIMS-11): each test of the sample's specification, whether it applies to the sample's
  * purpose, and its latest reviewed analysis with its result.
  */
-import { reportedFigure } from '../coa.js';
+import { reportedFigure, shownFigure } from '../coa.js';
 export { reportedFigure };
 
 export function testStates(spec: SpecDoc, purpose: string, results: Record<string, TestResult[]>, trend: Record<string, string> = {}, only?: readonly string[],
@@ -384,7 +385,7 @@ export function sampleRoutes(app: FastifyInstance, sql: Sql) {
       spec: v ? { id: v.id, masterId: v.masterId, versionNo: v.versionNo, state: v.state, header: v.doc.header,
         // Each test with whether it applies to this sample's purpose, and its analyses with their results (LIMS-11).
         tests: v.doc.tests.map((t) => ({ ...t, applies: testApplies(t, l.s.purpose, sampleOnly(v.doc, l.s)),
-          analyses: results[t.key] ?? [] })) } : null,
+          analyses: (results[t.key] ?? []).map((a) => (a.result?.value ? { ...a, result: { ...a.result, reported: reportedOn(t, l.s.purpose, a.result) } } : a)) })) } : null,
       // The methods this sample's tests are done by: their effective versions, to start an analysis from.
       methods,
       actions: SAMPLE_ACTION_NAMES.filter((a) => refusals[a] === null), refusals, contentHash: sampleHash(l.s, l.events),
