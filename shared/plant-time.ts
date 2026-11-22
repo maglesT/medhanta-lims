@@ -48,3 +48,6 @@ export const plantTimesIn = (text: string) =>
     const x = new Date(iso);
     return Number.isNaN(x.getTime()) ? _m : plantClock(x, true);
   });
+
+/** A source line without an empty "completed" (a batch not finished yet; samples registered before that was left out). */
+export const plainSource = (shown: string) => shown.replace(/, completed [—-](?=,|;|$)/g, '');

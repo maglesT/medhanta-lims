@@ -8,7 +8,7 @@ import type { Stored, Value } from '../../shared/engine/values.js';
 import { handWords, PROVIDER_NAME, SOURCE_NAME, type Source } from '../../shared/engine/links.js';
 import type { QualPick } from '../../shared/engine/qualification.js';
 import { stepTitle as sharedStepTitle, TERMINATED_STATE } from '../../shared/engine/analysis.js';
-import { plantClock, plantText } from '../../shared/plant-time.js';
+import { plainSource, plantClock, plantText } from '../../shared/plant-time.js';
 import { statusWords } from '../../shared/engine/release.js';
 import { product } from './product.js';
 
@@ -54,7 +54,7 @@ export const sourceWords = (s: Source | undefined) => (!s ? '' : s.from === 'han
   ? `Typed by hand: ${handWords(s)}. A second person checks it.`
   // A CDS import in short on the step (its file, hash and run are listed once, in the CDS result file panel).
   : s.from === 'cds' && s.cds ? `From the CDS result file: import ${s.cds.version}, run ${s.cds.run}, injection${s.cds.injections.length === 1 ? '' : 's'} ${s.cds.injections.join(', ')}.`
-  : `From ${SOURCE_NAME[s.from]}: ${plantText(s.shown)}`);
+  : `From ${SOURCE_NAME[s.from]}: ${plantText(plainSource(s.shown))}`);
 
 /** A pick list read through a link (pull, don't type): empty when the link is absent or down, and then the value is typed. */
 export function useLinked<T>(url: string | null, list: string): T[] {

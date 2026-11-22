@@ -7,7 +7,7 @@ import { loadMasterData, type MasterData } from '../api-designer.js';
 import { Picker } from '../designer/ui.js';
 import { PROVIDER_NAME } from '../../../shared/engine/links.js';
 import { SAMPLE_PURPOSES, type SamplePurpose } from '../../../shared/engine/sample.js';
-import { plantText } from '../../../shared/plant-time.js';
+import { plainSource, plantText } from '../../../shared/plant-time.js';
 import { SAMPLING_DETAILS, STARTING_MATERIALS, sampledProblem } from '../../../shared/master/spec.js';
 import { l19SamplingPlan } from '../../../shared/templates/index.js';
 import { PURPOSE_LABEL, registerSample, specsFor, type From, type SampleRequest, type SpecChoice } from './api-samples.js';
@@ -79,7 +79,7 @@ export function RegisterDialog({ from, onDone, onCancel, purpose: initial = 'rel
           <dl className="details">
             <dt>{what === 'lot' ? 'Lot' : 'Batch'}</dt><dd><b>{lotNo}</b></dd>
             <dt>What</dt><dd><b>{(from as SampleRequest).code}</b> {(from as SampleRequest).name ?? ''}</dd>
-            <dt>From {PROVIDER_NAME[source]}</dt><dd>{plantText((from as SampleRequest).shown)}</dd>
+            <dt>From {PROVIDER_NAME[source]}</dt><dd>{plantText(plainSource((from as SampleRequest).shown))}</dd>
           </dl>
         )}
         {specs && (specs.length === 0 ? <p className="error">No effective specification for this item: a sample is tested against the effective version only.</p> : (

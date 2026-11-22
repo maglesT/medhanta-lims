@@ -3,6 +3,7 @@ import { headline } from '../shared/engine/plain.js';
 import { store, type Stored } from '../shared/engine/values.js';
 import { t17LiquidMakeUp } from '../shared/templates/liquid.js';
 import { c1WithinLimits, c3AllIndividual } from '../shared/templates/series.js';
+import { plainSource } from '../shared/plant-time.js';
 import { shownFigure } from '../server/coa.js';
 import { c6StagedTest } from '../shared/templates/staged.js';
 
@@ -71,5 +72,10 @@ describe('count words and the mean', () => {
     expect(shownFigure('0.8991008991008991008991008991', { high: '1.0' })).toBe('0.9');
     expect(shownFigure('0.8991008991008991', undefined)).toBe('0.899');
     expect(shownFigure('99.4', undefined)).toBe('99.4');
+  });
+
+  it('a source line has no empty "completed" for a batch not finished', () => {
+    expect(plainSource('TrueBatch Tablets batch TB260012: FG-CPM4 Chlorphenamine, in production, completed —')).toBe('TrueBatch Tablets batch TB260012: FG-CPM4 Chlorphenamine, in production');
+    expect(plainSource('batch B1: P, completed, completed 22 Nov 2026, 14:27 IST, 98,000 tablets made')).toBe('batch B1: P, completed, completed 22 Nov 2026, 14:27 IST, 98,000 tablets made');
   });
 });

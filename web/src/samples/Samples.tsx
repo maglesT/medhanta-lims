@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { can, plantTime, type Me } from '../api.js';
 import { plainError } from '../api-floor.js';
 import { PROVIDER_NAME, type LinkState } from '../../../shared/engine/links.js';
-import { plantText } from '../../../shared/plant-time.js';
+import { plainSource, plantText } from '../../../shared/plant-time.js';
 import { DECISION_CHIP, DECISION_LABEL, PURPOSE_LABEL, STATUS_CHIP, STATUS_LABEL, listSamples, sampleRequests, type From, type Requests, type SampleListRow, type SampleRequest } from './api-samples.js';
 import { RegisterDialog } from './RegisterDialog.js';
 import { SampleScreen } from './SampleScreen.js';
@@ -75,7 +75,7 @@ export function Samples({ me }: { me: Me }) {
                       <tr key={`${r.source}:${r.lotNo}`}>
                         <td><b>{r.lotNo}</b><span className="cell-sub">{r.stock ?? ''}</span></td>
                         <td><b>{r.code}</b><span className="cell-sub">{r.name ?? ''}</span></td>
-                        <td>{PROVIDER_NAME[r.source]}<span className="cell-sub">{plantText(r.shown)}</span></td>
+                        <td>{PROVIDER_NAME[r.source]}<span className="cell-sub">{plantText(plainSource(r.shown))}</span></td>
                         <td>{r.specs.length ? r.specs.map((s) => <span key={s.id} className="cell-line">{s.number}, version {s.versionNo}</span>) : <span className="chip chip-warn">{r.noSpec}</span>}</td>
                         <td>{!r.sampleNo
                           ? <button className="primary" disabled={!r.specs.length} onClick={() => { setPurpose('release'); setRegistering(r); }} aria-label={`Register ${r.lotNo}`}>Register</button>

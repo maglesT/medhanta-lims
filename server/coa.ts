@@ -1,7 +1,7 @@
 // LIMS-21: the certificate of analysis of an approved sample, the way the analysis record PDF is made: what was sampled
 // (item, lot or batch, source), the specification, and each test with its limit, method and the reviewed result decided
 // on at approval (kept with the signed decision), then the decision with its e-signature. Nothing is typed again.
-import { plantTimesIn } from '../shared/plant-time.js';
+import { plainSource, plantTimesIn } from '../shared/plant-time.js';
 import { reportName } from '../shared/engine/sample.js';
 import type { Content, TDocumentDefinitions } from 'pdfmake/interfaces.js';
 import { limitFor, purposeLimits, type SpecDoc } from '../shared/master/spec.js';
@@ -72,7 +72,7 @@ export function coaDoc(c: CoaInput, by: string, printedAt = new Date(), demo = f
     { table: { widths: [95, '*', 95, '*'], body: [
       [th(s.item.of === 'material' ? 'Material' : s.item.of === 'room' ? 'Room' : s.item.of === 'water' ? 'Water system' : 'Product'), small(`${s.item.code} · ${s.item.name}`),
         th(s.item.of === 'material' ? 'Lot' : s.item.of === 'room' || s.item.of === 'water' ? 'Point' : 'Batch'), small(s.lotNo, { bold: true })],
-      [th('Sample'), small(`${s.sampleNo} (${s.purpose}), ${s.quantity}`), th('Source'), small(isHand(s.source) ? 'typed by hand (link not available), checked by a second person' : plantTimesIn(s.source.shown))],
+      [th('Sample'), small(`${s.sampleNo} (${s.purpose}), ${s.quantity}`), th('Source'), small(isHand(s.source) ? 'typed by hand (link not available), checked by a second person' : plantTimesIn(plainSource(s.source.shown)))],
       [th('Specification'), small(`${h.number}, version ${c.specVersion}`), th('Pharmacopoeia'), small(`${h.pharmacopoeia}${h.edition ? ` ${h.edition}` : ''}${h.market ? ` · market ${h.market}` : ''}`)],
     ] }, layout: 'lightHorizontalLines' },
     { text: 'Results', bold: true, fontSize: 11, margin: [0, 12, 0, 4] },
