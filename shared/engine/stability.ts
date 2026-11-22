@@ -110,7 +110,7 @@ export function pullRefusal(doc: ProtocolDoc, s: StudyFacts, events: readonly St
   if (!p) return 'The protocol has no such time point.';
   const placed = placementOf(events, condition);
   if (!placed) return `Nothing is placed at ${p.label}.`;
-  if (placed.payload.chamberByHand && !isChecked(events, placed.id)) return `The chamber ${placed.payload.chamber?.code ?? ''} was accepted without the Logbook: a second person checks its status label first.`;
+  if (placed.payload.chamberByHand && !isChecked(events, placed.id)) return `The chamber ${placed.payload.chamber?.code ?? ''} was accepted without LEAD: a second person checks its status label first.`;
   const done = pullOf(events, condition, month);
   if (done) return `The ${month}-month pull at ${p.label} is done (${done.payload.sampleNo ?? ''}).`;
   if (today < p.from) return `The ${month}-month pull at ${p.label} is due on ${p.due}: its window opens on ${p.from}.`;

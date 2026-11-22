@@ -5,7 +5,7 @@ import { small } from '../test/engine-fixture.js';
 import { E2E_IPC_PRODUCT_ID, E2E_SCHEMA } from './config.js';
 import { logIn } from './helpers.js';
 
-// The in-process journey (owner 19 Nov 2026): TrueBatch Liquids' bulk test of batch DEM-IPC-01 is an open lab request
+// The in-process journey (owner 19 Nov 2026): TrueBatch Oral Liquids' bulk test of batch DEM-IPC-01 is an open lab request
 // (e2e/server.ts). The analyst picks it on the Samples screen: the in-process sample is made from it, nothing typed but
 // the quantity; it is tested for the request's field only; QC approves an in-process test report (IPR). Setup (method,
 // in-process specification) and the analysis go through the API, as the other journeys do.
@@ -24,7 +24,7 @@ async function person(browser: Browser, username: string) {
   return { ctx, page, post, proof };
 }
 
-test('in-process journey: an open TrueBatch Liquids request picked, its sample tested for its field, QC approves an in-process test report', async ({ browser }) => {
+test('in-process journey: an open TrueBatch Oral Liquids request picked, its sample tested for its field, QC approves an in-process test report', async ({ browser }) => {
   test.setTimeout(120_000);
   const iss = await person(browser, 'iss1');
   const doc = small([{ name: 'Measurement', steps: [{ key: 'ph', settings: { what: 'pH', unit: '', limit: { spec: 'limit' } } }] }]);
@@ -44,7 +44,7 @@ test('in-process journey: an open TrueBatch Liquids request picked, its sample t
   await lab1.page.getByRole('button', { name: 'Samples', exact: true }).click();
   const panel = lab1.page.getByRole('region', { name: 'In-process requests' });
   const row = panel.getByRole('row', { name: /DEM-IPC-01/ });
-  await expect(row).toContainText('TrueBatch Liquids');
+  await expect(row).toContainText('TrueBatch Oral Liquids');
   await expect(row).toContainText('Bulk test (QA hold)');
   await expect(row).toContainText('SPEC-IP-LQ-IPC125, version 1');
   await row.getByRole('button', { name: /^Take the sample of/ }).click();

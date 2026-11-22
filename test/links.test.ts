@@ -180,7 +180,7 @@ describe('LIMS-12 Logbook: equipment and rooms fit for use', () => {
     expect(s.values.cleanedOn).toMatch(/^2026-11-15 05:30/);
     expect(s.source.cleanedBy).toMatchObject({ from: 'logbook' });
     expect(s.handFields).toEqual([]);
-    expect(await problems(record(b.id, '0.1.0.1', { cleanedBy: 'SOMEONE ELSE' }))).toEqual(['Cleaned by (name on the label) comes from Logbook and cannot be typed over']);
+    expect(await problems(record(b.id, '0.1.0.1', { cleanedBy: 'SOMEONE ELSE' }))).toEqual(['Cleaned by (name on the label) comes from LEAD and cannot be typed over']);
     expect((await record(b.id, '0.1.0.1', { previousRemoved: 'yes', noOther: 'yes' })).statusCode).toBe(200);
     expect((await sign('asha', b.id, '0.1.0.1', 'done')).statusCode).toBe(200);
   });
@@ -196,7 +196,7 @@ describe('LIMS-12 Logbook: equipment and rooms fit for use', () => {
     // A picker with choices has no note; an empty one names what the Logbook does not have.
     expect(picks.note).toBeNull();
     expect(inLogbook(stirrers.filter((m) => m.code === 'STR-05'), r.items)).toEqual({ offered: [],
-      note: 'Not offered, because the Logbook does not have it: STR-05. Only what the Logbook has can be used while it is linked.' });
+      note: 'Not offered, because LEAD does not have it: STR-05. Only what LEAD has can be used while it is linked.' });
     expect(inLogbook(t.master.rooms_, r.items).offered.map((x) => x.code)).toEqual(['QCL-01']);
     await cut(S.lb);
     try {
@@ -206,11 +206,11 @@ describe('LIMS-12 Logbook: equipment and rooms fit for use', () => {
     expect((await call(t.app, '', 'GET', '/api/logbook/items')).statusCode).toBe(401);
   });
 
-  it('LIMS-12 a machine the Logbook says is not fit for use is refused with the Logbook\'s reasons; one in use by another analysis too', async () => {
+  it('LIMS-12 a machine LEAD says is not fit for use is refused with the Logbook\'s reasons; one in use by another analysis too', async () => {
     await act('asha', b.id, '0.1.1.1', 'start');
-    expect(await problems(record(b.id, '0.1.1.1', { machine: 'eq-str2' }))).toEqual(['STR-02 is not fit for use (Logbook): Dirty: clean and verify before the next use; Calibration overdue.']);
-    expect(await problems(record(b.id, '0.1.1.1', { machine: 'eq-str3' }))).toEqual(['STR-03 is in use by XB26001 (Logbook).']);
-    expect(await problems(record(b.id, '0.1.1.1', { machine: 'eq-str5' }))).toEqual(['STR-05 is not in the Logbook, so it cannot be used.']);
+    expect(await problems(record(b.id, '0.1.1.1', { machine: 'eq-str2' }))).toEqual(['STR-02 is not fit for use (LEAD): Dirty: clean and verify before the next use; Calibration overdue.']);
+    expect(await problems(record(b.id, '0.1.1.1', { machine: 'eq-str3' }))).toEqual(['STR-03 is in use by XB26001 (LEAD).']);
+    expect(await problems(record(b.id, '0.1.1.1', { machine: 'eq-str5' }))).toEqual(['STR-05 is not in LEAD, so it cannot be used.']);
   });
 
   it('LIMS-12 a machine fit for use is pulled with its status: no label questions, no extra check', async () => {
@@ -266,7 +266,7 @@ describe('LIMS-12 Logbook: equipment and rooms fit for use', () => {
 
 });
 
-describe('LIMS-20 Deviations: the deviation number and its status come from the Deviations system', () => {
+describe('LIMS-20 Deviations: the deviation number and its status come from the DIVE system', () => {
   let b: { id: number; analysisNo: string };
   const devs = async () => ((await as('meera', 'GET', `/api/analyses/${b.id}`)).json() as { analysis: { deviations: { reference: string; open: boolean; status?: string }[]; deviationsLink: string } }).analysis;
   beforeAll(async () => {
@@ -277,11 +277,11 @@ describe('LIMS-20 Deviations: the deviation number and its status come from the 
       ('DEV-26-0500', 'closed', 'OTHER1', 'other1', 'Another analysis')`);
   });
 
-  it('a note\'s reference must be a deviation in the Deviations system; the pick list holds the deviations naming the analysis', async () => {
+  it('a note\'s reference must be a deviation in the DIVE system; the pick list holds the deviations naming the analysis', async () => {
     const picks = (await as('asha', 'GET', `/api/analyses/${b.id}/deviations`)).json() as { link: string; deviations: { number: string }[] };
     expect(picks.deviations.map((d) => d.number)).toEqual(['DEV-26-0001', 'DEV-26-0099']);
     expect((await act('asha', b.id, '0.1.0.1', 'note', { text: 'pH 7.4', reference: 'DEV-26-9999' })).json())
-      .toMatchObject({ error: 'unknown_deviation', problems: ['DEV-26-9999 is not in the Deviations system: pick one of the deviations of this analysis, or check the number.'] });
+      .toMatchObject({ error: 'unknown_deviation', problems: ['DEV-26-9999 is not in the DIVE system: pick one of the deviations of this analysis, or check the number.'] });
     expect((await act('asha', b.id, '0.1.0.1', 'note', { text: 'pH 7.4', reference: 'DEV-26-0001' })).statusCode).toBe(200);
   });
 
@@ -290,7 +290,7 @@ describe('LIMS-20 Deviations: the deviation number and its status come from the 
     const note = ((await as('meera', 'GET', `/api/analyses/${b.id}/review`)).json() as { deviations: { note: number }[]; unlinked: { number: string }[] });
     expect(note.unlinked.map((d) => d.number)).toEqual(['DEV-26-0099']);
     expect((await as('meera', 'POST', `/api/analyses/${b.id}/close-deviation`, { note: note.deviations[0]!.note, reason: 'Closed' })).json())
-      .toMatchObject({ problems: ['The status of DEV-26-0001 comes from the Deviations system (now under investigation): it is closed there.'] });
+      .toMatchObject({ problems: ['The status of DEV-26-0001 comes from the DIVE system (now under investigation): it is closed there.'] });
     await t.owner.unsafe(`update ${S.dv}.deviation_v1 set status = 'closed', closed_at = now() where number = 'DEV-26-0001'`);
     expect(await devs()).toMatchObject({ deviations: [{ reference: 'DEV-26-0001', open: false, status: 'closed' }] });
   });
@@ -303,7 +303,7 @@ describe('LIMS-20 Deviations: the deviation number and its status come from the 
       .map((d) => [d.reference, d.where, d.open, d.status]);
     expect(open('investigation')).toEqual([['DEV-26-001', 'Stage 0 › Check a value against limits: pH', true, 'investigation']]);
     expect([open('closed')[0]![2], open('rejected')[0]![2], open('cancelled')[0]![2]]).toEqual([false, false, false]);
-    expect(deviationText({ reference: 'DEV-26-001', open: false, status: 'cancelled' })).toBe('DEV-26-001 · cancelled as not a deviation (Deviations)');
+    expect(deviationText({ reference: 'DEV-26-001', open: false, status: 'cancelled' })).toBe('DEV-26-001 · cancelled as not a deviation (DIVE)');
     expect(open()).toEqual([['DEV-26-001', 'Stage 0 › Check a value against limits: pH', true, undefined]]);
   });
 
@@ -414,10 +414,10 @@ describe('the deviation number flows back to the analysis record (owner, 17 Nov 
       ('DEV-26-0123', 'investigation', '${b.analysisNo}', '${b.analysisNo.toLowerCase()}', 'Torn label', 'lims:note:${n.id}')`);
     const d = await devs();
     expect(d.deviations).toEqual([expect.objectContaining({ note: n!.id, step: '0.1.0.1', reference: 'DEV-26-0123', open: true, status: 'investigation', filed: true })]);
-    expect(deviationText(d.deviations[0]!)).toBe('DEV-26-0123 (filed in Deviations from this note) · under investigation (Deviations)');
+    expect(deviationText(d.deviations[0]!)).toBe('DEV-26-0123 (filed in DIVE from this note) · under investigation (DIVE)');
     // Open in Deviations: QA cannot close it by hand; the review lists it as linked, not as a deviation no note links.
     expect((await as('meera', 'POST', `/api/analyses/${b.id}/close-deviation`, { note: n!.id, reason: 'Closed' })).json())
-      .toMatchObject({ problems: ['The status of DEV-26-0123 comes from the Deviations system (now under investigation): it is closed there.'] });
+      .toMatchObject({ problems: ['The status of DEV-26-0123 comes from the DIVE system (now under investigation): it is closed there.'] });
     const r = (await as('meera', 'GET', `/api/analyses/${b.id}/review`)).json() as { deviations: Dev[]; unlinked: { number: string }[] };
     expect([r.deviations.map((x) => x.reference), r.unlinked]).toEqual([['DEV-26-0123'], []]);
     await t.owner.unsafe(`update ${S.dv}.deviation_v1 set status = 'closed', closed_at = now() where number = 'DEV-26-0123'`);
@@ -439,9 +439,9 @@ describe('the deviation number flows back to the analysis record (owner, 17 Nov 
     const l = (await loadAnalysis(t.sql, b.id))!;
     const note = l.events.find((e) => e.kind === 'note' && !e.payload.reference)!;
     const pdf = JSON.stringify(analysisRecordDoc({ ...await recordInput(t.sql, l), deviationsRead: new Map([[filedKey(note.id), { status: 'capa', closedAt: null, number: 'DEV-26-0123' }]]) }, 'QA'));
-    expect(pdf).toContain('deviation DEV-26-0123 (filed in Deviations from this note) · waiting for its CAPA (Deviations): Torn label on the standard vial');
+    expect(pdf).toContain('deviation DEV-26-0123 (filed in DIVE from this note) · waiting for its CAPA (DIVE): Torn label on the standard vial');
     expect(pdf).toContain('deviation DEV-PAPER-9 (typed by hand) · open: Second label torn');
-    expect(pdf).toContain('"DEV-26-0123 (filed in Deviations from this note)"');
-    expect(pdf).toContain('OPEN: waiting for its CAPA in the Deviations system');
+    expect(pdf).toContain('"DEV-26-0123 (filed in DIVE from this note)"');
+    expect(pdf).toContain('OPEN: waiting for its CAPA in the DIVE system');
   });
 });

@@ -204,7 +204,7 @@ function OpenDialog({ p, onDone, onCancel }: { p: Pending; onDone: (id: number) 
       <form className="card dialog" onSubmit={submit}>
         <h2>{p.level === 'action' ? 'Open the investigation' : 'Record the trend watch'}: {p.point.code}</h2>
         <p>{p.sampleNo} · {p.kind} · {p.shown}</p>
-        {p.level === 'action' && <label>Deviation number (as filed in Deviations; typed by hand while it is not linked, then checked)
+        {p.level === 'action' && <label>Deviation number (as filed in DIVE; typed by hand while it is not linked, then checked)
           <input aria-label="Deviation number" autoFocus value={deviation} onChange={(e) => setDeviation(e.target.value)} placeholder="e.g. DEV-26-201" /></label>}
         {error && <p className="error" role="alert">{error}</p>}
         <div className="actions"><button type="button" onClick={onCancel}>Cancel</button><button className="primary" type="submit">Record</button></div>

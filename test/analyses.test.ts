@@ -84,6 +84,7 @@ function pdfText(def: TDocumentDefinitions): string {
     if (!c || typeof c !== 'object') return '';
     const o = c as { text?: unknown; stack?: unknown[]; table?: { body: unknown[][] }; decoration?: string };
     if (o.stack) return o.stack.map(walk).join('\n');
+    if ((o as { columns?: unknown[] }).columns) return (o as { columns: unknown[] }).columns.map(walk).join('');
     if (o.table) return o.table.body.map((r) => r.map((x) => walk(x).trim()).join(' | ')).join('\n');
     const t = walk(o.text);
     return o.decoration === 'lineThrough' ? `~${t}~` : t;
@@ -313,7 +314,7 @@ describe('corrections: checked by a second person, the original kept', () => {
 
   it('LIMS-51 the analysis record PDF shows the corrected value struck through with its reason, the worked lines, limits, notes and who did what', async () => {
     const text = await recordText(id);
-    expect(text).toMatch(/^Medhanta LIMS · Analysis record LA\d{7} · M M/);
+    expect(text).toMatch(/^Medhanta QLIMS · Analysis record LA\d{7} · M M/);
     expect(text).toContain('Status | Complete');
     expect(text).toContain('Changed values | marked CHANGED');
     // LIMS-32: a mass typed, not read from the balance, says so.

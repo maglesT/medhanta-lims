@@ -31,7 +31,7 @@ describe('the templates registry', () => {
     const doc = small([{ role: 'Analyst', steps: [{ key: 'x', block: { id: 'check', version: 99 } }] }]);
     expect(masterChecks(doc).some((p) => p.level === 'error')).toBe(true);
     // The library's version is stated where it is described.
-    expect(readFileSync(path.resolve(root, '../shared/templates/README.md'), 'utf8')).toMatch(/^# Medhanta LIMS: calculation and check templates \(version \d+\)/);
+    expect(readFileSync(path.resolve(root, '../shared/templates/README.md'), 'utf8')).toMatch(/^# Medhanta QLIMS: calculation and check templates \(version \d+\)/);
     // CI (before every merge and release) runs the type check, every test, the build and the rule traceability.
     expect(JSON.parse(readFileSync(path.resolve(root, '../package.json'), 'utf8')).scripts.ci).toBe('npm run typecheck && npm test && npm run build && npm run traceability -- --check');
   });

@@ -1,13 +1,13 @@
 import { expect, test } from '@playwright/test';
 import { logIn, logOut } from './helpers.js';
 
-test('PL-01: sign in through core, see My work with the Medhanta LIMS header, and log out', async ({ page }) => {
+test('PL-01: sign in through core, see My work with the Medhanta QLIMS header, and log out', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('link', { name: 'Sign in' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Medhanta LIMS' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Medhanta QLIMS' })).toBeVisible();
   await logIn(page, 'op1');
   await expect(page.getByRole('heading', { name: 'My work' })).toBeVisible();
-  await expect(page.locator('header.bar')).toContainText('Medhanta LIMS');
+  await expect(page.locator('header.bar')).toContainText('Medhanta QLIMS');
   await expect(page.locator('header.bar')).toContainText('OP1');
   await logOut(page);
 });
@@ -21,7 +21,7 @@ test('PL-01: a tap or a key on the screen renews the idle session, at most once 
   expect((await renewal).headers()['x-background-poll']).toBeUndefined();
 });
 
-test('PL-01: a person without a Medhanta LIMS permission is refused at sign-in', async ({ page }) => {
+test('PL-01: a person without a Medhanta QLIMS permission is refused at sign-in', async ({ page }) => {
   await page.goto('/login?login_hint=norole');
   await expect(page.getByRole('heading', { name: 'No access' })).toBeVisible();
 });

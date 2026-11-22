@@ -5,6 +5,7 @@ import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { brandHeader } from './brand.js';
 import PdfPrinter from 'pdfmake';
 import type { Content, TDocumentDefinitions } from 'pdfmake/interfaces.js';
 import { plantClock } from '../shared/plant-time.js';
@@ -50,7 +51,7 @@ export function pageFrame(title: string, by: string, content: Content[], now = n
     pageSize: 'A4',
     pageMargins: [28, 50, 28, 36],
     defaultStyle: { font: 'Noto', fontSize: 9 },
-    header: { text: [...(demo ? [DEMO] : []), ...runs(title)], margin: [28, 20, 28, 0], fontSize: 9, bold: true },
+    header: brandHeader([...(demo ? [DEMO] : []), ...runs(title)], [28, 16, 28, 0]),
     footer: (page, pages) => ({
       text: [...(demo ? [{ ...DEMO, text: 'DEMO installation, not a GMP record · ' }] : []),
         `Generated ${plant(now)} by ${by} · ${demo ? 'copy' : 'true copy'} of the electronic record · page ${page} of ${pages}`],

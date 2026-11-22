@@ -127,8 +127,8 @@ describe('demo skip through the server', () => {
     const lines: string[] = [];
     expect(await demoSkipCommand(LIMS, ['LA260001', '--as', 'asha'], {}, (l) => lines.push(l))).toBe(2);
     expect(await demoSkipCommand(LIMS, ['LA260001', '--as', 'asha'], { LIMS_DEMO: 'yes' }, (l) => lines.push(l))).toBe(2);
-    expect(lines).toEqual(['Refused: Medhanta LIMS here is not a demo installation (LIMS_DEMO is not 1).',
-      'Refused: Medhanta LIMS here is not a demo installation (LIMS_DEMO is not 1).']);
+    expect(lines).toEqual(['Refused: Medhanta QLIMS here is not a demo installation (LIMS_DEMO is not 1).',
+      'Refused: Medhanta QLIMS here is not a demo installation (LIMS_DEMO is not 1).']);
     expect(await demoSkipCommand(LIMS, ['LA260001'], { LIMS_DEMO: '1' }, () => {})).toBe(1);
     const b = await issue();
     expect(await skipWaits(t.sql, b.analysisNo, undefined, 'nobody')).toEqual({ error: 'There is no person nobody here: they sign in once first.' });

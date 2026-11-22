@@ -50,7 +50,7 @@ export function Validation({ me, onBack }: { me: Me; onBack: () => void }) {
                 <tr key={r.id} className="clickable" onClick={() => setOpen(r.id)}>
                   <td><b>{r.reportNo}</b></td>
                   <td>{r.code}<span className="cell-sub">{r.name} · version {r.methodVersionNo}</span></td>
-                  <td>{r.kind}{r.outside ? ' (outside LIMS)' : ''}</td>
+                  <td>{r.kind}{r.outside ? ' (outside QLIMS)' : ''}</td>
                   <td>{r.reference}</td>
                   <td>{metChip(r.conclusion)}</td>
                   <td><span className={STATUS_CHIP[r.status]}>{r.status}</span></td>
@@ -105,7 +105,7 @@ function NewReport({ methods, onCancel, onDone }: { methods: MethodUse[]; onCanc
           onDone(r.id);
         }}>
         <div className="summary-box">
-          <p>{outside ? `${kind} outside LIMS, paper report ${reference}` : `Protocol ${reference}: ${preview?.conclusion.met ? 'met' : 'NOT met'}`}</p>
+          <p>{outside ? `${kind} outside QLIMS, paper report ${reference}` : `Protocol ${reference}: ${preview?.conclusion.met ? 'met' : 'NOT met'}`}</p>
           {preview && <p className="small">{preview.conclusion.why}</p>}
         </div>
       </SignDialog>
@@ -211,7 +211,7 @@ function ReportScreen({ me, id, onBack }: { me: Me; id: number; onBack: () => vo
         </span>
       </div>
       <div className="card">
-        <p>{r.outside ? 'Validated outside LIMS: paper report' : 'Protocol'} <b>{r.reference}</b> · type of test {r.testType}</p>
+        <p>{r.outside ? 'Validated outside QLIMS: paper report' : 'Protocol'} <b>{r.reference}</b> · type of test {r.testType}</p>
         {r.sendingLab && <p>Transfer from <b>{r.sendingLab}</b> to <b>{r.receivingLab}</b></p>}
         {r.remarks && <p className="small">{r.remarks}</p>}
         <p className="small muted">Prepared by {r.personName}, {plantTime(r.at)}{r.events.map((e) => `; ${e.kind} by ${e.personName}, ${plantTime(e.at)}`).join('')}</p>

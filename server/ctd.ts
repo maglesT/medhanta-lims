@@ -88,5 +88,5 @@ export function ctdDoc(item: Item, tables: readonly CtdTable[], evals: readonly 
         small(`${e.printedName ?? ''}, ${plant(e.signedAt)} (QC approved)`)];
     }),
   ] }, layout: 'lightHorizontalLines' } as Content);
-  return pageFrame(`Medhanta LIMS · ${section(item.of)} Stability data · ${item.code}`, by, content, printedAt, demo);
+  return pageFrame(`Medhanta QLIMS · ${section(item.of)} Stability data · ${item.code}`, by, content, printedAt, demo);
 }

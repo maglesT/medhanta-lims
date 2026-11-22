@@ -41,7 +41,7 @@ export function ExcursionScreen({ id, onBack, onSample }: { id: number; onBack: 
           <dt>Result</dt><dd>{x.result.shown}{x.result.why && x.result.why !== x.result.shown ? <span className="cell-sub">{x.result.why}</span> : null}</dd>
           {x.result.limit && <><dt>Limit</dt><dd>{x.result.limit}</dd></>}
           <dt>From</dt><dd>{x.origin === 'import' ? 'An alarm in a monitoring system\'s daily report' : <>Sample <button className="link dark" onClick={() => onSample(x.sampleId!)}>{x.sampleNo}</button>, analysis {x.result.analysisNo}</>}</dd>
-          <dt>Investigation</dt><dd>{d.deviation ? <>Deviation <b>{d.deviation.number}</b>{d.deviation.shown ? ` · ${d.deviation.shown}` : ''}{d.deviation.byHand ? ' (typed by hand: Deviations not linked)' : ''}</>
+          <dt>Investigation</dt><dd>{d.deviation ? <>Deviation <b>{d.deviation.number}</b>{d.deviation.shown ? ` · ${d.deviation.shown}` : ''}{d.deviation.byHand ? ' (typed by hand: DIVE not linked)' : ''}</>
             : x.level === 'action' ? 'Not opened yet.' : 'None: an alert is a trend watch.'}</dd>
           <dt>Recorded</dt><dd>{x.recordedByName}, {plantTime(x.recordedAt)}</dd>
         </dl>
@@ -81,9 +81,9 @@ function DeviationDialog({ d, onDone, onCancel }: { d: ExcursionDetail; onDone: 
       <form className="card dialog" onSubmit={submit}>
         <h2>Open the investigation</h2>
         {d.deviations.link === 'ok'
-          ? <label>Deviation<select aria-label="Deviation" value={number} onChange={(e) => setNumber(e.target.value)}><option value="">(pick the deviation filed in Deviations)</option>
+          ? <label>Deviation<select aria-label="Deviation" value={number} onChange={(e) => setNumber(e.target.value)}><option value="">(pick the deviation filed in DIVE)</option>
             {d.deviations.list.map((x) => <option key={x.number} value={x.number}>{x.number}: {x.title} ({x.status})</option>)}</select></label>
-          : <label>Deviation number (Deviations {d.deviations.link === 'down' ? 'does not answer' : 'is not linked'}: typed by hand, a second person checks it)
+          : <label>Deviation number (DIVE {d.deviations.link === 'down' ? 'does not answer' : 'is not linked'}: typed by hand, a second person checks it)
             <input aria-label="Deviation number" value={number} onChange={(e) => setNumber(e.target.value)} /></label>}
         {error && <p className="error" role="alert">{error}</p>}
         <div className="actions"><button type="button" onClick={onCancel}>Cancel</button><button className="primary" type="submit">Record</button></div>

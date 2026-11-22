@@ -72,7 +72,7 @@ describe('the OOS rules', () => {
 
   it('LIMS-23 phase II: a deviation number (typed by hand while Deviations is not reachable, then checked by a second person), concluded by QA once it is closed', () => {
     const ev = [e('checklist', 1, { answers: yes }), e('phase1_concluded', 1, { labError: false }), e('phase1_reviewed', 2)];
-    expect(oosRefusal('conclude', facts, ev, qa, { outcome: 'confirmed' })).toBe('Phase II needs its deviation number in Deviations first.');
+    expect(oosRefusal('conclude', facts, ev, qa, { outcome: 'confirmed' })).toBe('Phase II needs its deviation number in DIVE first.');
     const typed = e('phase2', 2, { reference: 'DEV-P-9', source: { from: 'hand', state: 'down' } });
     ev.push(typed);
     expect(oosRefusal('conclude', facts, ev, qa, { outcome: 'confirmed' })).toBe('A second person checks the deviation number typed by hand first.');
@@ -80,11 +80,11 @@ describe('the OOS rules', () => {
     expect(oosRefusal('check-phase2', facts, ev, qa)).toBeNull();
     ev.push(e('phase2_checked', 3, { entry: typed.id }));
     // Read now from Deviations: open there, QA waits; closed, QA concludes; unreachable, QA confirms by hand.
-    expect(oosRefusal('conclude', facts, ev, qa, { outcome: 'confirmed' }, { state: 'ok', status: 'investigation' })).toMatch(/is investigation in Deviations: QA concludes once it is closed there/);
+    expect(oosRefusal('conclude', facts, ev, qa, { outcome: 'confirmed' }, { state: 'ok', status: 'investigation' })).toMatch(/is investigation in DIVE: QA concludes once it is closed there/);
     expect(oosRefusal('conclude', facts, ev, qa, { outcome: 'confirmed' }, { state: 'ok', status: 'closed' })).toBeNull();
     // Cancelled in Deviations as not a deviation (owner, 20 Nov 2026): ended, QA concludes; rejected is not an end for phase II.
     expect(oosRefusal('conclude', facts, ev, qa, { outcome: 'confirmed' }, { state: 'ok', status: 'cancelled' })).toBeNull();
-    expect(oosRefusal('conclude', facts, ev, qa, { outcome: 'confirmed' }, { state: 'ok', status: 'rejected' })).toMatch(/is rejected in Deviations/);
+    expect(oosRefusal('conclude', facts, ev, qa, { outcome: 'confirmed' }, { state: 'ok', status: 'rejected' })).toMatch(/is rejected in DIVE/);
     expect(oosRefusal('conclude', facts, ev, qa, { outcome: 'confirmed' }, { state: 'down' })).toBeNull();
     expect(oosRefusal('conclude', facts, ev, qa, { outcome: 'invalidated' }, { state: 'ok', status: 'closed' })).toBe('An invalidation needs the assignable laboratory cause found.');
   });
@@ -284,7 +284,7 @@ describe('OOS on the server', () => {
     await ok(act('supervisor', id, 'phase2', { reference: 'DEV-26-0300' }));
     expect((await get(id)).phase2).toMatchObject({ reference: 'DEV-26-0300', typed: false });
     const early = await act('qalead', id, 'conclude', { outcome: 'confirmed', reason: 'Manufacturing cause found' }, 'oos_approved');
-    expect(early.json().problems[0]).toMatch(/DEV-26-0300 is investigation in Deviations/);
+    expect(early.json().problems[0]).toMatch(/DEV-26-0300 is investigation in DIVE/);
     await t.owner.unsafe(`update ${DV}.deviation_v1 set status = 'closed', closed_at = now() where number = 'DEV-26-0300'`);
     await ok(act('qalead', id, 'conclude', { outcome: 'confirmed', reason: 'Phase II DEV-26-0300 closed: mixing time too short' }, 'oos_approved'));
     expect(await view(oosNo)).toMatchObject({ status: 'CONFIRMED', phase_ii_needed: false, deviation_number: 'DEV-26-0300', closed: true });
@@ -307,7 +307,7 @@ describe('OOS on the server', () => {
     const d = await get(id);
     expect(d.phase2).toMatchObject({ reference: 'DEV-26-0310', typed: false, filed: true, event: null });
     expect((await act('supervisor', id, 'phase2', { reference: 'DEV-26-0310' })).json().problems).toEqual(['The phase II deviation is DEV-26-0310.']);
-    expect((await act('qalead', id, 'conclude', { outcome: 'confirmed', reason: 'early' }, 'oos_approved')).json().problems[0]).toMatch(/DEV-26-0310 is investigation in Deviations/);
+    expect((await act('qalead', id, 'conclude', { outcome: 'confirmed', reason: 'early' }, 'oos_approved')).json().problems[0]).toMatch(/DEV-26-0310 is investigation in DIVE/);
     await t.owner.unsafe(`update ${DV}.deviation_v1 set status = 'closed', closed_at = now() where number = 'DEV-26-0310'`);
     await ok(act('qalead', id, 'conclude', { outcome: 'confirmed', reason: 'Phase II DEV-26-0310 closed: wrong granulation end point' }, 'oos_approved'));
     expect(await view(oosNo)).toMatchObject({ status: 'CONFIRMED', closed: true });

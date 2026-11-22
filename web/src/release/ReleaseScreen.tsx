@@ -108,7 +108,7 @@ export function ReleaseScreen({ me, id }: { me: Me; id: number }) {
         <Kpi n={openDevs.length} label={r.deviations.length ? `Open deviations (${r.deviations.length} in all)` : 'Open deviations'} tone="bad" />
         <Kpi n={r.hand.length} label="Typed by hand, not pulled through a link" tone="warn" />
       </div>
-      {r.deviationsLink === 'down' && <p className="notice warn">The Deviations link is down: the deviation statuses shown are LIMS's own (closed by hand).</p>}
+      {r.deviationsLink === 'down' && <p className="notice warn">The DIVE link is down: the deviation statuses shown are LIMS's own (closed by hand).</p>}
 
       <section className="dash-panel" aria-label="Review of the record and its audit trail">
         <div className="panel-head"><h2>Review of the record and its audit trail</h2>
@@ -128,10 +128,10 @@ export function ReleaseScreen({ me, id }: { me: Me; id: number }) {
           <li key={x.step}><b>{name(x.step)}</b><small>{x.changes.map((e) => `${e.personName}, ${plainClock(e.at)}`).join(' · ')}</small></li>))}</Group>}
         <Group title="Deviation notes" empty="No deviation note has a deviation number.">{r.deviations.map((x) => (
           <li key={x.note} className={x.open ? 'bad' : 'ok'}><b>{deviationNumber(x)} · {name(x.step)}</b><span>{x.text}</span>
-            <small>{x.status ? `${deviationStatusWords(x.status)} in the Deviations system${x.closedAt ? `, ${plainClock(x.closedAt)}` : ''}` : x.open ? 'Open: closed in the Deviations system, or by hand by QC' : `Closed by ${x.closed?.personName}, ${plainClock(x.closed?.at ?? '')}: ${x.closed?.payload.reason ?? ''}`}</small>
+            <small>{x.status ? `${deviationStatusWords(x.status)} in the DIVE system${x.closedAt ? `, ${plainClock(x.closedAt)}` : ''}` : x.open ? 'Open: closed in the DIVE system, or by hand by QC' : `Closed by ${x.closed?.personName}, ${plainClock(x.closed?.at ?? '')}: ${x.closed?.payload.reason ?? ''}`}</small>
             {x.open && !x.status && !decided && can(me, 'qc.approve') && <button onClick={() => setClosing(x)}>Close the deviation…</button>}</li>))}</Group>
         {r.unlinked.length > 0 && <Group title="Deviations naming this analysis that no note links" empty="">{r.unlinked.map((x) => (
-          <li key={x.number} className="bad"><b>{x.number}</b><span>{x.title}</span><small>{deviationStatusWords(x.status)} in the Deviations system</small></li>))}</Group>}
+          <li key={x.number} className="bad"><b>{x.number}</b><span>{x.title}</span><small>{deviationStatusWords(x.status)} in the DIVE system</small></li>))}</Group>}
         <Group title="Typed by hand (a link was off or down)" empty="Every linked value came through its link.">{r.hand.map((h, i) => (
           <li key={i}><b>{name(h.step)} · {handLabel(h.step, h.field)}</b><span>{handWords(h)}</span>
             <small>{h.personName}, {plainClock(h.at)}</small></li>))}</Group>
@@ -139,8 +139,8 @@ export function ReleaseScreen({ me, id }: { me: Me; id: number }) {
           <li key={i}><b>{name(c.step)} · {c.fields.map((f) => fieldLabel(c.step, f)).join(', ')}</b>
             <span>{c.from === 'instrument' ? 'Read from the instrument' : 'Imported from the CDS'}: {plantText(c.shown)}</span>
             <small>{c.personName}, {plainClock(c.at)}{c.reason ? ` · imported again: ${c.reason}` : ''}</small></li>))}</Group>
-        {(r.trainingTyped.length > 0 || d.master.doc.stages.some((s) => s.steps.some((t) => t.training))) && <Group title="Training typed by hand (Recruitment not reachable)" empty="Every training was read from Recruitment.">{r.trainingTyped.map((x) => (
-          <li key={x.event} className="bad"><b>{name(x.step)}</b><span>{x.personName} ({x.kind === 'checked' ? 'checked' : 'performed'}) ticked “I am trained in {skillText(x)}”: Recruitment {x.state === 'down' ? 'link was down' : 'not linked'}</span>
+        {(r.trainingTyped.length > 0 || d.master.doc.stages.some((s) => s.steps.some((t) => t.training))) && <Group title="Training typed by hand (TIDE not reachable)" empty="Every training was read from TIDE.">{r.trainingTyped.map((x) => (
+          <li key={x.event} className="bad"><b>{name(x.step)}</b><span>{x.personName} ({x.kind === 'checked' ? 'checked' : 'performed'}) ticked “I am trained in {skillText(x)}”: TIDE {x.state === 'down' ? 'link was down' : 'not linked'}</span>
             <small>{plainClock(x.at)}</small></li>))}</Group>}
         <Group title="Steps not applicable" empty="Every step was done.">{r.notApplicable.map((e) => (
           <li key={e.id}><b>{name(idOf(e))}</b><span>{e.payload.reason}</span><small>{e.personName}, {plainClock(e.at)}</small></li>))}</Group>

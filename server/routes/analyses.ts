@@ -754,7 +754,7 @@ export function analysisRoutes(app: FastifyInstance, sql: Sql) {
             // The reference must be a deviation of the Deviations system while it answers; else typed, and QA closes it by hand.
             const r = await app.links.deviations.byNumbers([b.reference]);
             const d = r.state === 'ok' ? r.value.get(b.reference) : undefined;
-            if (r.state === 'ok' && !d) throw new StepError(409, 'unknown_deviation', [`${b.reference} is not in the Deviations system: pick one of the deviations of this analysis, or check the number.`]);
+            if (r.state === 'ok' && !d) throw new StepError(409, 'unknown_deviation', [`${b.reference} is not in the DIVE system: pick one of the deviations of this analysis, or check the number.`]);
             payload.reference = b.reference;
             payload.source = { reference: d ? { from: 'deviations', asOf: null, shown: `${d.number}: ${d.title ?? ''} (${d.status})` } : { from: 'hand', link: 'deviations', state: r.state as 'absent' | 'down' } };
           }

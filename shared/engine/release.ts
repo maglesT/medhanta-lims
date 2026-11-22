@@ -68,12 +68,12 @@ export function deviations(events: readonly StepEvent[], analysisEvents: readonl
  * "DEV-26-0001 · under investigation (Deviations)", "DEV-7 (typed by hand) · open", "… · closed by QA".
  */
 export function deviationText(d: Pick<Deviation, 'reference' | 'open' | 'status' | 'filed' | 'typed'>): string {
-  const status = d.status !== undefined ? `${deviationStatusWords(d.status)} (Deviations)` : d.open ? 'open' : 'closed by QA';
+  const status = d.status !== undefined ? `${deviationStatusWords(d.status)} (DIVE)` : d.open ? 'open' : 'closed by QA';
   return `${deviationNumber(d)} · ${status}`;
 }
 /** The number, and where it came from when it was not picked from Deviations: typed by hand, or filed there from the note. */
 export const deviationNumber = (d: Pick<Deviation, 'reference' | 'filed' | 'typed'>) =>
-  `${d.reference}${d.typed ? ' (typed by hand)' : ''}${d.filed ? ' (filed in Deviations from this note)' : ''}`;
+  `${d.reference}${d.typed ? ' (typed by hand)' : ''}${d.filed ? ' (filed in DIVE from this note)' : ''}`;
 
 /** Every timer that ran over, with the deviation notes made after it (a hold: in the using stage; a check: on it). */
 export function lateItems(doc: MasterDoc, events: readonly StepEvent[], now: Date): { timer: Timer; notes: StepEvent[] }[] {
@@ -120,7 +120,7 @@ export function analysisRefusal(action: AnalysisAction, v: AnalysisView, user: {
   if (action === 'close-deviation') {
     const d = v.deviations.find((x) => x.note === note && x.open);
     if (!d) return no('There is no open deviation note with this number.');
-    if (d.status !== undefined) return no(`The status of ${d.reference} comes from the Deviations system (now ${deviationStatusWords(d.status)}): it is closed there.`);
+    if (d.status !== undefined) return no(`The status of ${d.reference} comes from the DIVE system (now ${deviationStatusWords(d.status)}): it is closed there.`);
     // By hand: a second person, who checked the closure in the deviation system or its paper record.
     if (d.by === user.id) return { status: 403, error: 'own_work', problems: ['You typed this deviation number: another person closes it.'] };
     return null;

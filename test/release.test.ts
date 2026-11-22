@@ -91,11 +91,11 @@ describe('the review and the stop', () => {
     expect(analysisRefusal('close-deviation', view([...complete, deviation]), own, deviation.id)).toMatchObject({ status: 403, error: 'own_work' });
   });
 
-  it('LIMS-20 a deviation read from the Deviations system is closed there, not by hand', () => {
+  it('LIMS-20 a deviation read from the DIVE system is closed there, not by hand', () => {
     const read = new Map([['DEV-26-001', { status: 'investigation', closedAt: null }]]);
     const v = analysisView(doc, [...complete, deviation], [], at(1000), read);
     expect(v.deviations).toMatchObject([{ reference: 'DEV-26-001', open: true, status: 'investigation' }]);
-    expect(analysisRefusal('close-deviation', v, people.qc, deviation.id)?.problems).toEqual(['The status of DEV-26-001 comes from the Deviations system (now under investigation): it is closed there.']);
+    expect(analysisRefusal('close-deviation', v, people.qc, deviation.id)?.problems).toEqual(['The status of DEV-26-001 comes from the DIVE system (now under investigation): it is closed there.']);
   });
 
   it('LIMS-44 the review is refused while a check made late has no deviation note', () => {

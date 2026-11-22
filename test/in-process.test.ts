@@ -152,7 +152,7 @@ describe('on the server', () => {
     expect(r.requests.map((x) => [x.requestId, x.editionName, x.spec?.number, x.problems])).toEqual([
       ['B26101/blend', 'TrueBatch Tablets', 'SPEC-IP-FG-IP1', []],
       ['B26101/lub', 'TrueBatch Tablets', 'SPEC-IP-FG-IP1', ['Specification SPEC-IP-FG-IP1 has no test for LOD of the blend (lod), which this request asks: the sample is taken once a version with that test is effective (write the version in Specifications; QA approves it).']],
-      ['TL260004/bulk', 'TrueBatch Liquids', 'SPEC-IP-FG-IP1', []]]);
+      ['TL260004/bulk', 'TrueBatch Oral Liquids', 'SPEC-IP-FG-IP1', []]]);
   });
 
   it('the spec editor\'s field list: the fields the product\'s TrueBatch masters ask (master_lab_field_v1) and its requests have named; an edition without the master view gives its requests\' fields', async () => {
@@ -194,7 +194,7 @@ describe('on the server', () => {
     expect(sv).toMatchObject({ lot_number: 'B26101', item_kind: 'PRODUCT', purpose: 'in_process', quantity: '10', unit: 'unit doses', sampled_by: 'ANALYST', status: 'decided', request_id: 'B26101/blend' });
   });
 
-  it('a request of another edition (TrueBatch Liquids) makes its sample the same way', async () => {
+  it('a request of another edition (TrueBatch Oral Liquids) makes its sample the same way', async () => {
     const r = await as('analyst', 'POST', '/api/samples/in-process', { edition: 'truebatch_liquids', requestId: 'TL260004/bulk', quantity: '100 mL' });
     expect(r.statusCode, r.body).toBe(200);
     const sid = (r.json() as { id: number }).id;

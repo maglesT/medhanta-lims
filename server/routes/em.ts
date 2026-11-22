@@ -283,7 +283,7 @@ export function emRoutes(app: FastifyInstance, sql: Sql) {
     const user = req.user!;
     try {
       const dev = b.deviation ? await deviationNow(app, b.deviation) : null;
-      if (dev?.known === false) throw new EmError(409, 'unknown_deviation', [`${b.deviation} is not in the Deviations system: pick the deviation filed for this excursion, or check the number.`]);
+      if (dev?.known === false) throw new EmError(409, 'unknown_deviation', [`${b.deviation} is not in the DIVE system: pick the deviation filed for this excursion, or check the number.`]);
       return await sql.begin(async (tx) => {
         await tx`select pg_advisory_xact_lock(hashtext(${`em-sample:${b.sampleId}`}))`;
         const [t] = await takenSamples(tx, { ids: [b.sampleId] });
@@ -352,7 +352,7 @@ export function emRoutes(app: FastifyInstance, sql: Sql) {
         if (!pre) throw new EmError(404, 'not_found');
         const devNo = action === 'deviation' ? String(b.number) : pre.events.filter((e) => e.kind === 'deviation').at(-1)?.payload.number;
         const dev = devNo && (action === 'deviation' || action === 'close') ? await deviationNow(app, devNo) : null;
-        if (action === 'deviation' && dev?.known === false) throw new EmError(409, 'unknown_deviation', [`${devNo} is not in the Deviations system: pick the deviation filed for this excursion, or check the number.`]);
+        if (action === 'deviation' && dev?.known === false) throw new EmError(409, 'unknown_deviation', [`${devNo} is not in the DIVE system: pick the deviation filed for this excursion, or check the number.`]);
         let payload: ExcursionEvent['payload'] & { shown?: string; methodMasterId?: number } = {};
         if (action === 'isolate') {
           const [m] = await sql<{ code: string; name: string }[]>`select doc->'header'->>'code' as code, doc->'header'->>'name' as name from master_versions

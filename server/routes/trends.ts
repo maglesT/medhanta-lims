@@ -363,7 +363,7 @@ export function trendRoutes(app: FastifyInstance, sql: Sql) {
       const no = assignRefusal(who.name, row.method.skills, read);
       if (no) throw new TrendError(409, [no]);
       const training = !row.method.skills.length ? { checked: 'the method names no training' }
-        : read.state === 'ok' ? { checked: 'Recruitment', skills: row.method.skills.map((s) => s.code) } : { checked: `not checked: Recruitment ${read.state === 'down' ? 'does not answer' : 'is not linked'}` };
+        : read.state === 'ok' ? { checked: 'TIDE', skills: row.method.skills.map((s) => s.code) } : { checked: `not checked: TIDE ${read.state === 'down' ? 'does not answer' : 'is not linked'}` };
       return await sql.begin(async (tx) => {
         await tx`select pg_advisory_xact_lock(hashtext(${`assign:${b.data.sampleId}:${b.data.methodMasterId}`}))`;
         const [r] = await tx<{ id: number }[]>`
@@ -580,6 +580,6 @@ export function apqrDoc(r: Apqr, by: string, printedAt = new Date(), demo = fals
     table(['Adverse trend', 'Room or system', 'Date', 'What', 'QC acknowledged'], r.adverse.map((a) => [a.kind, a.room, a.on, a.what, a.answer ? `${a.answer.by}, ${plant(a.answer.at)}: ${a.answer.reason}` : 'not yet']), 'No EM adverse trend in the period.'),
     table(['Point', 'Level', 'Result', 'Deviation', 'Status', 'Recorded'], r.excursions.map((x) => [x.point, x.level, x.shown, x.deviation, x.closed ? 'closed' : 'open', plant(x.at)]), 'No excursions in the period.'),
   ];
-  return pageFrame(`Medhanta LIMS · APQR lab data · ${r.item.code}`, by, content, printedAt, demo);
+  return pageFrame(`Medhanta QLIMS · APQR lab data · ${r.item.code}`, by, content, printedAt, demo);
 }
 

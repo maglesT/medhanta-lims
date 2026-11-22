@@ -127,13 +127,13 @@ export function analysisRecordDoc(r: RecordInput, by: string, printedAt = new Da
   ])));
 
   // Deviation notes with their number and status (a note with a deviation number is open until it is closed: in the
-  // Deviations system while it answers, else by QA); a number typed by hand, or filed in Deviations from the note, says so.
+  // Deviations system while it answers, else by QA); a number typed by hand, or filed in DIVE from the note, says so.
   content.push(heading('Deviation notes'));
   content.push(table([70, 170, '*', 110, 170], ['Deviation', 'Step', 'Note', 'Written', 'Status'], events.filter((e) => e.kind === 'note').map((e) => {
     const d = devOf(e);
     const closed = d?.closed && analysisEvents.find((b) => b.id === d.closed!.id);
     return [small(d ? deviationNumber(d) : '—'), small(stepLabel(`${e.stage}.${e.sub}.${e.step}.${e.round}`)), small(e.payload.text ?? ''), small(`${who(e.person)}, ${plant(e.at)}`),
-      small(!d ? 'note (no deviation number)' : d.status ? `${d.open ? 'OPEN: ' : ''}${deviationStatusWords(d.status)} in the Deviations system${d.closedAt ? `, ${plant(d.closedAt)}` : ''}` : d.open ? 'OPEN' : `closed by ${closed?.personName ?? ''}, ${plant(closed?.at)}: ${closed?.payload.reason ?? ''}`, d?.open ? { color: RED } : {})];
+      small(!d ? 'note (no deviation number)' : d.status ? `${d.open ? 'OPEN: ' : ''}${deviationStatusWords(d.status)} in the DIVE system${d.closedAt ? `, ${plant(d.closedAt)}` : ''}` : d.open ? 'OPEN' : `closed by ${closed?.personName ?? ''}, ${plant(closed?.at)}: ${closed?.payload.reason ?? ''}`, d?.open ? { color: RED } : {})];
   })));
 
   // LIMS-19, LIMS-32, LIMS-33, LIMS-49: what was read from an instrument (with the raw line) and each CDS result file
@@ -155,11 +155,11 @@ export function analysisRecordDoc(r: RecordInput, by: string, printedAt = new Da
   // Signatures whose training was typed by hand because Recruitment was not reachable, for QA (owner, 17 Nov 2026);
   // only when the master names a training.
   if (doc.stages.some((s) => s.steps.some((t) => t.training))) {
-    content.push(heading('Training typed by hand (Recruitment not reachable)'));
+    content.push(heading('Training typed by hand (TIDE not reachable)'));
     content.push(table([170, 150, 120, '*'], ['Step', 'Signed by', 'When', 'Training'], trainingTyped(events).map((x) => [
       small(stepLabel(x.step)), small(`${who(x.person)} (${x.kind === 'checked' ? 'checked' : 'performed'})`), small(plant(x.at)),
-      small(`${skillText(x)}: ticked "I am trained", Recruitment ${x.state === 'down' ? 'link down' : 'not linked'}`, { color: RED }),
-    ]), 'None: every training was read from Recruitment.'));
+      small(`${skillText(x)}: ticked "I am trained", TIDE ${x.state === 'down' ? 'link down' : 'not linked'}`, { color: RED }),
+    ]), 'None: every training was read from TIDE.'));
   }
 
   // Every signature of the analysis with its meaning.
@@ -178,7 +178,7 @@ export function analysisRecordDoc(r: RecordInput, by: string, printedAt = new Da
     : { text: `Not reviewed yet: the analysis is ${statusWords(view.status)}.`, italics: true, fontSize: 9 });
   if (view.status !== 'reviewed') content.push(small(`This copy was made while the analysis is ${statusWords(view.status)}: it is not a reviewed record.`, { color: RED, margin: [0, 4, 0, 0] }));
 
-  return pageFrame(`Medhanta LIMS · ${record} ${r.analysis.analysisNo} · ${h.code} ${h.name}`, by, content, printedAt, demo);
+  return pageFrame(`Medhanta QLIMS · ${record} ${r.analysis.analysisNo} · ${h.code} ${h.name}`, by, content, printedAt, demo);
 }
 
 /** The recorded values; a corrected value shows the original struck through, the reason, the person and the time. */

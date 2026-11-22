@@ -3,7 +3,7 @@ import { POLICY, requirePermission, sessionKey } from '../server/auth.js';
 import { buildApp } from '../server/app.js';
 import { call, directory, fakeMaster, fakeSignOn, freshApp, login, seedUser, TEST_PROOF_KEY, type TestApp } from './helpers.js';
 
-// People, passwords, lockout and the permission register are Medhanta core's; Medhanta LIMS signs people on through core
+// People, passwords, lockout and the permission register are Medhanta core's; Medhanta QLIMS signs people on through core
 // (stand-in: helpers.fakeSignOn) and keeps sessions, per-action authority checks and its audit trail.
 
 let t: TestApp;
@@ -51,11 +51,11 @@ describe('sign-on through core', () => {
     expect(new URL(s.authUrl({ state: 'st', challenge: 'ch', prompt: 'login' })).searchParams.get('max_age')).toBe('0');
   });
 
-  it('PL-01: a person without a Medhanta LIMS permission is refused and the refusal is audited', async () => {
+  it('PL-01: a person without a Medhanta QLIMS permission is refused and the refusal is audited', async () => {
     const id = await seedUser(t.owner, uniq('nobody'), []);
     const { res, cookie } = await login(t.app, `nobody${n}`);
     expect(res.statusCode).toBe(403);
-    expect(res.body).toContain('no right to use Medhanta LIMS');
+    expect(res.body).toContain('no right to use Medhanta QLIMS');
     expect(cookie).toBe('');
     expect(await auditRows('login.failed', id)).toHaveLength(1);
   });

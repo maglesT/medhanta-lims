@@ -138,7 +138,7 @@ export function excursionRefusal(action: ExcursionAction, x: ExcursionFacts, eve
       if (status === 'investigation to open') return 'Open the investigation first: the deviation number.';
       if (status === 'deviation to check') return 'A second person checks the deviation number typed by hand first.';
       if (status === 'isolates to identify') return 'Identify the isolates first (genus and species from the identification report).';
-      if (dev && deviationClosed === false) return `Deviation ${dev.payload.number} is still open in Deviations: it is closed there first.`;
+      if (dev && deviationClosed === false) return `Deviation ${dev.payload.number} is still open in DIVE: it is closed there first.`;
       if (dev?.payload.byHand && person === dev.person) return 'You typed the deviation number: another QA person closes the excursion.';
       return null;
   }
