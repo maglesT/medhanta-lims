@@ -18,7 +18,7 @@ import { Dec } from '../../shared/templates/index.js';
 import { blocking, masterChecks } from '../../shared/master/checks.js';
 import type { MasterDoc, Step } from '../../shared/master/schema.js';
 import { applySpec, identityContainers, limitFor, purposeLimits, sampleOnly, testsFor, testsForAnalysis, type SpecDoc, type SpecTest } from '../../shared/master/spec.js';
-import { sampleStatus, type SampleEvent } from '../../shared/engine/sample.js';
+import { sampleDecision, sampleStatus, type SampleEvent } from '../../shared/engine/sample.js';
 import { isHand as sourceByHand } from '../../shared/engine/links.js';
 import { createHash } from 'node:crypto';
 import { captures, cdsFill, fileText, importSource, imported, isCaptureRaw, MAX_CDS_BYTES, parseCds, readCapture, typedSource } from '../../shared/capture/index.js';
@@ -87,6 +87,8 @@ export async function loadAnalysis(q: Sql | Tx, id: number): Promise<LoadedAnaly
 // What a analysis-level signer is shown: the record as it stands, by its last events (the signature is refused if
 // anything was added since).
 const analysisContent = (l: LoadedAnalysis) => ({ analysis: l.analysis.id, analysisNo: l.analysis.analysisNo, lastStepEvent: l.events.at(-1)?.id ?? 0, lastAnalysisEvent: l.analysisEvents.at(-1)?.id ?? 0 });
+const APPROVED_SAMPLE = 'This sample is already approved. Re-testing goes through an OOS or a new sample.';
+
 /** Every signature of the analysis: its issue, its steps and its analysis-level decisions, in order. */
 const analysisSignatures = (q: Sql, id: number) => q<Signature[]>`
   select s.object_type as "objectType", s.object_id::int as "objectId", s.printed_name as "printedName", s.meaning, s.signed_at as "signedAt",
@@ -445,6 +447,7 @@ export function analysisRoutes(app: FastifyInstance, sql: Sql) {
           if (!x) throw new StepError(404, 'no_such_sample', ['There is no such sample.']);
           const events = await tx<SampleEvent[]>`select kind, payload, person_id::int as person from sample_events where sample_id = ${x.id} order by id`;
           const status = sampleStatus({ registeredBy: x.registeredBy, byHand: sourceByHand(x.source) }, events);
+          if (sampleDecision(events) === 'approved') throw new StepError(409, 'sample_approved', [APPROVED_SAMPLE]);
           // LIMS-07: a sample is tested once QC has received it; never after it is disposed of.
           if (!['received', 'stored', 'handed over'].includes(status)) throw new StepError(409, 'sample_not_in_qc', [`Sample ${x.sampleNo} is ${status}: it is tested once QC has received it.`]);
           const covers = testsForAnalysis(x.spec, v.masterId, x.purpose, identityContainers(x.spec, x.purpose, x.containers), b.data.container);
@@ -680,6 +683,10 @@ export function analysisRoutes(app: FastifyInstance, sql: Sql) {
           await tx`select pg_advisory_xact_lock(${id}::bigint)`;
           const l = await loadAnalysis(tx, id);
           if (!l) throw new StepError(404, 'not_found');
+          if (action === 'review' && l.analysis.sampleId !== null) {
+            const ev = await tx<SampleEvent[]>`select kind, payload, person_id::int as person from sample_events where sample_id = ${l.analysis.sampleId} order by id`;
+            if (sampleDecision(ev) === 'approved') throw new StepError(409, 'sample_approved', [APPROVED_SAMPLE]);
+          }
           const no = analysisRefusal(action, view(l, (await deviationsRead(app, l)).read), user, b.note);
           if (no) throw new StepError(no.status, no.error, no.problems);
           if (signer && b.contentHash !== analysisHash(l)) throw new StepError(409, 'content_changed', ['The analysis record changed since you opened it.']);
