@@ -71,7 +71,7 @@ describe('KPIs', () => {
   it('the analyst must be trained in the method\'s skills while Recruitment answers; not checked while it does not', () => {
     const skills = [{ code: 'SOP-QC-012', title: 'pH measurement' }];
     expect(assignRefusal('Ana', skills, { state: 'ok', qualified: { 'SOP-QC-012': true } })).toBeNull();
-    expect(assignRefusal('Ana', skills, { state: 'ok', qualified: {} })).toBe('Ana has no valid training in SOP-QC-012 pH measurement (Recruitment).');
+    expect(assignRefusal('Ana', skills, { state: 'ok', qualified: {} })).toBe('Ana has no valid training in SOP-QC-012 pH measurement (TIDE).');
     expect(assignRefusal('Ana', skills, { state: 'down' })).toBeNull();
     expect(assignRefusal('Ana', [], { state: 'ok', qualified: {} })).toBeNull();
   });

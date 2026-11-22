@@ -125,7 +125,7 @@ export function FormsPanel({ d, me, reload }: { d: SampleDetail; me: Me; reload:
             <h2>Issue a blank worksheet</h2>
             <p className="muted">Sample {d.sample.sampleNo}. The form gets its own number, printed on every page.</p>
             <label>Method<select aria-label="Method" value={method} onChange={(e) => setMethod(Number(e.target.value))}>{d.methods.map((m) => <option key={m.versionId} value={m.versionId}>{m.code} {m.name}, version {m.versionNo}</option>)}</select></label>
-            <label>Reason<input aria-label="Reason" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. LIMS down for maintenance" /></label>
+            <label>Reason<input aria-label="Reason" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. QLIMS down for maintenance" /></label>
             <div className="actions"><button type="button" onClick={() => setIssuing(false)}>Cancel</button><button className="primary" type="submit" disabled={!reason.trim()}>Issue</button></div>
           </form>
         </div>

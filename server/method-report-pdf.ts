@@ -56,5 +56,5 @@ export function methodReportDoc(r: ReportForPdf, signatures: readonly SignatureR
   content.push({ text: runs(`Conclusion: ${r.conclusion === 'met' ? 'met' : 'NOT MET'}. ${r.outputs.why ?? ''}`), bold: true, fontSize: 10, margin: [0, 10, 0, 6] });
   content.push({ table: { headerRows: 1, widths: [110, 160, '*'], body: [[th('Signature'), th('Name'), th('Signed')],
     ...signatures.map((g) => [small(MEANING[g.meaning] ?? g.meaning), small(g.printedName), small(plant(g.signedAt))])] }, layout: 'lightHorizontalLines' } as Content);
-  return pageFrame(`Medhanta LIMS · ${r.reportNo} · ${r.kind} of ${r.code} version ${r.methodVersionNo}`, by, content, printedAt, demo);
+  return pageFrame(`Medhanta QLIMS · ${r.reportNo} · ${r.kind} of ${r.code} version ${r.methodVersionNo}`, by, content, printedAt, demo);
 }

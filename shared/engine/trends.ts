@@ -146,5 +146,5 @@ export function kpis(analyses: readonly KpiAnalysis[], samples: readonly KpiSamp
 export function assignRefusal(name: string, skills: readonly { code: string; title?: string }[], read: { state: 'ok'; qualified: Readonly<Record<string, boolean>> } | { state: 'absent' | 'down' }): string | null {
   if (read.state !== 'ok') return null;
   const missing = skills.filter((s) => !read.qualified[s.code]);
-  return missing.length ? `${name} has no valid training in ${missing.map((s) => (s.title ? `${s.code} ${s.title}` : s.code)).join(', ')} (Recruitment).` : null;
+  return missing.length ? `${name} has no valid training in ${missing.map((s) => (s.title ? `${s.code} ${s.title}` : s.code)).join(', ')} (TIDE).` : null;
 }

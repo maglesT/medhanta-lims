@@ -389,7 +389,7 @@ function TrainingCheck({ skill, read, ticked, onTick }: { skill: Skill; read: Tr
   if (read.link === 'ok') return read.ok ? <p className="notice info">Your training: {trainingText(read.training!)}.</p> : <p className="notice bad">{read.message}</p>;
   return (
     <div className="notice warn">
-      <p>Recruitment {read.link === 'absent' ? 'is not linked' : 'cannot be reached'}: this step needs a person trained in it. Your signature will be marked “training typed by hand” for QA.</p>
+      <p>TIDE {read.link === 'absent' ? 'is not linked' : 'cannot be reached'}: this step needs a person trained in it. Your signature will be marked “training typed by hand” for QA.</p>
       <label className="check"><input type="checkbox" checked={ticked} onChange={(e) => onTick(e.target.checked)} />{tickText(skill)}</label>
     </div>
   );

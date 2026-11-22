@@ -226,7 +226,7 @@ function NewStudy({ onDone, onCancel }: { onDone: (id: number) => void; onCancel
                   <td>{c.code === 'other' ? c.other : c.code} · {c.months.length} time points<span className="cell-sub">needs {c.months.length * Number(p.doc.quantity.amount)} {p.doc.quantity.unit}</span></td>
                   <td><select aria-label={`Chamber for ${c.key}`} value={place[c.key]?.chamber ?? ''} onChange={(e) => setPlace({ ...place, [c.key]: { quantity: place[c.key]?.quantity ?? '', chamber: e.target.value } })}>
                     <option value="">(choose)</option>
-                    {chambers.map((ch) => <option key={ch.itemId} value={ch.itemId} disabled={ch.fit === false}>{ch.code} {ch.name}{ch.fit === false ? `: ${ch.why}` : ch.link !== 'ok' ? ' (Logbook not read: label checked by hand)' : ''}</option>)}
+                    {chambers.map((ch) => <option key={ch.itemId} value={ch.itemId} disabled={ch.fit === false}>{ch.code} {ch.name}{ch.fit === false ? `: ${ch.why}` : ch.link !== 'ok' ? ' (LEAD not read: label checked by hand)' : ''}</option>)}
                   </select></td>
                   <td><input aria-label={`Quantity for ${c.key}`} inputMode="decimal" value={place[c.key]?.quantity ?? ''} onChange={(e) => setPlace({ ...place, [c.key]: { chamber: place[c.key]?.chamber ?? '', quantity: e.target.value.trim() } })} /></td>
                 </tr>))}
@@ -335,7 +335,7 @@ function ExcursionsTab({ me }: { me: Me }) {
             <dt>Period</dt><dd>{plantTime(x.fromAt)} to {plantTime(x.toAt)}</dd>
             <dt>Readings</dt><dd>{x.readings.length}{x.range ? `, ${x.range.min} to ${x.range.max} °C` : ''}</dd>
             <dt>Mean kinetic temperature</dt><dd>{x.mkt.ok ? <><b>{x.mkt.value}</b><span className="cell-sub">{x.mkt.shown}</span></> : x.mkt.message}</dd>
-            <dt>Deviation</dt><dd>{x.deviation}{x.deviationSource.from === 'hand' ? ' (typed by hand: Deviations not read)' : ''}</dd>
+            <dt>Deviation</dt><dd>{x.deviation}{x.deviationSource.from === 'hand' ? ' (typed by hand: DIVE not read)' : ''}</dd>
             <dt>Entered</dt><dd>{x.recordedByName}, {plantTime(x.recordedAt)}</dd>
             <dt>Checked</dt><dd>{x.checked ? `${x.checked.personName}, ${plantTime(x.checked.at)}` : 'Not yet: a second person checks the readings.'}</dd>
             <dt>Impact</dt><dd>{x.assessed ? `${x.assessed.payload.text} (${x.assessed.personName}, ${plantTime(x.assessed.at)})` : 'Not assessed yet.'}</dd>

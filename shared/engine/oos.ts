@@ -65,7 +65,7 @@ export const OOS_STATUSES = ['phase I', 'phase I review', 'QA approval', 'phase 
 export type OosStatus = (typeof OOS_STATUSES)[number];
 export const OOS_STATUS_WORDS: Record<OosStatus, string> = {
   'phase I': 'Phase I: laboratory investigation', 'phase I review': 'Phase I: waiting for the supervisor\'s review',
-  'QA approval': 'Laboratory error: waiting for QA', 'phase II': 'Phase II: manufacturing investigation (Deviations)',
+  'QA approval': 'Laboratory error: waiting for QA', 'phase II': 'Phase II: manufacturing investigation (DIVE)',
   confirmed: 'Concluded: OOS confirmed', invalidated: 'Concluded: invalidated (laboratory error)',
 };
 export const oosClosed = (s: OosStatus) => s === 'confirmed' || s === 'invalidated';
@@ -198,11 +198,11 @@ export function oosRefusal(action: OosAction, f: OosFacts, events: readonly OosE
       }
       if (status !== 'phase II') return 'QA concludes after the reviewed phase I.';
       const p = phase2(events, f.filedDeviation);
-      if (!p) return 'Phase II needs its deviation number in Deviations first.';
+      if (!p) return 'Phase II needs its deviation number in DIVE first.';
       if (p.typed && !p.checked) return 'A second person checks the deviation number typed by hand first.';
       if (deviation?.state === 'ok') {
-        if (deviation.status === null) return `${p.reference} is not in the Deviations system.`;
-        if (!OOS_DEVIATION_ENDED.includes(deviation.status)) return `${p.reference} is ${deviation.status.replaceAll('_', ' ')} in Deviations: QA concludes once it is closed there.`;
+        if (deviation.status === null) return `${p.reference} is not in the DIVE system.`;
+        if (!OOS_DEVIATION_ENDED.includes(deviation.status)) return `${p.reference} is ${deviation.status.replaceAll('_', ' ')} in DIVE: QA concludes once it is closed there.`;
       }
       // LIMS-24: an invalidation needs an assignable laboratory cause, here one found by the phase II investigation.
       if (input.outcome === 'invalidated' && !input.cause?.trim()) return 'An invalidation needs the assignable laboratory cause found.';

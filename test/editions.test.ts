@@ -5,7 +5,7 @@ import { call, freshApp, login, seedUser, TEST_DATABASE_URL, type TestApp } from
 import { c1WithinLimits, Dec } from '../shared/templates/index.js';
 import { convert, findUnit, unit, whyNot } from '../shared/templates/units.js';
 
-// Hotfix 19 Nov 2026 (the TrueBatch Liquids release CoA): viscosity units, the batches of every TrueBatch production
+// Hotfix 19 Nov 2026 (the TrueBatch Oral Liquids release CoA): viscosity units, the batches of every TrueBatch production
 // edition, and a release (bulk) sample of a batch still in production.
 
 describe('viscosity units', () => {
@@ -62,7 +62,7 @@ describe('the batches of every TrueBatch production edition', () => {
     // Not found in those that answer while one is down: down, so it may be typed by hand.
     expect((await t.app.links.truebatch.batch('TC260001')).state).toBe('down');
     const r = await call(t.app, cookies.sampler!, 'GET', '/api/sample-requests');
-    expect(r.json().requests.map((x: { lotNo: string; shown: string }) => [x.lotNo, x.shown.split(':')[0]])).toEqual([['TB26001', 'TrueBatch Tablets batch TB26001'], ['TL260004', 'TrueBatch Liquids batch TL260004'],
-      ['TLP260004', 'TrueBatch Liquids Packing batch TLP260004']]);
+    expect(r.json().requests.map((x: { lotNo: string; shown: string }) => [x.lotNo, x.shown.split(':')[0]])).toEqual([['TB26001', 'TrueBatch Tablets batch TB26001'], ['TL260004', 'TrueBatch Oral Liquids batch TL260004'],
+      ['TLP260004', 'TrueBatch Oral Liquids Packing batch TLP260004']]);
   });
 });

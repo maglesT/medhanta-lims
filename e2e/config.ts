@@ -35,7 +35,7 @@ export const E2E_TRADER_ID = '00000000-0000-4000-8000-0000000000f2';
 // and its product.
 export const E2E_LQ = `${E2E_SCHEMA}_lq`;
 export const E2E_IPC_PRODUCT_ID = '00000000-0000-4000-8000-000000000104';
-// Invented test people and the Medhanta LIMS permissions core gives them.
+// Invented test people and the Medhanta QLIMS permissions core gives them.
 export const USERS: Record<string, Permission[]> = {
   op1: ['lims.analysis.perform'],
   chk1: ['lims.analysis.check'],

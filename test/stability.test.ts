@@ -110,7 +110,7 @@ describe('the schedule and the stock', () => {
     expect(pullRefusal(protocol(), hand, e, 'lt', 0, '2026-01-01')).toMatch(/typed by hand: a second person checks the study first/);
     expect(checkRefusal(hand, e, 0, 1)).toMatch(/cannot check it/);
     const checked = [...e, ev(2, 'checked', { entry: 0 }, 2)];
-    expect(pullRefusal(protocol(), hand, checked, 'lt', 0, '2026-01-01')).toMatch(/without the Logbook: a second person checks its status label first/);
+    expect(pullRefusal(protocol(), hand, checked, 'lt', 0, '2026-01-01')).toMatch(/without LEAD: a second person checks its status label first/);
     expect(checkRefusal(hand, checked, 1, 1)).toBe('You typed it: a second person checks it.');
     expect(checkRefusal(hand, checked, 1, 2)).toBeNull();
     expect(pullRefusal(protocol(), hand, [...checked, ev(3, 'checked', { entry: 1 }, 2)], 'lt', 0, '2026-01-01')).toBeNull();
@@ -282,7 +282,7 @@ describe('studies on the server', () => {
     const unfit = await start({ placements: placements('100', 'eq-ch3') });
     expect(unfit.statusCode).toBe(409);
     expect(unfit.json().message).toBe('CH-03 Out of service: humidity sensor failed.');
-    expect((await start({ placements: placements('100', 'eq-ch4') })).json().message).toBe('CH-04 is not in the Logbook, so it cannot hold stability samples.');
+    expect((await start({ placements: placements('100', 'eq-ch4') })).json().message).toBe('CH-04 is not in LEAD, so it cannot hold stability samples.');
     expect((await start({ batchNumber: 'B26003' })).json().message).toMatch(/is of FG-002, not of FG-001/);
     expect((await start({ batchNumber: 'B26004' })).json().message).toMatch(/only a completed batch goes on study/);
     expect((await start({ byHand: true })).json().message).toMatch(/TrueBatch answers/);
@@ -339,7 +339,7 @@ describe('studies on the server', () => {
     }
     const pull = (b: object) => as('sampler', 'POST', `/api/stability/studies/${s!.id}/pull`, b);
     expect((await pull({ condition: 'lt', month: 3 })).json().message).toMatch(/is late \(its window closed on .*\): give the reason and the deviation number/);
-    expect((await pull({ condition: 'lt', month: 3, late: { reason: 'Chamber room closed', deviation: 'DEV-26-999' } })).json().message).toMatch(/not in the Deviations system/);
+    expect((await pull({ condition: 'lt', month: 3, late: { reason: 'Chamber room closed', deviation: 'DEV-26-999' } })).json().message).toMatch(/not in the DIVE system/);
     const ok = await pull({ condition: 'lt', month: 3, late: { reason: 'Chamber room closed', deviation: 'DEV-26-014' } });
     expect(ok.statusCode, ok.body).toBe(200);
     const d = (await as('viewer', 'GET', `/api/stability/studies/${s!.id}`)).json();
@@ -353,7 +353,7 @@ describe('studies on the server', () => {
     const now = new Date(Date.now() - 2 * 86400_000).toLocaleString('sv-SE', { timeZone: 'Asia/Kolkata' }).slice(0, 16).replace(' ', 'T');
     const end = new Date(Date.now() - 1 * 86400_000).toLocaleString('sv-SE', { timeZone: 'Asia/Kolkata' }).slice(0, 16).replace(' ', 'T');
     const body = { chamberItemId: 'eq-ch1', from: now, to: end, deviation: 'DEV-26-014', readings: [{ at: now, temperature: '33.5', humidity: '78' }, { at: end, temperature: '31.0' }] };
-    expect((await as('sampler', 'POST', '/api/stability/excursions', { ...body, deviation: 'DEV-26-999' })).json().message).toMatch(/not in the Deviations system/);
+    expect((await as('sampler', 'POST', '/api/stability/excursions', { ...body, deviation: 'DEV-26-999' })).json().message).toMatch(/not in the DIVE system/);
     expect((await as('sampler', 'POST', '/api/stability/excursions', { ...body, readings: [{ at: '2020-01-01T00:00', temperature: '30' }] })).json().message).toMatch(/outside the excursion's period/);
     const r = await as('sampler', 'POST', '/api/stability/excursions', body);
     expect(r.statusCode, r.body).toBe(200);

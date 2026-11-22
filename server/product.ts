@@ -13,4 +13,4 @@ export interface Product {
   analysisPrefix: string;
 }
 
-export const LIMS: Product = { id: 'lims', name: 'Medhanta LIMS', permissions: PERMISSIONS, analysisPrefix: 'LA' };
+export const LIMS: Product = { id: 'lims', name: 'Medhanta QLIMS', permissions: PERMISSIONS, analysisPrefix: 'LA' };

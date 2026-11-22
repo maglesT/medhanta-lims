@@ -118,7 +118,7 @@ describe('excursions (LIMS-36)', () => {
     const isolated = [...checked, ev(3, 'isolate', { genus: 'Staphylococcus', species: 'epidermidis' })];
     expect(excursionStatus(facts(), isolated)).toBe('open');
     expect(excursionRefusal('close', facts(), isolated, 1)).toMatch(/another QA person closes/);
-    expect(excursionRefusal('close', facts(), isolated, 3, false)).toMatch(/still open in Deviations/);
+    expect(excursionRefusal('close', facts(), isolated, 3, false)).toMatch(/still open in DIVE/);
     expect(excursionRefusal('close', facts(), isolated, 3, true)).toBeNull();
     expect(excursionStatus(facts({ identify: 'no' }), checked)).toBe('open');
     expect(excursionStatus(facts(), [...isolated, ev(4, 'closed', { text: 'Root cause: glove' }, 3)])).toBe('closed');
@@ -297,7 +297,7 @@ describe('EM and water on the server', () => {
     expect(await t.owner.unsafe(`select item_kind, point_code, room_code, batch_number from ${t.schema}_report.oos_v1`)).toEqual([{ item_kind: 'ROOM', point_code: 'B101-SP1', room_code: 'B101', batch_number: null }]);
     const open = (b: object) => as('sampler', 'POST', '/api/em/excursions', { sampleId: plateSample, ...b });
     expect((await open({})).json().message).toMatch(/over its action limit: give the deviation number/);
-    expect((await open({ deviation: 'DEV-26-999' })).json().message).toMatch(/not in the Deviations system/);
+    expect((await open({ deviation: 'DEV-26-999' })).json().message).toMatch(/not in the DIVE system/);
     const ok = await open({ deviation: 'DEV-26-201' });
     expect(ok.statusCode, ok.body).toBe(200);
     excursionId = ok.json().id;
@@ -315,7 +315,7 @@ describe('EM and water on the server', () => {
     expect(d.events.find((e: { kind: string }) => e.kind === 'isolate').payload).toMatchObject({ genus: 'Staphylococcus', species: 'epidermidis', method: 'M M', report: 'ID-26-001' });
     expect(d.excursion.status).toBe('open');
     expect((await as('sampler', 'POST', `/api/em/excursions/${excursionId}/close`, { text: 'x' })).statusCode).toBe(403);
-    expect((await as('qcman', 'POST', `/api/em/excursions/${excursionId}/close`, { text: 'Gowning breach' })).json().message).toMatch(/still open in Deviations/);
+    expect((await as('qcman', 'POST', `/api/em/excursions/${excursionId}/close`, { text: 'Gowning breach' })).json().message).toMatch(/still open in DIVE/);
     // Cancelled in Deviations as not a deviation (owner, 20 Nov 2026; closed_at stays empty): ended, as closed.
     await t.owner.unsafe(`update ${dv}.deviation_v1 set status = 'cancelled' where number = 'DEV-26-201'`);
     expect((await detail()).deviation).toMatchObject({ number: 'DEV-26-201', closed: true });

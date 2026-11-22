@@ -29,6 +29,7 @@ function pdfText(def: TDocumentDefinitions): string {
     if (!c || typeof c !== 'object') return '';
     const o = c as { text?: unknown; stack?: unknown[]; table?: { body: unknown[][] } };
     if (o.stack) return o.stack.map(walk).join('\n');
+    if ((o as { columns?: unknown[] }).columns) return (o as { columns: unknown[] }).columns.map(walk).join('');
     if (o.table) return o.table.body.map((r) => r.map((x) => walk(x).trim()).join(' | ')).join('\n');
     return walk(o.text);
   };
@@ -455,7 +456,7 @@ describe('on the server', () => {
     const [f] = await loadForms(t.sql, { id });
     const [m] = await t.sql<{ doc: never; versionNo: number }[]>`select doc, version_no as "versionNo" from master_versions where id = ${ir.id}`;
     const text = pdfText(blankFormDoc(f!, (await loadSampleRow(t.sql, sid))!, m!, 'VIEWER'));
-    expect(text).toMatch(new RegExp(`^Medhanta LIMS · Form ${formNo} · blank worksheet IR for sample LS\\d{7}`));
+    expect(text).toMatch(new RegExp(`^Medhanta QLIMS · Form ${formNo} · blank worksheet IR for sample LS\\d{7}`));
     expect(text).toContain('Issued by ANALYST');
     expect(text).toContain('LIMS down for maintenance');
     expect(text).toContain('Performed by / date:');

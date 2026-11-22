@@ -208,7 +208,7 @@ function WorkloadTab({ me, onSample }: { me: Me; onSample: (id: number) => void 
     <>
       {error && <p className="notice" role="alert">{error}</p>}
       {done && <p className="notice ok" role="status">{done}</p>}
-      {w?.link && w.link !== 'ok' && <p className="notice" role="status">Recruitment {w.link === 'down' ? 'does not answer' : 'is not linked'}: training is not checked when assigning (it is checked again when each step is signed).</p>}
+      {w?.link && w.link !== 'ok' && <p className="notice" role="status">TIDE {w.link === 'down' ? 'does not answer' : 'is not linked'}: training is not checked when assigning (it is checked again when each step is signed).</p>}
       {!w ? <div className="skel skel-block" /> : (<>
         <section className="dash-panel" aria-label="Open tests">
           <div className="panel-head"><h2>Open tests by due date</h2><span className="pill">{w.rows.length}</span><span className="muted">due: received + the purpose's turnaround target</span></div>

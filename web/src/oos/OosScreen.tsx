@@ -27,7 +27,7 @@ function entryText(e: OosEntry): string {
     case 'plan': return `${p.what} · by ${p.by}`;
     case 'remeasured': return `${p.shown ?? p.value} · raw data: ${p.reference}`;
     case 'phase1_concluded': return `${p.report ? `Contract lab report ${p.report.reportNo} (file ${p.report.fileName}, SHA-256 ${p.report.sha256.slice(0, 16)}…): ` : ''}${p.labError ? `Assignable laboratory error: ${p.cause}` : 'No laboratory error found'}`;
-    case 'phase2': return `${p.reference}${p.source?.from === 'hand' ? ' (typed by hand: Deviations was not reachable)' : ' (picked from Deviations)'}`;
+    case 'phase2': return `${p.reference}${p.source?.from === 'hand' ? ' (typed by hand: DIVE was not reachable)' : ' (picked from DIVE)'}`;
     case 'concluded': return `${p.outcome === 'invalidated' ? 'Invalidated' : 'OOS confirmed'}: ${p.reason}${p.cause ? ` · cause: ${p.cause}` : ''}${p.retests ? ` · ${p.retests} retest${p.retests === 1 ? '' : 's'} authorised` : ''}`;
     case 'retest': return `Analysis ${p.analysisNo}`;
     default: return p.reason ?? '';
@@ -103,10 +103,10 @@ export function OosScreen({ me, id }: { me: Me; id: number }) {
       </Phase>
 
       {(d.status === 'phase II' || d.phase2) && (
-        <Phase title="Phase II: manufacturing investigation" sub="in Deviations; QA concludes when its deviation is closed">
+        <Phase title="Phase II: manufacturing investigation" sub="in DIVE; QA concludes when its deviation is closed">
           {d.phase2 && (
             <p className={OOS_DEVIATION_ENDED.includes(d.phase2.deviation?.status ?? '') ? 'all-good' : 'notice info'}>
-              Deviation <b>{d.phase2.reference}</b>{d.phase2.typed ? ' (typed by hand)' : ''}{d.phase2.filed ? ' (filed in Deviations from this OOS)' : ''} · {d.phase2.link === 'ok' ? (d.phase2.deviation ? `${d.phase2.deviation.status.replaceAll('_', ' ')} in Deviations${d.phase2.deviation.title ? `: ${d.phase2.deviation.title}` : ''}` : 'not in Deviations') : 'Deviations does not answer now'}
+              Deviation <b>{d.phase2.reference}</b>{d.phase2.typed ? ' (typed by hand)' : ''}{d.phase2.filed ? ' (filed in DIVE from this OOS)' : ''} · {d.phase2.link === 'ok' ? (d.phase2.deviation ? `${d.phase2.deviation.status.replaceAll('_', ' ')} in DIVE${d.phase2.deviation.title ? `: ${d.phase2.deviation.title}` : ''}` : 'not in DIVE') : 'DIVE does not answer now'}
               {d.phase2.typed && (d.phase2.checked ? ' · checked by a second person' : ' · waiting for a second person\'s check')}
             </p>)}
           {can('phase2') && <Phase2Pick d={d} onSave={(reference) => run('phase2', { reference })} />}
@@ -231,14 +231,14 @@ function Phase2Pick({ d, onSave }: { d: OosDetail; onSave: (reference: string) =
   return (
     <div className="decide">
       {linked ? (
-        <label>Deviation in Deviations (those naming analysis {d.oos.analysisNo})
+        <label>Deviation in DIVE (those naming analysis {d.oos.analysisNo})
           <select aria-label="Phase II deviation" value={ref} onChange={(e) => setRef(e.target.value)}>
             <option value="">Pick the deviation filed for this OOS</option>
             {d.deviations.list.map((x) => <option key={x.number} value={x.number}>{x.number} · {x.status.replaceAll('_', ' ')}{x.title ? ` · ${x.title}` : ''}</option>)}
           </select>
         </label>
       ) : (
-        <label>Deviation number (typed by hand: Deviations {d.deviations.link === 'down' ? 'does not answer' : 'is not linked'}; a second person checks it)
+        <label>Deviation number (typed by hand: DIVE {d.deviations.link === 'down' ? 'does not answer' : 'is not linked'}; a second person checks it)
           <input aria-label="Phase II deviation" value={ref} onChange={(e) => setRef(e.target.value)} placeholder="e.g. DEV-26-0300" />
         </label>
       )}

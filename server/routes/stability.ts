@@ -82,9 +82,9 @@ function points(l: Loaded, today: string) {
 async function chamberStatus(app: FastifyInstance, itemId: string) {
   const r = await app.links.logbook.status(itemId);
   if (r.state !== 'ok' || r.value === 'stale') return { link: r.state === 'ok' ? 'down' as const : r.state, fit: null, why: null };
-  if (!r.value) return { link: 'ok' as const, fit: false, why: 'is not in the Logbook, so it cannot hold stability samples' };
+  if (!r.value) return { link: 'ok' as const, fit: false, why: 'is not in LEAD, so it cannot hold stability samples' };
   const s = r.value;
-  return { link: 'ok' as const, fit: s.fitForUse, why: s.fitForUse ? null : clauses(s.blockers.length ? s.blockers : [`${s.state.replaceAll('_', ' ')} in the Logbook`]) };
+  return { link: 'ok' as const, fit: s.fitForUse, why: s.fitForUse ? null : clauses(s.blockers.length ? s.blockers : [`${s.state.replaceAll('_', ' ')} in LEAD`]) };
 }
 
 const text = (max = 200) => z.string().trim().min(1).max(max);
@@ -283,7 +283,7 @@ export function stabilityRoutes(app: FastifyInstance, sql: Sql) {
     try {
       // The deviation of a late pull: one of Deviations' while it answers; typed by hand (then checked) while it does not.
       const dev = b.late ? await app.links.deviations.byNumbers([b.late.deviation]) : null;
-      if (dev?.state === 'ok' && !dev.value.get(b.late!.deviation)) throw new StabilityError(409, 'unknown_deviation', [`${b.late!.deviation} is not in the Deviations system: check the number.`]);
+      if (dev?.state === 'ok' && !dev.value.get(b.late!.deviation)) throw new StabilityError(409, 'unknown_deviation', [`${b.late!.deviation} is not in the DIVE system: check the number.`]);
       return await sql.begin(async (tx) => {
         await tx`select pg_advisory_xact_lock(hashtext(${`stability:${id}`}))`;
         const [l] = await loadStudies(tx, id);
@@ -422,7 +422,7 @@ export function stabilityRoutes(app: FastifyInstance, sql: Sql) {
       if (outside) throw new StabilityError(400, 'invalid', [`The reading of ${outside.at.replace('T', ' ')} is outside the excursion's period.`]);
       if (new Date(at(b.to)) > new Date()) throw new StabilityError(400, 'invalid', ['The excursion cannot end in the future.']);
       const dev = await app.links.deviations.byNumbers([b.deviation]);
-      if (dev.state === 'ok' && !dev.value.get(b.deviation)) throw new StabilityError(409, 'unknown_deviation', [`${b.deviation} is not in the Deviations system: check the number.`]);
+      if (dev.state === 'ok' && !dev.value.get(b.deviation)) throw new StabilityError(409, 'unknown_deviation', [`${b.deviation} is not in the DIVE system: check the number.`]);
       const devSource: Source = dev.state === 'ok' ? { from: 'deviations', asOf: null, shown: `${b.deviation}: ${dev.value.get(b.deviation)!.title ?? ''} (${dev.value.get(b.deviation)!.status})` } : { from: 'hand', link: 'deviations', state: dev.state };
       const readings = [...b.readings].sort((x, y) => x.at.localeCompare(y.at)).map((r) => ({ ...r, at: at(r.at) }));
       // The readings must give a mean kinetic temperature (L23: at least two, at equal intervals).

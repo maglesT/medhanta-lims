@@ -327,7 +327,7 @@ export function oosRoutes(app: FastifyInstance, sql: Sql) {
             case 'return': payload = { reason: input.reason }; break;
             case 'phase2': {
               // Picked from Deviations while it answers (the number must be there); typed by hand only while it does not.
-              if (typed!.state === 'ok' && !typed!.value.get(input.reference!)) throw new OosError(409, 'unknown_deviation', [`${input.reference} is not in the Deviations system: pick the deviation filed for this OOS, or check the number.`]);
+              if (typed!.state === 'ok' && !typed!.value.get(input.reference!)) throw new OosError(409, 'unknown_deviation', [`${input.reference} is not in the DIVE system: pick the deviation filed for this OOS, or check the number.`]);
               payload = { reference: input.reference, source: typed!.state === 'ok' ? { from: 'deviations' } : { from: 'hand', state: typed!.state } };
               break;
             }

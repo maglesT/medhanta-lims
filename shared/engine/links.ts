@@ -18,10 +18,10 @@ export const TB_EDITIONS = ['truebatch', 'truebatch_packing', 'truebatch_capsule
 export type Edition = (typeof TB_EDITIONS)[number];
 export const TB_PRODUCTION: readonly Edition[] = ['truebatch', 'truebatch_capsules', 'truebatch_liquids', 'truebatch_injectables', 'truebatch_api'];
 export const EDITION_NAME: Record<Edition, string> = { truebatch: 'TrueBatch Tablets', truebatch_packing: 'TrueBatch Tablets Packing', truebatch_capsules: 'TrueBatch Capsules',
-  truebatch_capsules_packing: 'TrueBatch Capsules Packing', truebatch_liquids: 'TrueBatch Liquids', truebatch_liquids_packing: 'TrueBatch Liquids Packing',
+  truebatch_capsules_packing: 'TrueBatch Capsules Packing', truebatch_liquids: 'TrueBatch Oral Liquids', truebatch_liquids_packing: 'TrueBatch Oral Liquids Packing',
   truebatch_injectables: 'TrueBatch Injectables', truebatch_injectables_packing: 'TrueBatch Injectables Packing', truebatch_api: 'TrueBatch API' };
 export type LinkState = 'absent' | 'down' | 'ok';
-export const PROVIDER_NAME: Record<Provider, string> = { deviations: 'Deviations', qms: 'QMS', logbook: 'Logbook', mms: 'MMS', recruitment: 'Recruitment', truebatch: 'TrueBatch', qual: 'Qualification' };
+export const PROVIDER_NAME: Record<Provider, string> = { deviations: 'DIVE', qms: 'ASSURE', logbook: 'LEAD', mms: 'MMS', recruitment: 'TIDE', truebatch: 'TrueBatch', qual: 'EQUIP' };
 
 /**
  * Pulled through a link (with what was read, PL-07), or typed by hand while the link was absent or down; or taken from

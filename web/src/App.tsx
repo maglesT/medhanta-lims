@@ -74,7 +74,7 @@ export function App() {
     <>
       {banner}
       <header className="bar">
-        <span className="brand"><img className="brand-mark" src="/truebatch-mark.svg" alt="" /><span><b>{product.name}</b><small>by Medhanta</small></span></span>
+        <span className="brand"><img className="brand-mark" src="/brand/mark.svg" alt="" /><b>Medhanta QLIMS</b></span>
         <nav>
           <button className={page === 'home' && !route.analysis && !release && !oos ? 'tab on' : 'tab'} onClick={() => { setVisit((v) => v + 1); setPage('home'); go('#/'); }}>My work</button>
           {can(me, 'analysis.review') && (

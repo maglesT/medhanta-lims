@@ -1,4 +1,4 @@
-# Medhanta LIMS: calculation and check templates (version 2)
+# Medhanta QLIMS: calculation and check templates (version 2)
 
 Small, pure TypeScript functions. One function per template. No formula language, no parser, no
 expression engine. The master analysis record picks a template and its inputs. Underneath there is

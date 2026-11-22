@@ -125,7 +125,7 @@ export function StudyScreen({ me, id, onBack, onProduct }: { me: Me; id: number;
         <ol className="custody">
           {d.events.map((e) => (
             <li key={e.id}><b>{ENTRY[e.kind]}</b>
-              <span>{[e.payload.condition && label(e.payload.condition), e.payload.chamber && `${e.payload.chamber.code}${e.payload.chamberByHand ? ' (Logbook not read)' : ''}`,
+              <span>{[e.payload.condition && label(e.payload.condition), e.payload.chamber && `${e.payload.chamber.code}${e.payload.chamberByHand ? ' (LEAD not read)' : ''}`,
                 e.payload.quantity && `${e.payload.quantity} ${d.protocol.quantity.unit}`, e.payload.month !== undefined && `${e.payload.month} months`, e.payload.sampleNo,
                 e.payload.reason, e.payload.text].filter(Boolean).join(' · ')}</span>
               <span className="muted"> {e.personName}, {plantTime(e.at)}{e.signature ? ` · signed “QC approved” by ${e.signature.printedName}` : ''}</span></li>))}

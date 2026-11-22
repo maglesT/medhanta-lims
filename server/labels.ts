@@ -38,7 +38,7 @@ export function labelsDoc(s: SampleRow, spec: { number: string; versionNo: numbe
       line('Sampled by', s.registeredByName), line('Date', date)]),
     ...numbers.map((k) => box(`SAMPLED · container ${k} of ${of}`, [...common(), line('Sample', s.sampleNo, true), line('Sampled by', s.registeredByName), line('Date', date)])),
   ];
-  return { ...pageFrame(`Medhanta LIMS · Labels of sample ${s.sampleNo} · ${s.item.code} ${s.lotNo}`, by, labels, printedAt, demo), pageOrientation: 'portrait' };
+  return { ...pageFrame(`Medhanta QLIMS · Labels of sample ${s.sampleNo} · ${s.item.code} ${s.lotNo}`, by, labels, printedAt, demo), pageOrientation: 'portrait' };
 }
 
 /**
@@ -71,5 +71,5 @@ export function blankFormDoc(f: { formNo: string; reason: string; issuedByName: 
     });
   });
   content.push({ text: `Returned to QC by / date: ${blank}      Transcribed into analysis: ${blank}`, fontSize: 9, margin: [0, 12, 0, 0] });
-  return pageFrame(`Medhanta LIMS · Form ${f.formNo} · blank worksheet ${h.code} for sample ${s.sampleNo}`, by, content, printedAt, demo);
+  return pageFrame(`Medhanta QLIMS · Form ${f.formNo} · blank worksheet ${h.code} for sample ${s.sampleNo}`, by, content, printedAt, demo);
 }

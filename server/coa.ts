@@ -81,5 +81,5 @@ export function coaDoc(c: CoaInput, by: string, printedAt = new Date(), demo = f
     { text: 'Decision', bold: true, fontSize: 11, margin: [0, 12, 0, 4] },
     small(`APPROVED by ${c.decision.signature?.printedName ?? c.decision.personName}, ${plant(c.decision.signature?.signedAt ?? c.decision.at)} (e-signature, meaning "QC approved")`, { fontSize: 10, bold: true }),
   ];
-  return pageFrame(`Medhanta LIMS · ${title} ${p.coaNo ?? ''} · ${s.item.code} ${s.lotNo}`, by, content, printedAt, demo);
+  return pageFrame(`Medhanta QLIMS · ${title} ${p.coaNo ?? ''} · ${s.item.code} ${s.lotNo}`, by, content, printedAt, demo);
 }
