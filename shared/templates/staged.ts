@@ -59,10 +59,10 @@ function needCount(stages: readonly unknown[][] | readonly (readonly unknown[])[
   if (stages.length > sizes.length) refuse(`This test has only ${sizes.length} stages`);
 }
 
-function finish(decision: Decision, stage: number, line: string, next?: number): Outcome<C6Extra> {
+function finish(decision: Decision, stage: number, line: string, next?: number, value?: Dec): Outcome<C6Extra> {
   return run(() => {
     const check: Check = { pass: decision === 'pass', level: decision === 'pass' ? 'pass' : 'fail', rounded: decision, shown: line };
-    return { ok: true, value: new Dec(stage), unit: '', decision, stageReached: stage, ...(next === undefined ? {} : { nextStageUnits: next }), shown: line, check };
+    return { ok: true, value: value ?? new Dec(stage), unit: '', decision, stageReached: stage, ...(next === undefined ? {} : { nextStageUnits: next }), shown: line, check };
   });
 }
 
@@ -126,11 +126,11 @@ export function c6StagedTest(input: C6Input): Outcome<C6Extra> {
         const first = i.stages[0] ?? [];
         const t1 = t14ContentUniformity({ method: 'content uniformity', coating: i.coating, ...(i.target === undefined ? {} : { target: i.target }), results: { values: first, unit: '%' } });
         if (!t1.ok) return t1;
-        if (t1.decision === 'pass') return finish('pass', 1, `L1: ${t1.shown}`);
-        if (i.stages.length === 1) return finish('next stage', 1, `L1: ${t1.shown}`, 20);
+        if (t1.decision === 'pass') return finish('pass', 1, `L1: ${t1.shown}`, undefined, t1.value);
+        if (i.stages.length === 1) return finish('next stage', 1, `L1: ${t1.shown}`, 20, t1.value);
         const t2 = t14ContentUniformity({ method: 'content uniformity', coating: i.coating, ...(i.target === undefined ? {} : { target: i.target }), results: { values: [...first, ...(i.stages[1] ?? [])], unit: '%' } });
         if (!t2.ok) return t2;
-        return finish(t2.decision === 'pass' ? 'pass' : 'fail', 2, `L2: ${t2.shown}`);
+        return finish(t2.decision === 'pass' ? 'pass' : 'fail', 2, `L2: ${t2.shown}`, undefined, t2.value);
       }
       case 'dissolution IR':
         return qRule(i.Q, i.stages, 'S');
