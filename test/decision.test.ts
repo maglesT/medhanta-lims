@@ -162,6 +162,21 @@ describe('QC decision on the server', () => {
     expect((await decide(sid, 'qcuser', 'reject', { reason: 'second thoughts' })).json().problems).toEqual(['The sample is already approved.']);
   });
 
+  it('an approved sample takes no new analysis and no review of a late one', async () => {
+    const msg = 'This sample is already approved. Re-testing goes through an OOS or a new sample.';
+    const sid = await sampleOf();
+    const late = await analysed(sid, '6.0', false);
+    await analysed(sid, '6.2');
+    expect((await decide(sid, 'qcuser', 'approve')).statusCode).toBe(200);
+    const issue = await as('analyst', 'POST', '/api/analyses', { masterVersionId: method.id, sampleId: sid, proof: proofFor('analyst') });
+    expect(issue.statusCode).toBe(409);
+    expect(issue.json().problems).toEqual([msg]);
+    const a = (await as('reviewer', 'GET', `/api/analyses/${late}`)).json() as { analysis: { contentHash: string } };
+    const review = await as('reviewer', 'POST', `/api/analyses/${late}/review`, { proof: proofFor('reviewer'), contentHash: a.analysis.contentHash });
+    expect(review.statusCode).toBe(409);
+    expect(review.json().problems).toEqual([msg]);
+  });
+
   it('LIMS-17 a reviewed result out of limits blocks approval; QC rejects with a reason, and no certificate is issued', async () => {
     const sid = await sampleOf();
     await analysed(sid, '7.4');
