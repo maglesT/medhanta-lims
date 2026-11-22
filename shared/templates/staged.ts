@@ -59,10 +59,10 @@ function needCount(stages: readonly unknown[][] | readonly (readonly unknown[])[
   if (stages.length > sizes.length) refuse(`This test has only ${sizes.length} stages`);
 }
 
-function finish(decision: Decision, stage: number, line: string, next?: number): Outcome<C6Extra> {
+function finish(decision: Decision, stage: number, line: string, next?: number, value?: Dec, unit = ''): Outcome<C6Extra> {
   return run(() => {
     const check: Check = { pass: decision === 'pass', level: decision === 'pass' ? 'pass' : 'fail', rounded: decision, shown: line };
-    return { ok: true, value: new Dec(stage), unit: '', decision, stageReached: stage, ...(next === undefined ? {} : { nextStageUnits: next }), shown: line, check };
+    return { ok: true, value: value ?? new Dec(stage), unit, decision, stageReached: stage, ...(next === undefined ? {} : { nextStageUnits: next }), shown: line, check };
   });
 }
 
@@ -114,23 +114,26 @@ export function c6StagedTest(input: C6Input): Outcome<C6Extra> {
           }).length;
         const f1 = fails(i.stages[0] ?? []);
         const u = i.noun ?? 'units';
-        if (f1 === 0) return finish('pass', 1, `All 6 ${u} disintegrated within ${i.maxTime} min: PASS`);
-        if (f1 > 2) return finish('fail', 1, `${f1} of 6 ${u} did not disintegrate within ${i.maxTime} min: FAIL`);
-        if (i.stages.length === 1) return finish('next stage', 1, `${f1} of 6 ${u} failed: test 12 more ${u}`, 12);
+        // The result is the longest time of the units tested ("> 15" counts as 15): what the certificate prints.
+        const longest = (xs: readonly string[]): Dec => xs.reduce((m, x) => { const t = parse(x.trim().replace(/^>\s*/, ''), 'Unit time').v; return t.gt(m) ? t : m; }, ZERO);
+        const at = (n: number) => longest(i.stages.slice(0, n).flat());
+        if (f1 === 0) return finish('pass', 1, `All 6 ${u} disintegrated within ${i.maxTime} min: PASS`, undefined, at(1), 'min');
+        if (f1 > 2) return finish('fail', 1, `${f1} of 6 ${u} did not disintegrate within ${i.maxTime} min: FAIL`, undefined, at(1), 'min');
+        if (i.stages.length === 1) return finish('next stage', 1, `${f1} of 6 ${u} failed: test 12 more ${u}`, 12, at(1), 'min');
         const f2 = fails(i.stages[1] ?? []);
         const passed = 18 - f1 - f2;
-        return finish(passed >= 16 ? 'pass' : 'fail', 2, `${passed} of 18 ${u} disintegrated within ${i.maxTime} min (at least 16 needed): ${passed >= 16 ? 'PASS' : 'FAIL'}`);
+        return finish(passed >= 16 ? 'pass' : 'fail', 2, `${passed} of 18 ${u} disintegrated within ${i.maxTime} min (at least 16 needed): ${passed >= 16 ? 'PASS' : 'FAIL'}`, undefined, at(2), 'min');
       }
       case 'content uniformity': {
         needCount(i.stages, [10, 20]);
         const first = i.stages[0] ?? [];
         const t1 = t14ContentUniformity({ method: 'content uniformity', coating: i.coating, ...(i.target === undefined ? {} : { target: i.target }), results: { values: first, unit: '%' } });
         if (!t1.ok) return t1;
-        if (t1.decision === 'pass') return finish('pass', 1, `L1: ${t1.shown}`);
-        if (i.stages.length === 1) return finish('next stage', 1, `L1: ${t1.shown}`, 20);
+        if (t1.decision === 'pass') return finish('pass', 1, `L1: ${t1.shown}`, undefined, t1.value);
+        if (i.stages.length === 1) return finish('next stage', 1, `L1: ${t1.shown}`, 20, t1.value);
         const t2 = t14ContentUniformity({ method: 'content uniformity', coating: i.coating, ...(i.target === undefined ? {} : { target: i.target }), results: { values: [...first, ...(i.stages[1] ?? [])], unit: '%' } });
         if (!t2.ok) return t2;
-        return finish(t2.decision === 'pass' ? 'pass' : 'fail', 2, `L2: ${t2.shown}`);
+        return finish(t2.decision === 'pass' ? 'pass' : 'fail', 2, `L2: ${t2.shown}`, undefined, t2.value);
       }
       case 'dissolution IR':
         return qRule(i.Q, i.stages, 'S');

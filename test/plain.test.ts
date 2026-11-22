@@ -48,4 +48,20 @@ describe('count words and the mean', () => {
     const r = c6StagedTest({ test: 'disintegration', maxTime: '15', noun: 'tablets', stages: [['5', '6', '7', '8', '9', '10']] });
     expect(r.ok && r.shown).toBe('All 6 tablets disintegrated within 15 min: PASS');
   });
+
+  it('C6 content uniformity: the result is the acceptance value (1.9), not the stage reached (LS2600113)', () => {
+    const contents = ['98.9', '100.2', '99.5', '101.0', '99.1', '100.4', '98.7', '100.8', '99.9', '100.1'];
+    const r = c6StagedTest({ test: 'content uniformity', coating: 'uncoated', stages: [contents] });
+    expect(r.ok && r.shown).toContain('AV = |99.86 − 99.86| + 2.4 × 0.790 = 1.9');
+    expect(r.ok && r.value.toFixed(1)).toBe('1.9');
+    expect(r.ok && r.decision).toBe('pass');
+    expect(r.ok && r.stageReached).toBe(1);
+  });
+
+  it('C6 disintegration: the result is the longest time of the units tested, in minutes', () => {
+    const one = c6StagedTest({ test: 'disintegration', maxTime: '15', noun: 'tablets', stages: [['5', '6', '7', '8', '9', '12.5']] });
+    expect(one.ok && [one.value.toString(), one.unit, one.decision]).toEqual(['12.5', 'min', 'pass']);
+    const two = c6StagedTest({ test: 'disintegration', maxTime: '15', noun: 'tablets', stages: [['5', '6', '7', '8', '9', '> 15'], ['5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '9', '8']] });
+    expect(two.ok && [two.value.toString(), two.stageReached, two.decision]).toEqual(['15', 2, 'pass']);
+  });
 });
