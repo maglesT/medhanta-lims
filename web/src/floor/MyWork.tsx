@@ -86,14 +86,14 @@ export function MyWork({ me }: { me: Me }) {
                 {rows.map((b) => {
                   const late = b.badges.some((x) => x.kind === 'late');
                   return (
-                    <button key={b.id} className={late ? 'pending-row late' : 'pending-row'} onClick={() => go(analysisLink(b.id))}>
+                    <button key={b.id} className={late ? 'pending-row late' : 'pending-row'} onClick={() => go(b.badges.some((x) => x.kind === 'review') ? `#/release/${b.id}` : analysisLink(b.id))}>
                       <span className={late ? 'age-dot late' : 'age-dot'} aria-hidden="true" />
                       <span className="pending-what">
                         <strong>{b.analysisNo} · {b.methodName}</strong>
                         <small>{b.current ? `${b.current.stage} · ${b.current.title} · ${STATE_LABEL[b.current.state][0]}` : statusText(b.status, true)} · stage {Math.min(b.stagesClosed + 1, b.stageCount)} of {b.stageCount}</small>
                         {b.badges.length > 0 && <span className="pending-badges">{b.badges.map((x, i) => <Badge key={i} x={x} now={now} />)}</span>}
                       </span>
-                      <span className="pending-go">Open →</span>
+                      <span className="pending-go">{b.badges.some((x) => x.kind === 'review') ? 'Review →' : 'Open →'}</span>
                     </button>
                   );
                 })}

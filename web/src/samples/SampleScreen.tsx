@@ -193,7 +193,10 @@ function Tests({ d, me, reload }: { d: SampleDetail; me: Me; reload: () => Promi
       </div>
       {may && d.methods.length > 0 && (
         <div className="actions-row">
-          {d.decision ? <p className="muted small">QC has decided: no new analysis is started.</p> : inQc ? d.methods.map((m) => <button key={m.masterId} onClick={() => setStarting(m)}>Start {m.code} {m.name}</button>)
+          {d.decision ? <p className="muted small">QC has decided: no new analysis is started.</p> : inQc ? d.methods.map((m) => {
+            const open = d.spec!.tests.filter((t) => t.method.masterId === m.masterId).flatMap((t) => t.analyses).find((a) => !a.outside && (a.status === 'in progress' || a.status === 'complete') && (a.container ?? undefined) === container);
+            return <button key={m.masterId} disabled={!!open} title={open ? `Analysis ${open.analysisNo} is open` : undefined} onClick={() => setStarting(m)}>Start {m.code} {m.name}{open ? ` (${open.analysisNo} is open)` : ''}</button>;
+          })
             : <p className="muted small">Analyses start once QC has received the sample.</p>}
           {inQc && !d.decision && <button onClick={() => setOutside(true)}>Outside lab result</button>}
           {inQc && !d.decision && d.reducedTesting?.recorded && <button onClick={() => setCertificate(true)}>Supplier's certificate result</button>}
@@ -255,6 +258,7 @@ function Decision({ d, me, reload }: { d: SampleDetail; me: Me; reload: () => Pr
         <div className="decide">
           <p className="why">Your signature means: every test of the specification that applies has a reviewed result within its limit; the sample is approved and its {reportWord(d.sample.purpose, d.sample.item.of)} issued.</p>
           <button className="big ok" disabled={d.approvalProblems.length > 0} onClick={() => setSigning('approve')}>Sign: QC approved</button>
+          {d.approvalProblems.length > 0 && <p className="muted small" role="note">Not available yet: {d.approvalProblems[0]}{d.approvalProblems.length > 1 ? ` (and ${d.approvalProblems.length - 1} more above)` : ''}</p>}
         </div>
         <div className="decide reject">
           <label>Reason for rejection<textarea value={reason} onChange={(e) => setReason(e.target.value)} maxLength={1000} /></label>

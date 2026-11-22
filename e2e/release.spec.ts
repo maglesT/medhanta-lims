@@ -146,7 +146,7 @@ test('LIMS-48 the reviewer stops an analysis still in progress from the To revie
   if (process.env.SHOTS) await rev.page.screenshot({ path: `${process.env.SHOTS}/to-review-in-progress.png`, fullPage: true });
   await inProgress.locator('.pending-row', { hasText: analysis.analysisNo }).getByRole('button', { name: 'Stop the analysis' }).click();
   await rev.page.getByLabel('Reason for stopping').fill('The pH meter failed and no other is qualified: the analysis cannot be finished');
-  await rev.page.getByRole('button', { name: 'Continue to sign' }).click();
+  await rev.page.getByRole('button', { name: 'Stop the analysis (sign)' }).click();
   await expect(rev.page.getByRole('dialog')).toContainText('Sign: Stopped');
   await sign(rev.page);
   await expect(inProgress).not.toContainText(analysis.analysisNo);

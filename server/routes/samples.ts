@@ -93,6 +93,9 @@ async function sentBack(q: Sql | Tx, lotNo: string): Promise<{ releaseDecided: b
 }
 
 export const lotShown = (l: LotRead) => `MMS lot ${l.lotNumber}: ${l.materialCode ?? '—'}, ${l.status.replaceAll('_', ' ')}, expiry ${l.expiryDate ? plantDate(l.expiryDate) : '—'}, retest ${l.retestDate ? plantDate(l.retestDate) : '—'}${l.stock ? `, ${l.stock} ${l.unit ?? ''} in stock`.trimEnd() : ''}`;
+/** The analyses of the sample not yet reviewed, stopped or invalidated: they stand in the way of QC's decision. */
+const openOf = (results: Awaited<ReturnType<typeof sampleTestResults>>): string[] =>
+  [...new Set(Object.values(results).flat().filter((a) => 'analysisId' in a && (a.status === 'in progress' || a.status === 'complete')).map((a) => a.analysisNo))];
 export const batchShown = (b: BatchRead) => `${b.edition ? EDITION_NAME[b.edition] : 'TrueBatch'} batch ${b.batchNumber}: ${b.productCode ?? '—'}${b.productName ? ` ${b.productName}` : ''}, ${b.status.replaceAll('_', ' ').toLowerCase()}, completed ${b.completedAt ? plantTimesIn(b.completedAt) : '—'}${b.quantity ? `, ${String(b.quantity).replace(/^\d{4,}/, (n) => Number(n).toLocaleString('en-US'))} made` : ''}`;
 
 async function loadSample(q: Sql | Tx, id: number): Promise<{ s: SampleRow; events: EventRow[] } | null> {
@@ -363,7 +366,9 @@ export function sampleRoutes(app: FastifyInstance, sql: Sql) {
     const results = await sampleTestResults(sql, l.s.id, app);
     const trend = v ? await sampleTrend(sql, l.s, v.doc, results) : {};
     const oos = await oosOfSample(sql, l.s.id);
-    const methodIds = [...new Set((v?.doc.tests ?? []).filter((t) => t.use === 'release and stability' || t.use === purposeLimits(l.s.purpose)).map((t) => t.method.masterId))];
+    // A monitoring or in-process sample is tested by its own test's method only (sampleOnly).
+    const only = v ? sampleOnly(v.doc, l.s) : undefined;
+    const methodIds = [...new Set((v?.doc.tests ?? []).filter((t) => !only || only.includes(t.key)).filter((t) => t.use === 'release and stability' || t.use === purposeLimits(l.s.purpose)).map((t) => t.method.masterId))];
     const methods = methodIds.length ? await sql<{ versionId: number; masterId: number; versionNo: number; code: string; name: string }[]>`
       select id::int as "versionId", master_id::int as "masterId", version_no as "versionNo", doc->'header'->>'code' as code, doc->'header'->>'name' as name
       from master_versions where kind = 'method' and state = 'effective' and master_id = any(${methodIds}) order by doc->'header'->>'code'` : [];
@@ -390,7 +395,7 @@ export function sampleRoutes(app: FastifyInstance, sql: Sql) {
       ootRefusal: user.permissions.includes('lims.qc.approve') ? null : 'Answering an out-of-trend flag needs the QC approval permission.',
       decision: sampleDecision(l.events), decisionHash: v ? decisionHash(l.s, l.events, testStates(v.doc, l.s.purpose, results, trend, sampleOnly(v.doc, l.s), l.s.containers)) : null,
       approvalProblems: !v ? ['The sample has no specification.'] : !user.permissions.includes('lims.qc.approve') ? ['QC approval needs the QC approval permission.']
-        : approvalProblems(facts(l.s), l.events, testStates(v.doc, l.s.purpose, results, trend, sampleOnly(v.doc, l.s), l.s.containers), user.id, oos, need),
+        : approvalProblems(facts(l.s), l.events, testStates(v.doc, l.s.purpose, results, trend, sampleOnly(v.doc, l.s), l.s.containers), user.id, oos, need, openOf(results)),
       // LIMS-30: the reserve sample (null: none logged), and what the decision says when the specification names no quantity.
       reserve: reserve ? { id: reserve.row.id, amount: reserve.row.amount, unit: reserve.row.unit, location: reserve.row.location, keptUntil: reserve.row.keptUntil, state: reserve.state } : null,
       reserveRequired: v?.doc.header.reserveQuantity ?? null,
@@ -492,7 +497,7 @@ export function sampleRoutes(app: FastifyInstance, sql: Sql) {
           const sampleResults = await sampleTestResults(tx, id, app);
           const tests = testStates(v!.doc, l.s.purpose, sampleResults, await sampleTrend(tx, l.s, v!.doc, sampleResults), sampleOnly(v!.doc, l.s), l.s.containers);
           const need = l.s.purpose === 'release' ? await reserveNeed(tx, id, v!.doc) : undefined;
-          const problems = decision === 'approve' ? approvalProblems(facts(l.s), l.events, tests, user.id, await oosOfSample(tx, id), need) : [rejectionRefusal(l.events)].filter((x): x is string => !!x);
+          const problems = decision === 'approve' ? approvalProblems(facts(l.s), l.events, tests, user.id, await oosOfSample(tx, id), need, openOf(sampleResults)) : [rejectionRefusal(l.events)].filter((x): x is string => !!x);
           if (problems.length) throw new SampleError(problems.some((p) => p.includes('another person approves')) ? 403 : 409, 'not_ready', problems);
           if (b.contentHash !== decisionHash(l.s, l.events, tests)) throw new SampleError(409, 'content_changed', ['The sample or its results changed since you opened it.']);
           let coaNo: string | undefined;

@@ -120,6 +120,7 @@ function TakeDialog({ row, onDone, onCancel }: { row: Due['perBatch'][number] & 
   const [person, setPerson] = useState('');
   const [reason, setReason] = useState('');
   const [error, setError] = useState('');
+  const [needReason, setNeedReason] = useState(false);
   const again = row.frequency !== 'per shift' && row.frequency !== 'per batch' && row.taken !== undefined && row.needed !== undefined && row.taken >= row.needed;
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -127,7 +128,7 @@ function TakeDialog({ row, onDone, onCancel }: { row: Due['perBatch'][number] & 
       const r = await take({ planVersionId: row.planVersionId, point: row.point, sampling: row.sampling, ...(shift ? { shift: Number(shift) } : {}), ...(batch.trim() ? { batch: batch.trim() } : {}),
         ...(person.trim() ? { person: person.trim() } : {}), ...(reason.trim() ? { reason: reason.trim() } : {}) });
       onDone(`${r.sampleNo}${r.byHand ? ' (batch typed by hand: a second person checks the sample)' : ''}`);
-    } catch (x) { setError(plainError(x)); }
+    } catch (x) { const m = plainError(x); setError(m); if (/give the reason/.test(m)) setNeedReason(true); }
   };
   return (
     <div className="overlay" role="dialog" aria-modal="true" aria-label="Take the sampling">
@@ -143,7 +144,7 @@ function TakeDialog({ row, onDone, onCancel }: { row: Due['perBatch'][number] & 
             {batches.batches.map((b) => <option key={`${b.edition}:${b.batchNumber}`} value={b.batchNumber}>{b.batchNumber} · {b.productCode ?? ''} · {b.status.toLowerCase().replaceAll('_', ' ')}</option>)}</select></label>
         ) : row.frequency === 'per batch' && <label>Batch number (TrueBatch not answering: typed, a second person checks)<input aria-label="Batch number" value={batch} onChange={(e) => setBatch(e.target.value)} /></label>}
         {row.person && <label>Person sampled<input aria-label="Person sampled" value={person} onChange={(e) => setPerson(e.target.value)} /></label>}
-        {again && <label>Already taken this period: why again<input aria-label="Reason" value={reason} onChange={(e) => setReason(e.target.value)} /></label>}
+        {(again || needReason) && <label>Taken already: why again<input aria-label="Reason" value={reason} onChange={(e) => setReason(e.target.value)} /></label>}
         {error && <p className="error" role="alert">{error}</p>}
         <div className="actions"><button type="button" onClick={onCancel}>Cancel</button><button className="primary" type="submit">Take the sample</button></div>
       </form>
