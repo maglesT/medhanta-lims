@@ -12,7 +12,8 @@ import { sampleTestResults } from './analyses.js';
 import { conditionLabel, type ProtocolDoc } from '../../shared/master/protocol.js';
 import { l23Mkt } from '../../shared/templates/index.js';
 import { fmt } from '../../shared/templates/core.js';
-import type { SpecDoc } from '../../shared/master/spec.js';
+import { limitFor, type SpecDoc } from '../../shared/master/spec.js';
+import { shownFigure } from '../coa.js';
 import { PROVIDER_NAME, clauses, type Source } from '../../shared/engine/links.js';
 import {
   addDays, affectedBy, capacity, checkRefusal, extraRefusal, isChecked, ongoingFlags, pointState, pullOf, pullRefusal, readingRange, schedule, stock,
@@ -251,7 +252,7 @@ export function stabilityRoutes(app: FastifyInstance, sql: Sql) {
     for (const p of ps.filter((x) => x.sampleId)) {
       const r = await sampleTestResults(sql, p.sampleId!, app);
       results.push({ condition: p.condition, label: p.label, month: p.month, sampleId: p.sampleId, sampleNo: p.sampleNo,
-        tests: Object.fromEntries(tests.map((t) => { const a = (r[t.key] ?? []).at(-1); return [t.key, a ? { analysisNo: a.analysisNo, status: a.status, shown: a.result?.shown ?? null, pass: a.result?.pass ?? null } : null]; })) });
+        tests: Object.fromEntries(tests.map((t) => { const a = (r[t.key] ?? []).at(-1); return [t.key, a ? { analysisNo: a.analysisNo, status: a.status, shown: a.result?.value ? `${shownFigure(a.result.value, limitFor(t, 'stability'))}${a.result.unit ? ` ${a.result.unit}` : ''}` : a.result?.shown ?? null, pass: a.result?.pass ?? null } : null]; })) });
     }
     const excursions = (await loadExcursions(sql)).filter((x) => affectedBy(x.at, [{ ...l.s, doc: l.s.protocol, events: l.events, pulledOn: pulledOn(l.events) }]).length)
       .map((x) => ({ id: x.row.id, chamber: x.row.chamber, from: x.row.fromAt, to: x.row.toAt, deviation: x.row.deviation, range: readingRange(x.row.readings), mkt: mkt(x.row.readings) }));

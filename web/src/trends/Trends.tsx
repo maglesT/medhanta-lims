@@ -82,7 +82,7 @@ function ChartsTab({ onSample }: { onSample: (id: number) => void }) {
           {c.message && <p className="notice" role="status">{c.message}</p>}
           {c.chart && (<>
             <p className="tr-shown">{c.chart.shown}{c.chart.cpk ? ` · Cpk ${Number(c.chart.cpk).toFixed(2)}` : ''}{c.chart.ppk ? ` · Ppk ${Number(c.chart.ppk).toFixed(2)}` : ''}</p>
-            <ControlChart c={c.chart} values={values} labels={c.points.map((p) => `${p.sampleNo} (${p.lotNo})`)} />
+            <ControlChart c={c.chart} values={values} labels={c.points.map((p) => `${p.sampleNo} (${p.lotNo})`)} shownValues={c.points.map((p) => p.reported ?? String(Number(p.value)))} />
             <h3>Nelson rule breaks</h3>
             {!c.chart.breaks.length ? <p className="all-good"><span aria-hidden="true">✓</span> No Nelson rule broken.</p> : (
               <div className="table-wrap"><table className="masters" aria-label="Rule breaks">

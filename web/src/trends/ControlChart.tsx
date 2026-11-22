@@ -14,7 +14,7 @@ function scale(lo: number, hi: number, h: number) {
 }
 const fmt = (v: number) => (Math.abs(v) >= 100 ? v.toFixed(1) : Math.abs(v) >= 1 ? v.toFixed(3) : v.toPrecision(3));
 
-export function ControlChart({ c, values, labels }: { c: NonNullable<Chart['chart']>; values: number[]; labels: string[] }) {
+export function ControlChart({ c, values, labels, shownValues }: { c: NonNullable<Chart['chart']>; values: number[]; labels: string[]; shownValues?: string[] }) {
   const H = 300;
   const flagged = new Set(c.breaks.flatMap((b) => b.points));
   const lines: { y: number; label: string; cls: string }[] = [
@@ -42,7 +42,7 @@ export function ControlChart({ c, values, labels }: { c: NonNullable<Chart['char
         <polyline className="cc-path" points={values.map((v, i) => `${x(i)},${y(v)}`).join(' ')} />
         {values.map((v, i) => (
           <circle key={i} className={flagged.has(i + 1) ? 'cc-pt cc-break' : 'cc-pt'} cx={x(i)} cy={y(v)} r={flagged.has(i + 1) ? 5.5 : 4}>
-            <title>{`${i + 1}: ${labels[i]} = ${values[i]}`}</title>
+            <title>{`${i + 1}: ${labels[i]} = ${shownValues?.[i] ?? values[i]}`}</title>
           </circle>
         ))}
         {values.map((_, i) => (values.length <= 40 || i % 5 === 0) && <text key={`n${i}`} className="cc-n" x={x(i)} y={H - 8} textAnchor="middle">{i + 1}</text>)}

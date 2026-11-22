@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import type { Content } from 'pdfmake/interfaces.js';
+import { shownFigure } from '../coa.js';
 import { z } from 'zod';
 import type { Sql, Tx } from '../db.js';
 import { audit } from '../audit.js';
@@ -212,7 +213,7 @@ export function trendRoutes(app: FastifyInstance, sql: Sql) {
     return {
       series: p.data.series, test: p.data.test, testName: last.testName, unit, item: last.purpose === 'monitoring' ? { code: last.point, name: last.pointName } : { code: last.item.code, name: last.item.name },
       spec: v ? { number: v.number, versionNo: v.versionNo, limit: limit ?? null, trendLimit: t?.trendLimit ?? null } : null,
-      points: rows.map((r, k) => ({ n: k + 1, sampleId: r.sampleId, sampleNo: r.sampleNo, lotNo: r.lotNo, value: r.value, reported: r.reported, shown: r.shown, pass: r.pass, analysisNo: r.analysisNo,
+      points: rows.map((r, k) => ({ n: k + 1, sampleId: r.sampleId, sampleNo: r.sampleNo, lotNo: r.lotNo, value: r.value, reported: r.reported ?? `${shownFigure(r.value, limit)}${r.unit ? ` ${r.unit}` : ''}`, shown: r.shown, pass: r.pass, analysisNo: r.analysisNo,
         decidedAt: r.decidedAt, decision: r.decision, oos: oos.find((o) => o.sampleId === r.sampleId && o.analysisNo === r.analysisNo)?.oosNo ?? null,
         oot: oot.find((o) => o.sampleId === r.sampleId && o.analysisNo === r.analysisNo)?.answer ?? null })),
       chart: c.ok ? { shown: c.shown, mean: str(c.mean), sigma: str(c.sigma), sd: str(c.sd), ucl: str(c.ucl), lcl: str(c.lcl), mrBar: str(c.mrBar), mrUcl: str(c.mrUcl),
