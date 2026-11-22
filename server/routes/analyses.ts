@@ -457,7 +457,15 @@ export function analysisRoutes(app: FastifyInstance, sql: Sql) {
           const tests = covers.tests.filter((t) => !only || only.includes(t.key));
           if (covers.tests.length && !tests.length) throw new StepError(409, 'no_tests', [`${v.doc.header.code} does none of the tests sample ${x.sampleNo} is tested for.`]);
           if (!tests.length) throw new StepError(409, 'method_not_in_spec', [`The specification of sample ${x.sampleNo} has no ${x.purpose === 'stability' ? 'stability' : 'release'} test done by method ${v.doc.header.code}.`]);
-          sample = { id: x.id, sampleNo: x.sampleNo, tests: tests.map((t) => t.key) };
+          // The same test is not started twice: a second analysis waits until the open one is reviewed or stopped.
+          const keys = tests.map((t) => t.key);
+          const [again] = await tx<{ analysisNo: string }[]>`
+            select a.analysis_no as "analysisNo" from analyses a
+            where a.sample_id = ${x.id} and a.tests && ${keys}::text[] and a.container is not distinct from ${b.data.container ?? null}
+              and not exists (select 1 from analysis_events e where e.analysis_id = a.id and e.kind in ('reviewed', 'stopped', 'invalidated'))
+            order by a.id limit 1`;
+          if (again) throw new StepError(409, 'analysis_open', [`An analysis of this test is already open: ${again.analysisNo}.`]);
+          sample = { id: x.id, sampleNo: x.sampleNo, tests: keys };
         }
         const [c] = await tx<{ n: number; yy: string }[]>`
           insert into analysis_counters (year, last_no) values (extract(year from now() at time zone ${PLANT_TZ})::int, 1)

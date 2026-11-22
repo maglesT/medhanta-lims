@@ -198,6 +198,9 @@ export function emRoutes(app: FastifyInstance, sql: Sql) {
         if (s.frequency === 'per shift') {
           const same = taken.find((t) => t.m.takenOn === now && t.m.shift === b.shift);
           if (same && !b.reason) throw new EmError(409, 'already_taken', [`${what}, shift ${b.shift} is already taken today (${same.sampleNo}): give the reason to take it again.`]);
+        } else if (s.frequency === 'per batch') {
+          const same = b.batch ? taken.find((t) => t.m.batch === b.batch) : undefined;
+          if (same && !b.reason) throw new EmError(409, 'already_taken', [`${what} is already taken for batch ${b.batch} (${same.sampleNo}): give the reason to take it again (re-sample: why?).`]);
         } else if (period) {
           const same = taken.find((t) => t.m.takenOn >= period.from && t.m.takenOn <= period.to);
           if (same && !b.reason) throw new EmError(409, 'already_taken', [`${what} is already taken this ${s.frequency === 'daily' ? 'day' : s.frequency === 'weekly' ? 'week' : 'month'} (${same.sampleNo}): give the reason to take it again.`]);

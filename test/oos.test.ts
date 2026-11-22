@@ -202,7 +202,7 @@ describe('OOS on the server', () => {
 
   it('LIMS-23 an out-of-limit result opens an OOS at once, when the step is signed; a result within the limit opens none', async () => {
     const sid = await sampleOf();
-    await analysed(sid, '6.0', false);
+    await analysed(sid, '6.0');
     expect(await oosOf(sid)).toEqual([]);
     const { id: aid } = await analysed(sid, '7.4', false);
     const list = await oosOf(sid);

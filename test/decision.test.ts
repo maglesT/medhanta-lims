@@ -123,8 +123,16 @@ describe('QC decision on the server', () => {
   it('LIMS-20 LIMS-21 QC approves a sample whose tests all have a reviewed result within limits: a CoA number, the certificate, and the published views', async () => {
     const sid = await sampleOf();
     expect((await detail(sid)).approvalProblems).toEqual(['pH: no reviewed result yet.']);
-    await analysed(sid, '6.1', false);
-    expect((await detail(sid)).approvalProblems).toEqual(['pH: no reviewed result yet.']);
+    const open = await analysed(sid, '6.1', false);
+    const [row] = await t.owner<{ analysis_no: string }[]>`select analysis_no from analyses where id = ${open}`;
+    const analysis_no = row!.analysis_no;
+    expect((await detail(sid)).approvalProblems).toEqual([`Open analysis ${analysis_no} must be finished or stopped first.`, 'pH: no reviewed result yet.']);
+    // The same test is not started twice while one is open.
+    const twice = await as('analyst', 'POST', '/api/analyses', { masterVersionId: method.id, sampleId: sid, proof: proofFor('analyst') });
+    expect(twice.statusCode).toBe(409);
+    expect(twice.json().problems).toEqual([`An analysis of this test is already open: ${analysis_no}.`]);
+    const o = (await as('reviewer', 'GET', `/api/analyses/${open}`)).json() as { analysis: { contentHash: string } };
+    expect((await as('reviewer', 'POST', `/api/analyses/${open}/review`, { proof: proofFor('reviewer'), contentHash: o.analysis.contentHash })).statusCode).toBe(200);
     const aid = await analysed(sid, '6.2');
     expect((await detail(sid)).approvalProblems).toEqual([]);
     const r = await decide(sid, 'qcuser', 'approve');
@@ -166,8 +174,9 @@ describe('QC decision on the server', () => {
     const msg = 'This sample is already approved. Re-testing goes through an OOS or a new sample.';
     const sid = await sampleOf();
     const late = await analysed(sid, '6.0', false);
-    await analysed(sid, '6.2');
-    expect((await decide(sid, 'qcuser', 'approve')).statusCode).toBe(200);
+    // Approved before the late analysis was reviewed (an older record): the decision is stood in by the owner connection.
+    const [u] = await t.owner<{ id: number }[]>`select id::int from users order by id limit 1`;
+    await t.owner`insert into sample_events (sample_id, kind, payload, person_id) values (${sid}, 'approved', ${t.owner.json({ coaNo: `COA-L${sid}`, results: [] } as never)}, ${u!.id})`;
     const issue = await as('analyst', 'POST', '/api/analyses', { masterVersionId: method.id, sampleId: sid, proof: proofFor('analyst') });
     expect(issue.statusCode).toBe(409);
     expect(issue.json().problems).toEqual([msg]);

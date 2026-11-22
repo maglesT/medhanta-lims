@@ -23,7 +23,7 @@ export function Stop({ id, analysisNo, onDone }: { id: number; analysisNo: strin
     <button type="button" className="big soft-bad" onClick={() => void open()}>Stop the analysis</button>
     {error && <p className="notice bad" role="alert">{error}</p>}
     {step && d && createPortal(<>{step === 'reason' && (
-      <ReasonDialog title={`Stop analysis ${analysisNo}`} label="Reason for stopping" submit="Continue to sign" onCancel={close} wide
+      <ReasonDialog title={`Stop analysis ${analysisNo}`} label="Reason for stopping" submit="Stop the analysis (sign)" onCancel={close} wide
         hint="The analysis stops here. Its record is kept; no step can be recorded any more. A new analysis of the sample may be started."
         onSubmit={async (why) => { setReason(why); setStep('sign'); }} />
     )}

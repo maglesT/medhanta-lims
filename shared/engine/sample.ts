@@ -117,7 +117,7 @@ export const ootAnswer = (events: readonly SampleEvent[], test: string, analysis
  * names a reserve quantity, its lot's reserve sample logged at least at that quantity (LIMS-30; reserve: the caller
  * passes it for release samples only).
  */
-export function approvalProblems(s: SampleFacts, events: readonly SampleEvent[], tests: readonly TestState[], person: number, oos: readonly SampleOos[] = [], reserve?: ReserveNeed): string[] {
+export function approvalProblems(s: SampleFacts, events: readonly SampleEvent[], tests: readonly TestState[], person: number, oos: readonly SampleOos[] = [], reserve?: ReserveNeed, open: readonly string[] = []): string[] {
   const d = sampleDecision(events);
   if (d) return [`The sample is already ${d}.`];
   const status = sampleStatus(s, events);
@@ -127,6 +127,7 @@ export function approvalProblems(s: SampleFacts, events: readonly SampleEvent[],
     if (o.status === 'open') out.push(`${o.oosNo} (${o.testName}) is open: the sample is approved only after the OOS is concluded.`);
     if (o.status === 'confirmed') out.push(`${o.oosNo} (${o.testName}) is a confirmed OOS: the sample can only be rejected.`);
   }
+  for (const no of open) out.push(`Open analysis ${no} must be finished or stopped first.`);
   for (const t of tests.filter((x) => x.applies)) {
     const c = t.containers;
     if (c && !c.of) { out.push(`${t.name}: the sample does not say how many containers were sampled; each container of a starting material is identified.`); continue; }
