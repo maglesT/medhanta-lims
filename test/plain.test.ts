@@ -57,4 +57,11 @@ describe('count words and the mean', () => {
     expect(r.ok && r.decision).toBe('pass');
     expect(r.ok && r.stageReached).toBe(1);
   });
+
+  it('C6 disintegration: the result is the longest time of the units tested, in minutes', () => {
+    const one = c6StagedTest({ test: 'disintegration', maxTime: '15', noun: 'tablets', stages: [['5', '6', '7', '8', '9', '12.5']] });
+    expect(one.ok && [one.value.toString(), one.unit, one.decision]).toEqual(['12.5', 'min', 'pass']);
+    const two = c6StagedTest({ test: 'disintegration', maxTime: '15', noun: 'tablets', stages: [['5', '6', '7', '8', '9', '> 15'], ['5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '9', '8']] });
+    expect(two.ok && [two.value.toString(), two.stageReached, two.decision]).toEqual(['15', 2, 'pass']);
+  });
 });
