@@ -20,3 +20,5 @@
 .cc-pt.cc-break { fill: var(--bad); stroke: #fff; stroke-width: 1.5; }
 .cc-n { font-size: 10px; }
 @media (max-width: 640px) { .tr-pick label { min-width: 100%; } }
+.tr-pick select { width: 100%; max-width: 100%; min-width: 0; }
+.tr-pick label:first-child { min-width: 0; }

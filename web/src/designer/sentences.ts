@@ -118,6 +118,7 @@ export function settingText(doc: MasterDoc, v: SettingValue | undefined): string
   if (v === undefined) return '(not set)';
   if (typeof v === 'string') return v.trim() === '' ? '(none)' : v;
   if ('unit' in v) return limitText(v);
+  if ('spec' in v && v.spec === 'limit') return 'within the limit the specification gives';
   if ('spec' in v) return `the specification's ${lower(v.spec.replace(/([A-Z])/g, ' $1'))}`;
   const [sk, tk, name] = v.ref.split('/');
   const s = doc.stages.find((x) => x.key === sk);

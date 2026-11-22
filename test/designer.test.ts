@@ -171,7 +171,7 @@ describe('method designer', () => {
     expect(em.join(' ')).not.toContain('method .');
     expect(describeMaster(b)[1]!.lines[0]!.text).toContain('Method PH pH. Applies');
     expect(describeMaster(b, undefined, new Map([['1|s0/t0/readingCheck', 'pH › Read the pH › pH within limits']]))[1]!.lines[0]!.text)
-      .toContain('Method PH pH, result pH › Read the pH › pH within limits.');
+      .toContain('Method PH pH, the result of pH.');
   });
 
   it('display round 20 Nov: the sieve analysis is singular and its pan reads as a weight', () => {

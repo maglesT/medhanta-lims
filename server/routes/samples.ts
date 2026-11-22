@@ -93,7 +93,7 @@ async function sentBack(q: Sql | Tx, lotNo: string): Promise<{ releaseDecided: b
 }
 
 export const lotShown = (l: LotRead) => `MMS lot ${l.lotNumber}: ${l.materialCode ?? '—'}, ${l.status.replaceAll('_', ' ')}, expiry ${l.expiryDate ? plantDate(l.expiryDate) : '—'}, retest ${l.retestDate ? plantDate(l.retestDate) : '—'}${l.stock ? `, ${l.stock} ${l.unit ?? ''} in stock`.trimEnd() : ''}`;
-export const batchShown = (b: BatchRead) => `${b.edition ? EDITION_NAME[b.edition] : 'TrueBatch'} batch ${b.batchNumber}: ${b.productCode ?? '—'}${b.productName ? ` ${b.productName}` : ''}, ${b.status.replaceAll('_', ' ').toLowerCase()}, completed ${b.completedAt ? plantTimesIn(b.completedAt) : '—'}${b.quantity ? `, ${b.quantity} made` : ''}`;
+export const batchShown = (b: BatchRead) => `${b.edition ? EDITION_NAME[b.edition] : 'TrueBatch'} batch ${b.batchNumber}: ${b.productCode ?? '—'}${b.productName ? ` ${b.productName}` : ''}, ${b.status.replaceAll('_', ' ').toLowerCase()}, completed ${b.completedAt ? plantTimesIn(b.completedAt) : '—'}${b.quantity ? `, ${String(b.quantity).replace(/^\d{4,}/, (n) => Number(n).toLocaleString('en-US'))} made` : ''}`;
 
 async function loadSample(q: Sql | Tx, id: number): Promise<{ s: SampleRow; events: EventRow[] } | null> {
   const [s] = await q<SampleRow[]>`

@@ -228,7 +228,7 @@ describe('registering a sample', () => {
     expect(r.statusCode, r.body).toBe(200);
     const d = await detail(r.json().id);
     expect(d.sample).toMatchObject({ item: { code: 'FG-001' }, source: { from: 'truebatch' } });
-    expect(d.sample.source.shown).toMatch(/^TrueBatch Tablets batch B26001: FG-001 Examplol 500 mg tablets, completed, completed .*, 98000 tablets made$/);
+    expect(d.sample.source.shown).toMatch(/^TrueBatch Tablets batch B26001: FG-001 Examplol 500 mg tablets, completed, completed .*, 98,000 tablets made$/);
     for (const [no, why] of [['B26002', 'already released'], ['B26004', 'rejected']]) {
       const x = await as('sampler', 'POST', '/api/samples', { source: 'truebatch', batchNumber: no, specVersionId: specs.fg, quantity: '60 tablets', purpose: 'release' });
       expect(x.statusCode).toBe(409);
