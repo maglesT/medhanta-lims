@@ -3,7 +3,7 @@
 // critical, the flow, and "More options" for the rare settings.
 import { useEffect, useState } from 'react';
 import { findBlock, type Block } from '../../../shared/blocks/index.js';
-import { stepTitle } from '../../../shared/engine/analysis.js';
+import { askedFields, stepTitle } from '../../../shared/engine/analysis.js';
 import type { Stored, Value } from '../../../shared/engine/index.js';
 import type { Kind } from '../../../shared/templates/index.js';
 import type { Limit, MasterDoc, SettingValue, Step } from '../../../shared/master/schema.js';
@@ -32,10 +32,23 @@ export function StepSettings({ doc, si, ti, onChange }: { doc: MasterDoc; si: nu
     onChange({ ...step, settings: v === undefined ? rest : { ...rest, [name]: v } });
   };
   const slots = slotsOf(block);
-  const loose = block.settings.filter((s) => !slots.has(s.name));
+  // Count colonies: MPN settings only in an MPN method; the dilutions only in a plate count, the third once the second is set.
+  const relevant = (n: string) => {
+    if (block.id !== 'count') return true;
+    const mpn = step.settings.method === 'MPN';
+    if (n === 'mpnFirstLevel') return mpn;
+    const k = /^dilution(\d)$/.exec(n)?.[1];
+    return k ? !mpn && (k === '1' || (step.settings[`dilution${Number(k) - 1}`] ?? '') !== '') : true;
+  };
+  const loose = block.settings.filter((s) => !slots.has(s.name) && relevant(s.name));
   // A setting used in two sentences is one input: the first sentence holds it, later ones name it.
   const seen = new Set<string>();
   const first = (p: Part) => typeof p !== 'object' || !('setting' in p) || (!seen.has(p.setting) && !!seen.add(p.setting));
+  // A setting that does not apply (MPN in a plate count) leaves the sentence with the words before it.
+  const prune = (parts: Part[]) => parts.reduce<Part[]>((out, p) => {
+    if (typeof p === 'object' && 'setting' in p && !relevant(p.setting)) { if (typeof out.at(-1) === 'string' && out.length > 1) out.pop(); return out; }
+    out.push(p); return out;
+  }, []);
   const slot = (name: string) => <Slot doc={doc} si={si} ti={ti} block={block} settings={step.settings} name={name} onChange={(v) => setting(name, v)} />;
   return (
     <div className="step-settings">
@@ -49,7 +62,7 @@ export function StepSettings({ doc, si, ti, onChange }: { doc: MasterDoc; si: nu
 
       <div className="d-section">
         <h3>The analyst records</h3>
-        <p className="tokens">{block.fields.map((f) => <span key={f.name} className="tok field">{f.label}{f.count ? ` (${f.count} readings)` : ''}{f.unit && !f.unit.startsWith('$') ? `, ${f.unit}` : ''}{f.optional ? ' · if given' : ''}</span>)}</p>
+        <p className="tokens">{askedFields(doc, block, step.settings).map((f) => <span key={f.name} className="tok field">{f.label}{f.count ? ` (${f.count} readings)` : ''}{f.unit && !f.unit.startsWith('$') ? `, ${f.unit}` : ''}{f.optional ? ' · if given' : ''}</span>)}</p>
       </div>
 
       {loose.length > 0 && (
@@ -62,7 +75,7 @@ export function StepSettings({ doc, si, ti, onChange }: { doc: MasterDoc; si: nu
       {block.calcs.length > 0 && (
         <div className="d-section">
           <h3>Calculations and checks</h3>
-          {block.calcs.map((c) => <p key={c.name} className="sentence">{sentence(block, c).map((p, i) => <PartView key={i} block={block} part={p} slot={slot} first={first(p)} />)}</p>)}
+          {block.calcs.map((c) => <p key={c.name} className="sentence">{prune(sentence(block, c)).map((p, i) => <PartView key={i} block={block} part={p} slot={slot} first={first(p)} />)}</p>)}
         </div>
       )}
 

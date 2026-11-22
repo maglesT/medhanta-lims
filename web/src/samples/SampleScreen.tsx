@@ -9,6 +9,11 @@ import { testText } from '../designer/describe.js';
 import { reportName, type SampleAction } from '../../../shared/engine/sample.js';
 
 // The report of an approved sample in a sentence: "certificate COA…", "EM result report COA…".
+// What an analysis waits for, so nobody wonders why the sample cannot be approved yet.
+const STATUS_HINT: Record<string, string> = {
+  'in progress': 'steps still open; a second analyst must check them first',
+  complete: 'checked by a second analyst; waits for the review',
+};
 const reportWord = (purpose: string, of: string) => { const n = reportName(purpose, of); return n === 'Certificate of analysis' ? 'certificate' : n.replace(/^In-/, 'in-'); };
 import { ReservePanel } from './Reserve.js';
 import { DECISION_CHIP, DECISION_LABEL, PURPOSE_LABEL, STATUS_CHIP, STATUS_LABEL, answerOot, coaLink, decide, getSample, labelsLink, recordReduced, sampleEntry, type ReducedBasis, type SampleDetail, type SampleEntry } from './api-samples.js';
@@ -69,7 +74,7 @@ export function SampleScreen({ me, id, onBack, onOpenReserve, backTo = 'Samples'
             {SAMPLING_DETAILS.filter(([k]) => s.sampling!.details[k]).map(([k, label]) => <span key={k} className="cell-sub">{label}: {s.sampling!.details[k]}</span>)}</dd></>}
           {s.stability && <><dt>Stability study</dt><dd>{s.stability.studyNo}, {s.stability.label}, {s.stability.month} months</dd></>}
           {s.monitoring && <><dt>Monitoring</dt><dd>Plan {s.monitoring.planNumber} version {s.monitoring.planVersionNo} · point {s.monitoring.pointCode} {s.monitoring.pointName} · {s.monitoring.kind}
-            {s.monitoring.state ? `, ${s.monitoring.state}` : ''}{s.monitoring.grade ? ` · grade ${s.monitoring.grade}` : ''} · taken {s.monitoring.takenOn}{s.monitoring.shift ? `, shift ${s.monitoring.shift}` : ''}
+            {s.monitoring.state ? `, ${s.monitoring.state}` : ''}{s.monitoring.grade ? ` · grade ${s.monitoring.grade}` : ''} · taken {plantDate(s.monitoring.takenOn)}{s.monitoring.shift ? `, shift ${s.monitoring.shift}` : ''}
             {s.monitoring.batch ? ` · batch ${s.monitoring.batch}` : ''}{s.monitoring.person ? ` · ${s.monitoring.person}` : ''}</dd></>}
           <dt>Registered</dt><dd>{s.registeredByName}, {plantTime(s.registeredAt)}</dd>
           {d.spec && (<><dt>Specification</dt><dd>{d.spec.header.number}, version {d.spec.versionNo} · {d.spec.header.pharmacopoeia}{d.spec.header.edition ? ` ${d.spec.header.edition}` : ''}{d.spec.state !== 'effective' ? ` (now ${d.spec.state})` : ''}</dd></>)}
@@ -174,9 +179,9 @@ function Tests({ d, me, reload }: { d: SampleDetail; me: Me; reload: () => Promi
             {d.spec!.tests.map((t, i) => (
               <tr key={t.key} className={t.applies ? '' : 'muted'}>
                 <td><b>{t.name}</b><span className="cell-sub">{testText(t, i).replace(/^\d+\. [^:]*: /, '')}{t.applies ? '' : ' · not for this sample'}</span></td>
-                <td>{n !== null && t.identity && t.applies && <span className="cell-sub">On each of {n} containers: {Array.from({ length: n }, (_, k) => k + 1).map((c) => `${c} ${t.analyses.some((a) => a.container === c && a.status === 'reviewed') ? '✓' : '·'}`).join('  ')}</span>}
+                <td>{n !== null && t.identity && t.applies && <span className="cell-sub">On each of {n} container{n === 1 ? '' : 's'}: {Array.from({ length: n }, (_, k) => k + 1).map((c) => `${c} ${t.analyses.some((a) => a.container === c && a.status === 'reviewed') ? '✓' : '·'}`).join('  ')}</span>}
                   {t.analyses.length ? t.analyses.map((a) => a.outside ? <OutsideLine key={`o${a.outside.id}`} d={d} a={a} me={me} reload={reload} /> : (
-                  <div key={a.analysisId}><a href={analysisLink(a.analysisId)}>{a.analysisNo}</a>{a.container ? ` · container ${a.container}` : ''} · {a.status}
+                  <div key={a.analysisId}><a href={analysisLink(a.analysisId)}>{a.analysisNo}</a>{a.container ? ` · container ${a.container}` : ''} · {a.status}{STATUS_HINT[a.status] && <span className="muted small"> ({STATUS_HINT[a.status]})</span>}
                     {a.result && <> · <b>{a.result.value} {a.result.unit}</b>{a.result.pass !== undefined && <span className={`chip ${a.result.pass ? 'chip-ok' : 'chip-bad'}`}>{a.result.pass ? 'within limits' : 'out of limits'}</span>}</>}
                     {d.oot.some((x) => x.key === t.key && x.analysisNo === a.analysisNo) && <span className="chip chip-warn">out of trend</span>}
                     {d.oos.filter((o) => o.testKey === t.key && o.analysisNo === a.analysisNo).map((o) => <a key={o.id} className="chip chip-bad" href={oosLink(o.id)}>{o.oosNo} · {o.status}</a>)}

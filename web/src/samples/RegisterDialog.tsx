@@ -8,7 +8,7 @@ import { Picker } from '../designer/ui.js';
 import { PROVIDER_NAME } from '../../../shared/engine/links.js';
 import { SAMPLE_PURPOSES, type SamplePurpose } from '../../../shared/engine/sample.js';
 import { plantText } from '../../../shared/plant-time.js';
-import { SAMPLING_DETAILS, STARTING_MATERIALS } from '../../../shared/master/spec.js';
+import { SAMPLING_DETAILS, STARTING_MATERIALS, sampledProblem } from '../../../shared/master/spec.js';
 import { l19SamplingPlan } from '../../../shared/templates/index.js';
 import { PURPOSE_LABEL, registerSample, specsFor, type From, type SampleRequest, type SpecChoice } from './api-samples.js';
 
@@ -28,6 +28,7 @@ export function RegisterDialog({ from, onDone, onCancel, purpose: initial = 'rel
   const [sampled, setSampled] = useState('');
   const [purpose, setPurpose] = useState<SamplePurpose>(initial);
   const [error, setError] = useState('');
+  const [sampledErr, setSampledErr] = useState('');
   const [busy, setBusy] = useState(false);
 
   useEffect(() => { if (hand) loadMasterData().then(setMd, (e) => setError(plainError(e))); }, [hand]);
@@ -45,6 +46,7 @@ export function RegisterDialog({ from, onDone, onCancel, purpose: initial = 'rel
   const numbers = sampled.split(/[\s,;]+/).filter(Boolean).map(Number);
   const submit = async (e: FormEvent) => {
     e.preventDefault();
+    setSampledErr('');
     if (!lotNo.trim()) return setError(`Give the ${what} number.`);
     if (hand && !item) return setError(`Pick the ${source === 'mms' ? 'material' : 'product'}.`);
     if (!specId) return setError('There is no effective specification to test it against.');
@@ -52,6 +54,7 @@ export function RegisterDialog({ from, onDone, onCancel, purpose: initial = 'rel
     const n = containers.trim() ? Number(containers) : undefined;
     if (n !== undefined && (!Number.isInteger(n) || n < 1)) return setError('Containers sampled: a whole number, 1 or more.');
     if (planned && !plan?.ok) return setError('Containers received: a whole number, 1 or more.');
+    if (planned && plan?.ok) { const why = sampledProblem(numbers, Number(plan.value.toString()), N); if (why) return setSampledErr(why); }
     setBusy(true);
     try {
       const r = await registerSample({ source, ...(source === 'mms' ? { lotNumber: lotNo.trim() } : { batchNumber: lotNo.trim() }),
@@ -102,6 +105,8 @@ export function RegisterDialog({ from, onDone, onCancel, purpose: initial = 'rel
             <p><b>Sampling plan</b> ({spec!.number}): {plan?.ok ? plan.shown.replace(/; each tested: .*$/, '') : every ? 'every container (identity of each container)' : spec!.sampling!.plan === 'square root' ? '1 + √N containers' : 'every container'}</p>
             {SAMPLING_DETAILS.map(([k, label]) => spec!.sampling?.[k] ? <p key={k} className="small">{label}: {spec!.sampling[k]}</p> : null)}
             <label>Container numbers sampled<input aria-label="Container numbers sampled" value={sampled} onChange={(e) => setSampled(e.target.value)} placeholder="e.g. 1, 4, 9" /></label>
+            {plan?.ok && <p className="muted small">Give {plan.value.toString()} container numbers, each from 1 to {N}, none twice.</p>}
+            {sampledErr && <p className="error" role="alert">{sampledErr}</p>}
           </div>
         )}
         {error && <p className="error" role="alert">{error}</p>}

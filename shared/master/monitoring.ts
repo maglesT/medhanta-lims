@@ -131,7 +131,7 @@ export function monitoringChecks(doc: MonitoringDoc, specs: (masterId: number) =
       if (!spec) return void error(sp, `${what}: specification ${s.spec.number || s.spec.masterId} has no approved or effective version.`, rule);
       const h = spec.doc.header;
       const type = p.of === 'room' ? 'Environmental monitoring' : 'Water';
-      if (h.type !== type) error(sp, `${what}: specification ${h.number} is a ${h.type.toLowerCase()} specification, not ${type.toLowerCase()}.`, rule);
+      if (h.type !== type) error(sp, `${what}: specification ${h.number} is ${/^[aeiou]/i.test(h.type) ? 'an' : 'a'} ${h.type.toLowerCase()} specification, not ${type.toLowerCase()}.`, rule);
       if (p.of === 'water' && /in-?house/i.test(h.pharmacopoeia)) error(sp, `${what}: water is tested to its pharmacopoeial specification; ${h.number} is in-house.`, 'LIMS-37');
       const t = spec.doc.tests.find((x) => x.key === s.spec!.testKey);
       if (!t) return void error(sp, `${what}: specification ${h.number} has no test ${s.spec.testName || s.spec.testKey}.`, rule);

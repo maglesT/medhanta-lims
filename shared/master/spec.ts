@@ -171,11 +171,11 @@ export function specChecks(doc: SpecDoc, methods: (masterId: number) => { doc: M
   // LIMS-05: a starting material or a packing material is sampled by an approved plan (US 211.84(b); Schedule M 19.6):
   // its specification names it (1 + √N or every container, and how).
   if (doc.header.of === 'material' && SAMPLED_BY_PLAN.includes(doc.header.type) && !doc.header.sampling?.plan) {
-    error('header.sampling', `A ${doc.header.type.toLowerCase()} is sampled by a written plan: choose the sampling plan (1 + √N containers or every container) and say how it is sampled`, 'LIMS-05');
+    error('header.sampling', `${/^[aeiou]/i.test(doc.header.type) ? 'An' : 'A'} ${doc.header.type.toLowerCase()} is sampled by a written plan: choose the sampling plan (1 + √N containers or every container) and say how it is sampled`, 'LIMS-05');
   }
   // LIMS-09: reduced testing only for a starting or packing material, and at least one specific identity test is still done.
   if (doc.header.reducedTesting) {
-    if (doc.header.of !== 'material' || !SAMPLED_BY_PLAN.includes(doc.header.type)) error('header.reducedTesting', `Reduced testing on the supplier's certificate is for a raw material, an active substance or a packing material, not a ${doc.header.type.toLowerCase()}`, 'LIMS-09');
+    if (doc.header.of !== 'material' || !SAMPLED_BY_PLAN.includes(doc.header.type)) error('header.reducedTesting', `Reduced testing on the supplier's certificate is for a raw material, an active substance or a packing material, not ${/^[aeiou]/i.test(doc.header.type) ? 'an' : 'a'} ${doc.header.type.toLowerCase()}`, 'LIMS-09');
     if (!doc.tests.some((t) => t.identity && (t.use === 'release and stability' || t.use === 'release'))) error('header.reducedTesting', 'Reduced testing needs at least one identity test, done here on every lot', 'LIMS-09');
   }
   // In-process: each test names the TrueBatch field it answers, once.
@@ -255,7 +255,7 @@ export function samplingPlan(doc: SpecDoc, purpose: string, received: number): {
   const mode = perContainer ? 'every container' : doc.header.sampling!.plan;
   const r = l19SamplingPlan({ mode, containers: String(received), test: 'each container' });
   if (!r.ok) return { problem: `Containers received: ${r.message}` };
-  return { mode, n: Number(r.value.toString()), line: `${r.shown.replace(/; each tested: .*$/, '')}${perContainer ? ' (each identified, LIMS-08)' : ''}` };
+  return { mode, n: Number(r.value.toString()), line: `${r.shown.replace(/; each tested: .*$/, '')}${perContainer ? ' (each container identified)' : ''}` };
 }
 /** LIMS-05: why the container numbers the sampler confirms do not fit the plan; null when they do. */
 export function sampledProblem(numbers: readonly number[], n: number, received: number): string | null {

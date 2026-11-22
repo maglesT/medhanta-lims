@@ -131,7 +131,7 @@ export function OosScreen({ me, id }: { me: Me; id: number }) {
         </Phase>
       )}
 
-      <Phase title="Other lots of this item" sub="for the impact on other lots or batches">
+      <Phase title={o.item.of === 'material' ? 'Other lots of this item' : o.item.of === 'product' ? 'Other batches of this item' : 'Other samples of this point'} sub={o.item.of === 'material' ? 'for the impact on other lots' : o.item.of === 'product' ? 'for the impact on other batches' : 'for the impact on other samplings'}>
         {d.others.length ? <ul className="rv-list">{d.others.map((x) => <li key={x.id}><span><b>{x.sampleNo}</b> · {x.lotNo} · {x.purpose} · {x.decision ?? 'not decided'} · {plantTime(x.registeredAt)}</span></li>)}</ul> : <p className="muted">No other samples of {o.item.code}.</p>}
       </Phase>
 

@@ -83,7 +83,7 @@ describe('the rules', () => {
     const withPlan = (identity: boolean) => { const d = specOf('Raw material', identity); d.header.sampling = plan; return d; };
     expect(samplingPlan(withPlan(false), 'release', 20)).toEqual({ mode: 'square root', n: 6, line: 'sample 6 of 20 containers (1 + √20 = 5.47, rounded up = 6)' });
     expect(samplingPlan(withPlan(false), 'release', 2)).toMatchObject({ n: 2 });
-    expect(samplingPlan(withPlan(true), 'release', 20)).toEqual({ mode: 'every container', n: 20, line: 'sample 20 of 20 containers (every container: 20) (each identified, LIMS-08)' });
+    expect(samplingPlan(withPlan(true), 'release', 20)).toEqual({ mode: 'every container', n: 20, line: 'sample 20 of 20 containers (every container: 20) (each container identified)' });
     expect(samplingPlan(specOf('Raw material', false), 'release', 20)).toBeNull();
     expect(samplingPlan(withPlan(false), 'retest', 20)).toBeNull();
     expect(sampledProblem([1, 5, 9, 13, 17, 20], 6, 20)).toBeNull();
@@ -97,7 +97,7 @@ describe('the rules', () => {
       header: { ...specOf(type, false).header, of, ...(sampling ? { sampling } : {}) } }), () => null).filter((p) => p.path === 'header.sampling');
     for (const type of ['Raw material', 'Active substance', 'Packing material']) {
       expect(plan(type)).toEqual([{ level: 'error', path: 'header.sampling', rule: 'LIMS-05',
-        message: `A ${type.toLowerCase()} is sampled by a written plan: choose the sampling plan (1 + √N containers or every container) and say how it is sampled` }]);
+        message: `${type === 'Active substance' ? 'An' : 'A'} ${type.toLowerCase()} is sampled by a written plan: choose the sampling plan (1 + √N containers or every container) and say how it is sampled` }]);
       expect(plan(type, { plan: 'square root' })).toEqual([]);
     }
     expect(plan('Finished product', undefined, 'product')).toEqual([]);

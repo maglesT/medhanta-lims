@@ -87,6 +87,9 @@ export function sentence(block: Block, c: Calc): Part[] {
       const [first, more] = a.stages as unknown[];
       return ['Each of ', p(first), ' must be at most ', p(a.maxTime), '; when one or two are not, ', p(more), ' are recorded too, and at least 16 of the 18 must be.'];
     }
+    case 'L5': return ['The dissolved amount is worked out for each vessel at each time point as a % of the label claim ', p(a.labelClaim), ' from the responses of the vessels and of the standard. ',
+      'The result is the mean % dissolved at the time point reported, from 6 vessels (6 more in stage 2 and 12 more in stage 3 when the stage rule asks). ', 'Stage rule: ', p((a.acceptance as { test?: unknown } | undefined)?.test), ', limit ', p((a.acceptance as { limit?: unknown } | undefined)?.limit), '.'];
+    case 'T22': return [`The ${label} ${is} worked out from `, p(a.sample), ', the weight retained on each sieve and ', p(a.pan), ', with the fines taken below ', p(a.finesBelow), '; the fines must be ', p(a.finesLimit), ' and the recovery must be ', p(a.recoveryLimit), '.'];
     case 'F2': return [p(a.current), ' must not differ by more than ', p((a.limit as { maxChange: unknown }).maxChange), ' from the previous round.'];
   }
   // Any other: the inputs it is worked out from, then the limits it must meet.

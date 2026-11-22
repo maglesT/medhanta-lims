@@ -22,7 +22,7 @@ type Tab = 'charts' | 'kpis' | 'workload' | 'apqr';
 export function Trends({ me }: { me: Me }) {
   const [tab, setTab] = useState<Tab>('charts');
   const [sample, setSample] = useState<number | null>(null);
-  if (sample) return <SampleScreen me={me} id={sample} onBack={() => setSample(null)} />;
+  if (sample) return <SampleScreen me={me} id={sample} onBack={() => setSample(null)} backTo="Trends" />;
   return (
     <>
       <div className="home-head"><div>

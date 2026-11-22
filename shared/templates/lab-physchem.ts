@@ -1503,7 +1503,7 @@ export function l19SamplingPlan(i: L19Input): Outcome<{ readonly tests?: number;
           const raw = d(N).sqrt().plus(1);
           const up = raw.ceil().toNumber();
           n = Math.min(up, N);
-          line = `1 + √${N} = ${fmt(raw, 2)}, rounded up = ${up}${up > N ? `, but only ${N} containers: all ${N}` : ''}`;
+          line = `1 + √${N} = ${fmt(raw, 2)}, rounded up = ${up}${up > N ? `, but only ${N} container${N === 1 ? '' : 's'}: all ${N}` : ''}`;
         }
         const t = i.test ?? 'each container';
         let tests: number;
@@ -1515,7 +1515,7 @@ export function l19SamplingPlan(i: L19Input): Outcome<{ readonly tests?: number;
           tests = Math.ceil(n / t.compositesOf);
           tl = `composites of up to ${t.compositesOf} containers: ${tests} composites`;
         }
-        return { ok: true, value: d(n), unit: 'units', tests, shown: `sample ${n} of ${N} containers (${line}); ${tl}` };
+        return { ok: true, value: d(n), unit: 'units', tests, shown: `sample ${n} of ${N} container${N === 1 ? '' : 's'} (${line}); ${tl}` };
       }
       case 'sterility containers': {
         const N = wholeCount(i.batchSize, 'The batch size');
