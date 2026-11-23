@@ -282,7 +282,7 @@ function cdsValues(l: LoadedAnalysis, block: Block, settings: Step['settings'], 
 }
 
 const reason = z.string().trim().min(1).max(1000);
-const values = z.record(z.unknown());
+const values = z.record(z.string(), z.unknown());
 // A CDS result file as the browser read it: its name and its bytes in base64 (the hash is worked out from the bytes).
 const cdsFile = z.object({ name: z.string().trim().min(1).max(200), content: z.string().min(1).max(Math.ceil(MAX_CDS_BYTES / 3) * 4 + 8) });
 const BODIES: Record<Action, z.ZodTypeAny> = {

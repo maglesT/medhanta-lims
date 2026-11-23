@@ -83,7 +83,7 @@ function NewSpec({ md, onCreated, onCancel }: { md: MasterData; onCreated: (id: 
     e.preventDefault();
     if (!header.itemId) return setError(`Pick the ${header.of}.`);
     const parsed = specSchema.safeParse({ header: { ...header, ...(header.market ? {} : { market: undefined }), ...(header.edition ? {} : { edition: undefined }) }, tests: [] });
-    if (!parsed.success) return setError(parsed.error.issues.map((i) => `${i.path.at(-1)}: ${i.message}`).join('; '));
+    if (!parsed.success) return setError(parsed.error.issues.map((i) => `${String(i.path.at(-1))}: ${i.message}`).join('; '));
     setBusy(true);
     try { onCreated((await createSpec(parsed.data)).id); } catch (err) { setError(err instanceof ApiError ? err.message : String(err)); setBusy(false); }
   };

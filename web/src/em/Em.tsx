@@ -314,7 +314,7 @@ function NewPlan({ onCreated, onCancel }: { onCreated: (id: number) => void; onC
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     const doc = monitoringSchema.safeParse({ header: { number, name, shifts: 3 }, points: [] });
-    if (!doc.success) return setError(doc.error.issues.map((i) => `${i.path.at(-1)}: ${i.message}`).join('; '));
+    if (!doc.success) return setError(doc.error.issues.map((i) => `${String(i.path.at(-1))}: ${i.message}`).join('; '));
     try { onCreated((await createPlan(doc.data)).id); } catch (x) { setError(plainError(x)); }
   };
   return (

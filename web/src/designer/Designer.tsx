@@ -17,7 +17,7 @@ const TABS: [Tab, string][] = [['header', 'Header'], ['process', 'Steps'], ['rev
 type Save = { kind: 'saved' | 'saving' | 'pending' } | { kind: 'invalid' | 'error'; message: string };
 
 const FIELD: Record<string, string> = { code: 'code', name: 'name', key: 'key', holdHours: 'hold time', count: 'number of replicates' };
-function issueText(doc: MasterDoc, path: (string | number)[], message: string): string {
+function issueText(doc: MasterDoc, path: PropertyKey[], message: string): string {
   const [a, i, b, j] = path;
   const where = a === 'stages' && typeof i === 'number' ? `${doc.stages[i]?.name || `Stage ${i + 1}`}${b === 'steps' && typeof j === 'number' ? `, step ${j + 1}` : ''}` : 'Header';
   const last = String([...path].reverse().find((p) => typeof p === 'string') ?? '');

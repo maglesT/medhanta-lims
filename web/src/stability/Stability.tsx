@@ -289,7 +289,7 @@ function NewProtocol({ md, onCreated, onCancel }: { md: MasterData; onCreated: (
       header: { of, itemId: item.id, code: item.code, name: item.name, number, purpose, containerClosure: '', sameAsMarketed: true, shelfLifeMonths: 24 },
       spec: null, quantity: { amount: '0', unit: 'tablets' }, pullWindowDays: 7, conditions: [], design: { type: 'full', factors: [], matrix: [] },
     });
-    if (!doc.success) return setError(doc.error.issues.map((i) => `${i.path.at(-1)}: ${i.message}`).join('; '));
+    if (!doc.success) return setError(doc.error.issues.map((i) => `${String(i.path.at(-1))}: ${i.message}`).join('; '));
     try { onCreated((await createProtocol(doc.data)).id); } catch (x) { setError(plainError(x)); }
   };
   const items = (of === 'product' ? md.products : md.materials).filter((i) => i.active).map((i) => ({ id: i.itemId, code: i.code, name: i.name }));
