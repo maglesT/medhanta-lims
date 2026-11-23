@@ -522,7 +522,9 @@ async function apqr(q: Sql, f: { of: 'product' | 'material'; code: string; from:
   };
 }
 
-const csvCell = (v: unknown) => { const s = String(v ?? ''); return /[",\n\r]/.test(s) || /^[=+\-@]/.test(s) ? `"${(/^[=+\-@]/.test(s) ? `'${s}` : s).replaceAll('"', '""')}"` : s; };
+// A cell a spreadsheet would run as a formula (also after leading spaces, tab or line break) gets a leading apostrophe.
+const FORMULA = /^\s*[=+\-@]/;
+export const csvCell = (v: unknown) => { const s = String(v ?? ''); const t = FORMULA.test(s) ? `'${s}` : s; return /[",\n\r]/.test(t) || t !== s ? `"${t.replaceAll('"', '""')}"` : t; };
 const day = (d: Date | null | undefined) => (d ? plantDay(d) : '');
 /** The APQR export as CSV: one section after another, each row starting with its section's name. */
 export function apqrCsv(r: Apqr): string {

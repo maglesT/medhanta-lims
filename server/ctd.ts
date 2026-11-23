@@ -40,7 +40,9 @@ const section = (of: string) => (of === 'material' ? '3.2.S.7.3' : '3.2.P.8.3');
 const evaluationOf = (evals: readonly Evaluation[], t: Pick<CtdTable, 'studyId' | 'condition'>) => evals.find((e) => e.condition === t.condition && e.studyIds.includes(t.studyId));
 const mark = (c: CtdCell) => `${c.figure}${c.pass === false ? ' (FAILS)' : ''}${c.oot ? ' (OOT)' : ''}${c.decided ? '' : ' *'}`;
 
-const csvCell = (v: unknown) => { const s = String(v ?? ''); return /[",\n\r]/.test(s) || /^[=+\-@]/.test(s) ? `"${(/^[=+\-@]/.test(s) ? `'${s}` : s).replaceAll('"', '""')}"` : s; };
+// A cell a spreadsheet would run as a formula (also after leading spaces, tab or line break) gets a leading apostrophe.
+const FORMULA = /^\s*[=+\-@]/;
+export const csvCell = (v: unknown) => { const s = String(v ?? ''); const t = FORMULA.test(s) ? `'${s}` : s; return /[",\n\r]/.test(t) || t !== s ? `"${t.replaceAll('"', '""')}"` : t; };
 export function ctdCsv(item: Item, tables: readonly CtdTable[], evals: readonly Evaluation[]): string {
   const kind = item.of === 'material' ? 'Retest period (months)' : 'Shelf life (months)';
   const head = ['Section', 'Code', 'Name', 'Study', item.of === 'material' ? 'Lot' : 'Batch', 'Protocol', 'Container closure', 'Placed', 'Condition', 'Role', 'Test',
