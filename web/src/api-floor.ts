@@ -99,13 +99,16 @@ export function useQualItems(on: boolean): QualPick[] | null {
 }
 
 // ---- routes: #/ (My work), #/analysis/12, #/analysis/12/step/0.1.0.1, #/analysis/12/approve, #/release (To review), #/release/12 ----
-export interface Route { analysis?: number; step?: string; approve?: boolean; release?: number | 'list'; oos?: number | 'list' }
+export interface Route { analysis?: number; step?: string; approve?: boolean; release?: number | 'list'; oos?: number | 'list'; sample?: number }
 export function parseRoute(hash: string): Route {
   const r = /^#\/release(?:\/(\d+))?$/.exec(hash);
   if (r) return { release: r[1] ? Number(r[1]) : 'list' };
   // The OOS list and one OOS (LIMS-23): #/oos, #/oos/3.
   const o = /^#\/oos(?:\/(\d+))?$/.exec(hash);
   if (o) return { oos: o[1] ? Number(o[1]) : 'list' };
+  // One sample (the back link of an analysis opened from it): #/sample/12.
+  const sm = /^#\/sample\/(\d+)$/.exec(hash);
+  if (sm) return { sample: Number(sm[1]) };
   const m = /^#\/analysis\/(\d+)(?:\/(?:step\/([\d.]+)|(approve)))?$/.exec(hash);
   return m ? { analysis: Number(m[1]), ...(m[2] ? { step: m[2] } : {}), ...(m[3] ? { approve: true } : {}) } : {};
 }
@@ -120,6 +123,17 @@ export function useRoute(): Route {
 }
 export const go = (to: string) => { window.location.hash = to; };
 export const analysisLink = (id: number) => `#/analysis/${id}`;
+// An analysis opened from a sample goes back to that sample, not to My work (kept for the browser tab only).
+let openedFrom: { analysis: number; sample: number; no: string } | null = null;
+export const rememberSample = (analysis: number, sample: number, no: string) => {
+  openedFrom = { analysis, sample, no };
+  try { sessionStorage.setItem('qlims.analysisFrom', JSON.stringify(openedFrom)); } catch { /* the variable is enough */ }
+};
+export const sampleOf = (analysis: number): { sample: number; no: string } | null => {
+  let from = openedFrom;
+  if (!from) try { from = JSON.parse(sessionStorage.getItem('qlims.analysisFrom') ?? 'null'); } catch { from = null; }
+  return from && from.analysis === analysis ? from : null;
+};
 export const stepLink = (id: number, step: string) => `#/analysis/${id}/step/${step}`;
 export const releaseLink = (id: number) => `#/release/${id}`;
 export const oosLink = (id: number) => `#/oos/${id}`;

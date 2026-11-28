@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { api, type Me } from '../api.js';
 import { product } from '../product.js';
 import {
-  analysisLink, changed, go, headline, oosLink, pdfLink, plainClock, plainError, stateLabel, STATUS_CHIP, statusText, stepLink, stepOf, stepTitle, timeLeft, tone, useBlocks, words, useServerNow,
+  analysisLink, sampleOf, changed, go, headline, oosLink, pdfLink, plainClock, plainError, stateLabel, STATUS_CHIP, statusText, stepLink, stepOf, stepTitle, timeLeft, tone, useBlocks, words, useServerNow,
   type AnalysisDetail, type Block, type StepRow,
 } from '../api-floor.js';
 import { StepScreen } from './StepScreen.js';
@@ -38,9 +38,10 @@ export function AnalysisScreen({ me, id, step, approve }: { me: Me; id: number; 
     );
   }
   const row = step ? d.steps.find((s) => s.id === step) : undefined;
+  const from = sampleOf(id);
   return (
     <div className="fl">
-      <button className="back" onClick={() => go(step || approve ? analysisLink(id) : '#/')}>← {step || approve ? `Analysis ${d.analysis.analysisNo}` : 'My work'}</button>
+      <button className="back" onClick={() => go(step || approve ? analysisLink(id) : from ? `#/sample/${from.sample}` : '#/')}>← {step || approve ? `Analysis ${d.analysis.analysisNo}` : from ? `Sample ${from.no}` : 'My work'}</button>
       {error && <p className="notice bad" role="alert">{error}</p>}
       {step ? (row ? <StepScreen me={me} d={d} blocks={blocks} row={row} now={now} reload={reload} /> : <p className="notice">This step is not open in the analysis yet.</p>)
         : <><Overview d={d} blocks={blocks} now={now} reload={() => reload()} /><DemoSkip me={me} d={d} reload={() => reload()} /></>}

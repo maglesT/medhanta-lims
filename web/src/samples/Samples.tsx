@@ -3,7 +3,7 @@
 // (SampleScreen).
 import { useEffect, useState } from 'react';
 import { can, plantTime, type Me } from '../api.js';
-import { plainError } from '../api-floor.js';
+import { go, plainError } from '../api-floor.js';
 import { PROVIDER_NAME, type LinkState } from '../../../shared/engine/links.js';
 import { plainSource, plantText } from '../../../shared/plant-time.js';
 import { DECISION_CHIP, DECISION_LABEL, PURPOSE_LABEL, STATUS_CHIP, STATUS_LABEL, listSamples, sampleRequests, type From, type Requests, type SampleListRow, type SampleRequest } from './api-samples.js';
@@ -21,12 +21,12 @@ const linkWords = (from: From, s: LinkState) => (s === 'ok' ? `${PROVIDER_NAME[f
   : s === 'down' ? `${PROVIDER_NAME[from]} does not answer now: register its ${from === 'mms' ? 'lots' : 'batches'} by hand; a second person checks each one.`
   : `${PROVIDER_NAME[from]} is not linked: register its ${from === 'mms' ? 'lots' : 'batches'} by hand; a second person checks each one.`);
 
-export function Samples({ me }: { me: Me }) {
+export function Samples({ me, openId }: { me: Me; openId?: number }) {
   const sampler = can(me, 'sample.register');
   const [rows, setRows] = useState<SampleListRow[] | null>(null);
   const [req, setReq] = useState<Requests | null>(null);
   const [error, setError] = useState('');
-  const [open, setOpen] = useState<number | null>(null);
+  const [open, setOpen] = useState<number | null>(openId ?? null);
   const [registering, setRegistering] = useState<SampleRequest | { hand: From } | null>(null);
   // LIMS-30, LIMS-31: a reserve sample opened; the purpose of the sample being registered (a retest from the retest-due list).
   const [reserve, setReserve] = useState<number | null>(null);
@@ -39,7 +39,7 @@ export function Samples({ me }: { me: Me }) {
   useEffect(load, [sampler]);
 
   if (reserve !== null) return <ReserveScreen id={reserve} onBack={() => { setReserve(null); load(); }} />;
-  if (open !== null) return <SampleScreen me={me} id={open} onBack={() => { setOpen(null); load(); }} onOpenReserve={(r) => { setOpen(null); setReserve(r); }} />;
+  if (open !== null) return <SampleScreen me={me} id={open} onBack={() => { setOpen(null); load(); if (window.location.hash.startsWith('#/sample/')) go('#/'); }} onOpenReserve={(r) => { setOpen(null); setReserve(r); }} />;
   const words = q.toLowerCase().split(/\s+/).filter(Boolean);
   const shown = (rows ?? []).filter((r) => words.every((w) => `${r.sampleNo} ${r.item.code} ${r.item.name} ${r.lotNo} ${r.purpose} ${r.status} ${r.registeredByName}`.toLowerCase().includes(w)));
   // A lot sent back to QC by MMS (its release sample decided, the lot waiting again) is offered for a retest sample.

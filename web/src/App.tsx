@@ -59,6 +59,8 @@ export function App() {
   }, [refresh]);
   // A analysis opened from another page (a analysis just issued from the master records) shows on the floor screens.
   useEffect(() => { if (route.analysis) setPage('home'); }, [route.analysis]);
+  // Back from an analysis to the sample it was opened from.
+  useEffect(() => { if (route.sample) setPage('samples'); }, [route.sample]);
 
   if (me === undefined) return <>{banner}<main className="page">Loading…</main></>;
   if (me === null) return <>{banner}<Login /></>;
@@ -115,7 +117,7 @@ export function App() {
           {page === 'home' && (route.analysis ? <AnalysisScreen me={me} id={route.analysis} step={route.step} approve={route.approve} /> : <MyWork me={me} />)}
           {page === 'masters' && <Masters me={me} />}
           {page === 'specs' && <Specs me={me} />}
-          {page === 'samples' && <Samples me={me} />}
+          {page === 'samples' && <Samples key={route.sample ?? 0} me={me} openId={route.sample} />}
           {page === 'inventory' && <Inventory me={me} />}
           {page === 'stability' && <Stability me={me} />}
           {page === 'em' && <Em me={me} />}

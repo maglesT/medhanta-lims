@@ -2,7 +2,7 @@
 // the next entries this person may add. Disposal is an e-signature with its reason and method.
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { can, plantTime, type Me } from '../api.js';
-import { analysisLink, oosLink, plainError, sourceWords } from '../api-floor.js';
+import { analysisLink, rememberSample, oosLink, plainError, sourceWords } from '../api-floor.js';
 import { IssueDialog } from '../floor/IssueDialog.js';
 import { SignDialog } from '../components/SignDialog.js';
 import { testText } from '../designer/describe.js';
@@ -28,8 +28,8 @@ const SIGNED_WORDS: Record<string, string> = { disposed: 'Disposed of', qc_appro
 const ENTRY_WORDS: Record<SampleEntry['kind'], string> = {
   checked: 'Checked by a second person', received: 'Received in QC', stored: 'Stored', handed_over: 'Handed over', disposed: 'Disposed of', note: 'Note', approved: 'QC approved', rejected: 'QC rejected', oot_answered: 'Out-of-trend flag answered by QC',
 };
-const entryText = (e: SampleEntry) => [e.payload.condition && `Condition: ${e.payload.condition}`, e.payload.where && `Where: ${e.payload.where}`,
-  e.payload.to && `To: ${e.payload.to}`, e.payload.reason && `Reason: ${e.payload.reason}`, e.payload.method && `Method: ${e.payload.method}`, e.payload.coaNo && `${e.payload.coaNo.startsWith('IPR') ? 'In-process test report' : 'Certificate'} ${e.payload.coaNo}`, e.payload.test && `${e.payload.test}, analysis ${e.payload.analysisNo}: ${e.payload.answer}`, e.payload.text].filter(Boolean).join(' · ');
+const entryText = (e: SampleEntry, report = 'Certificate') => [e.payload.condition && `Condition: ${e.payload.condition}`, e.payload.where && `Where: ${e.payload.where}`,
+  e.payload.to && `To: ${e.payload.to}`, e.payload.reason && `Reason: ${e.payload.reason}`, e.payload.method && `Method: ${e.payload.method}`, e.payload.coaNo && `${e.payload.coaNo.startsWith('IPR') ? 'In-process test report' : report} ${e.payload.coaNo}`, e.payload.test && `${e.payload.test}, analysis ${e.payload.analysisNo}: ${e.payload.answer}`, e.payload.text].filter(Boolean).join(' · ');
 
 // The entries asked for in a small form: their fields and button words.
 const FORMS: Partial<Record<SampleAction, { title: string; button: string; fields: { name: string; label: string; hint?: string }[] }>> = {
@@ -52,6 +52,7 @@ export function SampleScreen({ me, id, onBack, onOpenReserve, backTo = 'Samples'
 
   if (!d) return <>{error ? <p className="notice" role="alert">{error}</p> : <div className="skel skel-block" />}</>;
   const s = d.sample;
+  const report = reportName(s.purpose, s.item.of).replace(/^Certificate of analysis$/, 'Certificate');
   const waitingWhy = !d.decision && !d.actions.includes('receive') && d.status !== 'disposed' && d.refusals.receive;
   return (
     <>
@@ -93,7 +94,7 @@ export function SampleScreen({ me, id, onBack, onOpenReserve, backTo = 'Samples'
           {d.events.map((e) => (
             <li key={e.id}>
               <b>{ENTRY_WORDS[e.kind]}</b>
-              {entryText(e) && <span>{entryText(e)}</span>}
+              {entryText(e, report) && <span>{entryText(e, report)}</span>}
               <span className="muted"> {e.personName}, {plantTime(e.at)}{e.signature ? ` · signed “${SIGNED_WORDS[e.signature.meaning] ?? e.signature.meaning}” by ${e.signature.printedName}` : ''}</span>
             </li>
           ))}
@@ -181,7 +182,7 @@ function Tests({ d, me, reload }: { d: SampleDetail; me: Me; reload: () => Promi
                 <td><b>{t.name}</b><span className="cell-sub">{testText(t, i).replace(/^\d+\. [^:]*: /, '')}{t.applies ? '' : ' · not for this sample'}</span></td>
                 <td>{n !== null && t.identity && t.applies && <span className="cell-sub">On each of {n} container{n === 1 ? '' : 's'}: {Array.from({ length: n }, (_, k) => k + 1).map((c) => `${c} ${t.analyses.some((a) => a.container === c && a.status === 'reviewed') ? '✓' : '·'}`).join('  ')}</span>}
                   {t.analyses.length ? t.analyses.map((a) => a.outside ? <OutsideLine key={`o${a.outside.id}`} d={d} a={a} me={me} reload={reload} /> : (
-                  <div key={a.analysisId}><a href={analysisLink(a.analysisId)}>{a.analysisNo}</a>{a.container ? ` · container ${a.container}` : ''} · {a.status}{STATUS_HINT[a.status] && <span className="muted small"> ({STATUS_HINT[a.status]})</span>}
+                  <div key={a.analysisId}><a href={analysisLink(a.analysisId)} onClick={() => rememberSample(a.analysisId, d.sample.id, d.sample.sampleNo)}>{a.analysisNo}</a>{a.container ? ` · container ${a.container}` : ''} · {a.status}{STATUS_HINT[a.status] && <span className="muted small"> ({STATUS_HINT[a.status]})</span>}
                     {a.result && <> · <b>{a.result.reported ?? a.result.value} {a.result.unit}</b>{a.result.pass !== undefined && <span className={`chip ${a.result.pass ? 'chip-ok' : 'chip-bad'}`}>{a.result.pass ? 'within limits' : 'out of limits'}</span>}</>}
                     {d.oot.some((x) => x.key === t.key && x.analysisNo === a.analysisNo) && <span className="chip chip-warn">out of trend</span>}
                     {d.oos.filter((o) => o.testKey === t.key && o.analysisNo === a.analysisNo).map((o) => <a key={o.id} className="chip chip-bad" href={oosLink(o.id)}>{o.oosNo} · {o.status}</a>)}
